@@ -21,11 +21,17 @@ from app.services.security import hash_password
 
 SEED_PRICING = [
     # (model, resolution, with_ref, unit, rate_usd)
+    # Seedance 2.0 — facturé À LA SECONDE. Ces valeurs = tier image-to-video
+    # AVEC référence (notre cas : on envoie toujours visage + caractéristiques).
+    # Vérifiées via sources tierces (kie.ai bloque le scraping) → resynchronise
+    # les valeurs EXACTES de ton compte kie.ai via l'éditeur de tarifs (Réglages).
     ("seedance_2.0", "480p", True, "per_sec", 0.0575),
     ("seedance_2.0", "720p", True, "per_sec", 0.125),
     ("seedance_2.0", "1080p", True, "per_sec", 0.31),
-    ("elevenlabs_s2s", None, None, "per_min", 0.10),
-    # Nano Banana (image) — tarif indicatif kie.ai, à resynchroniser
+    # ElevenLabs Voice Changer — 1000 crédits/min ; ~0,12 $/min pay-as-you-go
+    # (jusqu'à ~0,20 $/min selon le plan). Facturé à la minute d'audio.
+    ("elevenlabs_s2s", None, None, "per_min", 0.12),
+    # Nano Banana Edit (Gemini 2.5 Flash Image) — ~0,02 $/image, confirmé.
     ("nano_banana", None, None, "per_image", 0.02),
 ]
 

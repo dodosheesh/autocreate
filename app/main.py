@@ -3,7 +3,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 
-from app.api.routers import auth, banks, jobs, models, pictures, uploads, webhooks
+from app.api.routers import auth, banks, jobs, models, pictures, pricing, uploads, webhooks
 from app.config import get_settings
 
 # Fail-fast : refuse de démarrer en prod avec des secrets par défaut
@@ -16,6 +16,7 @@ app.include_router(models.router)
 app.include_router(banks.router)
 app.include_router(jobs.router)
 app.include_router(pictures.router)
+app.include_router(pricing.router)
 app.include_router(uploads.router)
 app.include_router(webhooks.router)
 

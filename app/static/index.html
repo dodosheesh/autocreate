@@ -13,22 +13,36 @@
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
          font: 14px/1.5 system-ui, -apple-system, sans-serif; }
-  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 16px 80px; }
+  .nav { position: sticky; top: 0; z-index: 20; display: flex; align-items: center;
+         justify-content: space-between; gap: 16px; padding: 12px 18px;
+         background: rgba(14,15,19,.92); backdrop-filter: blur(8px);
+         border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .nav .brand { font-size: 18px; font-weight: 700; }
+  .nav .brand span { color: var(--accent); }
+  .tabs { display: flex; gap: 6px; }
+  .tabs button { background: var(--panel2); border: 1px solid var(--border); color: var(--muted);
+         padding: 8px 14px; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 600; }
+  .tabs button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .nav .who { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 10px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 22px 16px 90px; }
+  .page { display: none; } .page.active { display: block; }
   h1 { font-size: 20px; margin: 0 0 2px; }
-  h1 span { color: var(--accent); }
-  .sub { color: var(--muted); margin-bottom: 24px; font-size: 13px; }
+  .sub, .hint { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
   h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .08em;
        color: var(--muted); margin: 0 0 14px; }
+  h2 .step { display: inline-flex; align-items: center; justify-content: center;
+       width: 20px; height: 20px; border-radius: 50%; background: var(--accent);
+       color: #fff; font-size: 11px; margin-right: 8px; }
   .grid { display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items: start; }
   @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
   .card { background: var(--panel); border: 1px solid var(--border);
           border-radius: 12px; padding: 18px; margin-bottom: 20px; }
   label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
-  select, input[type=text], input[type=number], input[type=url] {
+  select, input[type=text], input[type=number], input[type=url], input[type=password], input[type=file], textarea {
     width: 100%; background: var(--panel2); color: var(--text);
     border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
-    font-size: 14px; outline: none; }
-  select:focus, input:focus { border-color: var(--accent); }
+    font-size: 14px; outline: none; font-family: inherit; }
+  select:focus, input:focus, textarea:focus { border-color: var(--accent); }
   .cats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
   @media (max-width: 640px) { .cats { grid-template-columns: repeat(2, 1fr); } }
   .cat { background: var(--panel2); border: 1px solid var(--border);
@@ -41,7 +55,7 @@
   .seg button { flex: 1; background: none; border: 0; color: var(--muted);
                 padding: 8px 4px; cursor: pointer; font-size: 13px; }
   .seg button.on { background: var(--accent); color: #fff; }
-  .estimate { position: sticky; top: 16px; }
+  .estimate { position: sticky; top: 76px; }
   .big { font-size: 30px; font-weight: 700; letter-spacing: -.02em; }
   .big small { font-size: 13px; color: var(--muted); font-weight: 400; }
   .est-line { display: flex; justify-content: space-between; padding: 5px 0;
@@ -68,203 +82,263 @@
   .b-completed, .b-done, .b-approved, .b-pass { background: rgba(62,207,142,.15); color: var(--ok); }
   .b-failed, .b-rejected, .b-fail, .b-blocked_budget { background: rgba(239,91,91,.15); color: var(--err); }
   .b-pending, .b-composed, .b-composing, .b-skipped { background: rgba(139,144,160,.15); color: var(--muted); }
-  .b-dispatched, .b-generated, .b-qc, .b-voiced, .b-assembled { background: rgba(124,92,255,.15); color: var(--accent); }
+  .b-dispatched, .b-generated, .b-qc, .b-voiced, .b-assembled, .b-ready { background: rgba(124,92,255,.15); color: var(--accent); }
   .items { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
            gap: 12px; margin-top: 12px; }
   .item { background: var(--panel2); border: 1px solid var(--border);
           border-radius: 10px; padding: 10px; }
-  .item video { width: 100%; border-radius: 8px; background: #000; aspect-ratio: 9/16;
-                max-height: 300px; }
+  .item video, .item img { width: 100%; border-radius: 8px; background: #000; }
+  .item video { aspect-ratio: 9/16; max-height: 300px; }
   .item .prompt { color: var(--muted); font-size: 11px; max-height: 48px;
                   overflow: hidden; margin: 6px 0; }
   .item .actions { display: flex; gap: 6px; margin-top: 6px; }
   .muted { color: var(--muted); } .mono { font-variant-numeric: tabular-nums; }
   #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
            background: var(--panel2); border: 1px solid var(--accent); border-radius: 10px;
-           padding: 10px 18px; display: none; z-index: 10; }
+           padding: 10px 18px; display: none; z-index: 30; max-width: 90vw; }
 </style>
 </head>
 <body>
+<nav class="nav">
+  <div class="brand">auto<span>create</span></div>
+  <div class="tabs">
+    <button data-page="settings">⚙ Réglages</button>
+    <button data-page="video" class="on">🎬 Vidéos</button>
+    <button data-page="photo">🖼 Photos</button>
+  </div>
+  <div class="who"><span id="whoami"></span>
+    <button class="btn small ghost" id="logout">Déconnexion</button></div>
+</nav>
+
 <div class="wrap">
-  <div style="display:flex; justify-content:space-between; align-items:flex-start">
-    <div>
-      <h1>auto<span>create</span></h1>
-      <div class="sub">content factory — Seedance via kie.ai · voice-swap ElevenLabs · assemblage FFmpeg</div>
+
+  <!-- ================= RÉGLAGES ================= -->
+  <section class="page" id="page-settings">
+    <h1>Réglages</h1>
+    <div class="hint">Configure ici, une seule fois : ta model, ses caractéristiques, tes voix, tes banques d'assets
+      et tes textes. Une fois prêt → onglet <b>Vidéos</b> ou <b>Photos</b> pour générer.</div>
+
+    <div class="card">
+      <h2><span class="step">1</span>Model active</h2>
+      <label>Model utilisée pour générer &amp; pour les caractéristiques ci-dessous</label>
+      <select class="js-model"></select>
+      <div class="row">
+        <div><label>Nouvelle model — nom</label><input type="text" id="m-name" placeholder="Ma model"></div>
+        <div><label>Photo visage (référence de consistance)</label><input type="file" id="m-face" accept="image/*"></div>
+      </div>
+      <button class="btn small" id="m-create" style="margin-top:10px">Créer la model</button>
     </div>
-    <div style="text-align:right; font-size:12px; color:var(--muted)">
-      <span id="whoami"></span><br>
-      <button class="btn small ghost" id="logout" style="margin-top:6px">Se déconnecter</button>
+
+    <div class="card">
+      <h2><span class="step">2</span>Caractéristiques spéciales</h2>
+      <div class="hint">Traits distinctifs (tatouage, piercing, accessoire signature…) injectés dans chaque génération
+        de la model active, avec leur photo de référence.</div>
+      <div class="row" style="margin-top:0">
+        <div><label>Label</label><input type="text" id="c-label" placeholder="tatouage avant-bras gauche"></div>
+        <div><label>Photo du trait</label><input type="file" id="c-photo" accept="image/*"></div>
+      </div>
+      <label>Comment le décrire dans le prompt (injection hint, en anglais)</label>
+      <input type="text" id="c-hint" placeholder="a delicate floral tattoo on her left forearm">
+      <button class="btn small" id="c-add" style="margin-top:10px">Ajouter la caractéristique</button>
     </div>
-  </div>
 
-  <div class="grid">
-    <div>
-      <div class="card">
-        <h2>Panneau de génération</h2>
-        <label>Model</label>
-        <select id="model"></select>
+    <div class="card">
+      <h2><span class="step">3</span>Voix ElevenLabs</h2>
+      <div class="hint">Clone tes 2 voix une fois dans ElevenLabs, colle ici leurs <code>voice_id</code>.
+        Tag <b>H</b> = voix grave masculine, <b>F</b> = voix féminine. Ces voix restent 100 % consistantes sur tous les reels.</div>
+      <div class="row" style="margin-top:0">
+        <div><label>Tag</label>
+          <select id="v-tag"><option value="H">H (grave masculin)</option><option value="F">F (féminin)</option></select></div>
+        <div><label>Genre</label>
+          <select id="v-gender"><option value="male">male</option><option value="female">female</option></select></div>
+      </div>
+      <div class="row">
+        <div><label>Label</label><input type="text" id="v-label" placeholder="grave masculin"></div>
+        <div><label>ElevenLabs voice_id</label><input type="text" id="v-id" placeholder="21m00…"></div>
+      </div>
+      <button class="btn small" id="v-add" style="margin-top:10px">Ajouter la voix</button>
+    </div>
 
-        <div style="margin-top:14px">
-          <label>Vidéos par catégorie</label>
-          <div class="cats" id="cats"></div>
-        </div>
+    <div class="card">
+      <h2><span class="step">4</span>Banques visuelles</h2>
+      <div class="hint">Outfits et décors sont mélangés aléatoirement dans les générations. Uploade directement (→ R2).</div>
+      <div class="row" style="margin-top:0">
+        <div><label>Outfit — image</label><input type="file" id="o-photo" accept="image/*"></div>
+        <div><label>Tags (virgules)</label><input type="text" id="o-tags" placeholder="red dress, heels"></div>
+      </div>
+      <button class="btn small" id="o-add" style="margin-top:10px">Ajouter l'outfit</button>
+      <div class="row">
+        <div><label>Background — image</label><input type="file" id="b-photo" accept="image/*"></div>
+        <div><label>Tags (virgules)</label><input type="text" id="b-tags" placeholder="beach at sunset"></div>
+      </div>
+      <button class="btn small" id="b-add" style="margin-top:10px">Ajouter le background</button>
+    </div>
 
-        <div class="row">
-          <div><label>Résolution</label>
-            <div class="seg" data-name="resolution">
-              <button data-v="480p">480p</button>
-              <button data-v="720p" class="on">720p</button>
-              <button data-v="1080p">1080p</button>
+    <div class="card">
+      <h2><span class="step">5</span>Templates de scène</h2>
+      <div class="hint">Les templates décrivent la <b>mise en scène</b> (décor, cadrage, action, ambiance) avec des slots.
+        Charge la bibliothèque prête à l'emploi, ou ajoute les tiens. Slots :
+        <code>{outfit} {background} {characteristics} {dialogue} {caption}</code>.</div>
+      <button class="btn small" id="load-templates">📚 Charger les templates par défaut</button>
+      <div class="row" style="margin-top:14px">
+        <div><label>Catégorie</label><select id="t-cat"></select></div>
+        <div style="display:flex;align-items:flex-end">
+          <label style="margin:0"><input type="checkbox" id="t-speaking" style="width:auto"> speaking (déclenche la voix)</label></div>
+      </div>
+      <label>Texte du template</label>
+      <input type="text" id="t-text" placeholder="A woman {outfit}, {background}, {characteristics}. {dialogue}">
+      <button class="btn small" id="t-add" style="margin-top:10px">Ajouter le template</button>
+    </div>
+
+    <div class="card">
+      <h2><span class="step">6</span>Textes fournis (dialogues &amp; captions)</h2>
+      <div class="hint">C'est <b>toi</b> qui déposes ici le texte parlé et les légendes. Le dialogue est taggé
+        <code>[H]</code>/<code>[F]</code>/<code>[beat]</code>, une ligne = une voix, dans l'ordre chronologique.</div>
+      <div class="row" style="margin-top:0">
+        <div><label>Dialogue — catégorie</label><select id="d-cat"></select></div>
+        <div><label>Caption — catégorie</label><select id="cap-cat"></select></div>
+      </div>
+      <label>Dialogue taggé</label>
+      <textarea id="d-text" rows="3" placeholder="[H] première ligne&#10;[F] deuxième ligne"></textarea>
+      <button class="btn small" id="d-add" style="margin-top:10px">Ajouter le dialogue</button>
+      <label style="margin-top:12px">Caption (barre de texte Snapchat)</label>
+      <input type="text" id="cap-text" placeholder="légende…">
+      <button class="btn small" id="cap-add" style="margin-top:10px">Ajouter la caption</button>
+    </div>
+
+    <div class="card">
+      <h2>Tarifs (estimateur)</h2>
+      <div class="hint">Les coûts estimés viennent de cette table. kie.ai bloque la lecture auto de ses prix,
+        donc <b>corrige ici avec les valeurs exactes de ton compte</b> pour des estimations justes. Édite un tarif → Entrée.</div>
+      <table><thead><tr><th>modèle</th><th>résolution</th><th>réf</th><th>unité</th><th>tarif USD</th></tr></thead>
+        <tbody id="pricing-rows"></tbody></table>
+    </div>
+
+    <div class="card">
+      <h2>Compte</h2>
+      <div class="row" style="margin-top:0">
+        <div><label>Mot de passe actuel</label><input type="password" id="pw-cur"></div>
+        <div><label>Nouveau mot de passe (8+)</label><input type="password" id="pw-new"></div>
+      </div>
+      <button class="btn small" id="pw-change" style="margin-top:10px">Changer le mot de passe</button>
+    </div>
+  </section>
+
+  <!-- ================= VIDÉOS ================= -->
+  <section class="page active" id="page-video">
+    <h1>Génération vidéo</h1>
+    <div class="sub">Seedance 2.0 via kie.ai · voix ElevenLabs · assemblage FFmpeg</div>
+    <div class="grid">
+      <div>
+        <div class="card">
+          <h2>Panneau de génération</h2>
+          <label>Model</label>
+          <select class="js-model"></select>
+          <div style="margin-top:14px">
+            <label>Vidéos par catégorie</label>
+            <div class="cats" id="cats"></div>
+          </div>
+          <div class="row">
+            <div><label>Résolution</label>
+              <div class="seg" data-name="resolution">
+                <button data-v="480p">480p</button>
+                <button data-v="720p" class="on">720p</button>
+                <button data-v="1080p">1080p</button>
+              </div>
+            </div>
+            <div><label>Bitrate</label>
+              <div class="seg" data-name="bitrate">
+                <button data-v="standard" class="on">standard</button>
+                <button data-v="high">high</button>
+              </div>
             </div>
           </div>
-          <div><label>Bitrate</label>
-            <div class="seg" data-name="bitrate">
-              <button data-v="standard" class="on">standard</button>
-              <button data-v="high">high</button>
+          <div class="row">
+            <div><label>Durée : <b id="durv">10</b> s <span class="muted">(max 15)</span></label>
+              <input type="range" id="duration" min="4" max="15" value="10" style="width:100%">
+            </div>
+            <div><label>Variante</label>
+              <select id="variant"><option value="seedance_2.0">seedance_2.0</option></select>
             </div>
           </div>
-        </div>
-        <div class="row">
-          <div><label>Durée : <b id="durv">10</b> s</label>
-            <input type="range" id="duration" min="4" max="15" value="10" style="width:100%">
-          </div>
-          <div><label>Variante de modèle</label>
-            <select id="variant"><option value="seedance_2.0">seedance_2.0</option></select>
-          </div>
-        </div>
-        <div class="row">
-          <div><label>Budget max (USD, optionnel)</label>
-            <input type="number" id="budget" min="0" step="1" placeholder="—"></div>
-          <div><label>Musique (URL, optionnel)</label>
-            <input type="url" id="music" placeholder="https://…"></div>
-        </div>
-        <button class="btn" id="generate">⚡ Generate</button>
-      </div>
-
-      <div class="card">
-        <h2>Configuration — model &amp; banques</h2>
-        <p class="muted" style="font-size:12px;margin:0 0 12px">
-          Uploade les images directement ici (elles partent sur R2). Pas besoin de coller d'URL.
-        </p>
-
-        <details open><summary style="cursor:pointer;font-weight:600;margin-bottom:8px">Model</summary>
-          <div class="row" style="margin-top:0">
-            <div><label>Nom</label><input type="text" id="m-name" placeholder="Ma model"></div>
-            <div><label>Photo visage (référence)</label><input type="file" id="m-face" accept="image/*"></div>
-          </div>
-          <button class="btn small" id="m-create" style="margin-top:8px">Créer la model</button>
-        </details>
-
-        <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600;margin-bottom:8px">Caractéristique spéciale (pour la model sélectionnée en haut)</summary>
-          <div class="row" style="margin-top:0">
-            <div><label>Label</label><input type="text" id="c-label" placeholder="tatouage avant-bras gauche"></div>
-            <div><label>Photo du trait</label><input type="file" id="c-photo" accept="image/*"></div>
-          </div>
-          <label>Injection hint (comment le décrire dans le prompt)</label>
-          <input type="text" id="c-hint" placeholder="a delicate floral tattoo on her left forearm">
-          <button class="btn small" id="c-add" style="margin-top:8px">Ajouter la caractéristique</button>
-        </details>
-
-        <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600;margin-bottom:8px">Outfits &amp; Backgrounds</summary>
-          <div class="row" style="margin-top:0">
-            <div><label>Outfit — image</label><input type="file" id="o-photo" accept="image/*"></div>
-            <div><label>Tags (virgules)</label><input type="text" id="o-tags" placeholder="red dress, heels"></div>
-          </div>
-          <button class="btn small" id="o-add" style="margin-top:8px">Ajouter l'outfit</button>
           <div class="row">
-            <div><label>Background — image</label><input type="file" id="b-photo" accept="image/*"></div>
-            <div><label>Tags (virgules)</label><input type="text" id="b-tags" placeholder="beach at sunset"></div>
+            <div><label>Budget max (USD, optionnel)</label>
+              <input type="number" id="budget" min="0" step="1" placeholder="—"></div>
+            <div><label>Musique (URL, optionnel)</label>
+              <input type="url" id="music" placeholder="https://…"></div>
           </div>
-          <button class="btn small" id="b-add" style="margin-top:8px">Ajouter le background</button>
-        </details>
+          <button class="btn" id="generate">⚡ Generate</button>
+        </div>
 
-        <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600;margin-bottom:8px">Templates / dialogues / captions / voix (texte)</summary>
-          <label>Template — catégorie</label>
-          <select id="t-cat"></select>
-          <label style="margin-top:8px">Texte (slots : {outfit} {background} {characteristics} {dialogue} {caption})</label>
-          <input type="text" id="t-text" placeholder="A woman {outfit}, {background}, {characteristics}. {dialogue}">
-          <label style="margin-top:8px"><input type="checkbox" id="t-speaking"> speaking (déclenche la voix)</label>
-          <button class="btn small" id="t-add" style="margin-top:8px">Ajouter le template</button>
-
-          <div class="row" style="margin-top:12px">
-            <div><label>Dialogue — catégorie</label><select id="d-cat"></select></div>
-            <div><label>Caption — catégorie</label><select id="cap-cat"></select></div>
-          </div>
-          <label>Dialogue taggé ([H] / [F] / [beat], une ligne = une voix)</label>
-          <textarea id="d-text" rows="3" placeholder="[H] première ligne&#10;[F] deuxième ligne"
-            style="width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:14px;font-family:inherit"></textarea>
-          <button class="btn small" id="d-add" style="margin-top:8px">Ajouter le dialogue</button>
-          <label style="margin-top:8px">Caption (barre de texte Snapchat)</label>
-          <input type="text" id="cap-text" placeholder="légende…">
-          <button class="btn small" id="cap-add" style="margin-top:8px">Ajouter la caption</button>
-
-          <div class="row" style="margin-top:12px">
-            <div><label>Voix — tag</label>
-              <select id="v-tag"><option value="H">H (grave masculin)</option><option value="F">F (féminin)</option></select></div>
-            <div><label>Genre</label>
-              <select id="v-gender"><option value="male">male</option><option value="female">female</option></select></div>
-          </div>
-          <div class="row">
-            <div><label>Label</label><input type="text" id="v-label" placeholder="grave masculin"></div>
-            <div><label>ElevenLabs voice_id</label><input type="text" id="v-id" placeholder="21m00…"></div>
-          </div>
-          <button class="btn small" id="v-add" style="margin-top:8px">Ajouter la voix</button>
-        </details>
+        <div class="card">
+          <h2>Jobs vidéo</h2>
+          <table>
+            <thead><tr><th>créé</th><th>catégories</th><th>statut</th><th>estimé</th><th>réel</th></tr></thead>
+            <tbody id="jobs"></tbody>
+          </table>
+          <div id="job-detail"></div>
+        </div>
       </div>
 
-      <div class="card">
-        <h2>Jobs vidéo</h2>
-        <table>
-          <thead><tr><th>créé</th><th>catégories</th><th>statut</th>
-                     <th>estimé</th><th>réel</th></tr></thead>
-          <tbody id="jobs"></tbody>
-        </table>
-        <div id="job-detail"></div>
-      </div>
-
-      <div class="card">
-        <h2>Pictures — nano banana</h2>
-        <div class="row" style="margin-top:0">
-          <div><label>Image de référence (upload) → prompt</label>
-            <input type="file" id="pic-ref-file" accept="image/*"></div>
-          <div style="display:flex; align-items:flex-end">
-            <button class="btn small" id="pic-reverse" style="width:100%">Uploader &amp; reverse-engineer</button></div>
+      <div class="card estimate">
+        <h2>Coût estimé</h2>
+        <div class="big" id="est-eff">$0.00 <small>effectif (livré)</small></div>
+        <div style="margin-top:10px">
+          <div class="est-line"><span class="muted">Brut</span><span class="v" id="est-gross">$0.00</span></div>
+          <div class="est-line"><span class="muted">Vidéos</span><span class="v" id="est-count">0</span></div>
+          <div class="est-line"><span class="muted">$ / vidéo livrée</span><span class="v" id="est-per">$0.00</span></div>
+          <div class="est-line"><span class="muted">Taux QC calibré</span><span class="v" id="est-qc">—</span></div>
+          <div id="est-cats"></div>
         </div>
-        <div id="pic-prompts" style="margin-top:10px; font-size:12px"></div>
-        <div class="row">
-          <div><label>Photos à générer</label>
-            <input type="number" id="pic-count" min="1" value="10"></div>
-          <div><label>Format</label>
-            <select id="pic-size">
-              <option value="1:1">1:1</option><option value="4:5">4:5 (IG)</option>
-              <option value="9:16">9:16</option><option value="16:9">16:9</option>
-            </select></div>
-        </div>
-        <div class="row">
-          <div><label>Budget max (USD)</label>
-            <input type="number" id="pic-budget" min="0" step="1" placeholder="—"></div>
-          <div style="display:flex; align-items:flex-end">
-            <span class="muted mono" id="pic-est" style="font-size:13px">—</span></div>
-        </div>
-        <button class="btn" id="pic-generate">🖼️ Générer les photos</button>
-        <div id="pic-jobs" style="margin-top:14px"></div>
-        <div id="pic-detail"></div>
+        <div class="warn-box" id="budget-warn"></div>
       </div>
     </div>
+  </section>
 
-    <div class="card estimate">
-      <h2>Coût estimé</h2>
-      <div class="big" id="est-eff">$0.00 <small>effectif (livré)</small></div>
-      <div style="margin-top:10px">
-        <div class="est-line"><span class="muted">Brut</span><span class="v" id="est-gross">$0.00</span></div>
-        <div class="est-line"><span class="muted">Vidéos</span><span class="v" id="est-count">0</span></div>
-        <div class="est-line"><span class="muted">$ / vidéo livrée</span><span class="v" id="est-per">$0.00</span></div>
-        <div class="est-line"><span class="muted">Taux QC calibré</span><span class="v" id="est-qc">—</span></div>
-        <div id="est-cats"></div>
+  <!-- ================= PHOTOS ================= -->
+  <section class="page" id="page-photo">
+    <h1>Génération photo</h1>
+    <div class="sub">Nano Banana via kie.ai · consistance visage + caractéristiques · métadonnées nettoyées</div>
+
+    <div class="card">
+      <h2>Banque de prompts (reverse-engineering)</h2>
+      <div class="hint">Uploade une image de référence : elle est transformée en prompt réutilisable, adapté à ta model.
+        Le prompt est sauvegardé à vie.</div>
+      <div class="row" style="margin-top:0">
+        <div><label>Image de référence</label><input type="file" id="pic-ref-file" accept="image/*"></div>
+        <div style="display:flex; align-items:flex-end">
+          <button class="btn small" id="pic-reverse" style="width:100%">Uploader &amp; reverse-engineer</button></div>
       </div>
-      <div class="warn-box" id="budget-warn"></div>
+      <div id="pic-prompts" style="margin-top:12px; font-size:12px"></div>
     </div>
-  </div>
+
+    <div class="card">
+      <h2>Générer des photos</h2>
+      <label>Model</label>
+      <select class="js-model"></select>
+      <div class="row">
+        <div><label>Photos à générer</label><input type="number" id="pic-count" min="1" value="10"></div>
+        <div><label>Format</label>
+          <select id="pic-size">
+            <option value="1:1">1:1</option><option value="4:5">4:5 (IG)</option>
+            <option value="9:16">9:16</option><option value="16:9">16:9</option>
+          </select></div>
+      </div>
+      <div class="row">
+        <div><label>Budget max (USD)</label><input type="number" id="pic-budget" min="0" step="1" placeholder="—"></div>
+        <div style="display:flex; align-items:flex-end">
+          <span class="muted mono" id="pic-est" style="font-size:13px">—</span></div>
+      </div>
+      <button class="btn" id="pic-generate">🖼️ Générer les photos</button>
+    </div>
+
+    <div class="card">
+      <h2>Jobs photo</h2>
+      <div id="pic-jobs"></div>
+      <div id="pic-detail"></div>
+    </div>
+  </section>
+
 </div>
 <div id="toast"></div>
 
@@ -273,12 +347,11 @@ const CATEGORIES = ["skit","storytelling","showing_body","micro_trottoir","podca
 const $ = (s) => document.querySelector(s);
 const state = { resolution: "720p", bitrate: "standard" };
 
-// Échappe toute donnée non fiable avant insertion via innerHTML (prompts
-// générés par LLM, captions, erreurs, URLs…) → pas de XSS stockée.
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>(
   {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
-// N'accepte que des URLs http(s) pour les attributs src (bloque javascript: etc.)
 function safeUrl(u){u=String(u==null?"":u);return /^https?:\/\//i.test(u)?u:"";}
+const badge = (s) => `<span class="badge b-${s}">${esc(s)}</span>`;
+const tags = (s) => s.split(",").map(t => t.trim()).filter(Boolean);
 
 function toast(msg) {
   const t = $("#toast"); t.textContent = msg; t.style.display = "block";
@@ -290,8 +363,24 @@ async function api(path, opts) {
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
   return r.json();
 }
+async function uploadFile(inputEl) {
+  const f = inputEl.files[0];
+  if (!f) throw new Error("Aucun fichier sélectionné");
+  const fd = new FormData(); fd.append("file", f);
+  const r = await fetch("/api/uploads", {method: "POST", body: fd});
+  if (r.status === 401) { location.href = "/login"; throw new Error("Non authentifié"); }
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || "upload échoué");
+  return (await r.json()).url;
+}
 
-// Garde : redirige vers /login si pas de session valide
+// --- navigation ---
+function showPage(p) {
+  document.querySelectorAll(".page").forEach(el => el.classList.toggle("active", el.id === "page-" + p));
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.page === p));
+}
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => showPage(b.dataset.page)));
+
+// --- auth ---
 async function requireAuth() {
   const me = await api("/auth/me");
   $("#whoami").textContent = me.email;
@@ -300,11 +389,126 @@ $("#logout").addEventListener("click", async () => {
   await fetch("/api/auth/logout", {method: "POST"});
   location.href = "/login";
 });
+$("#pw-change").addEventListener("click", async () => {
+  try {
+    await api("/auth/change-password", {method: "POST", body: JSON.stringify({
+      current_password: $("#pw-cur").value, new_password: $("#pw-new").value})});
+    toast("Mot de passe changé"); $("#pw-cur").value = ""; $("#pw-new").value = "";
+  } catch (e) { toast("Mot de passe : " + e.message); }
+});
 
-// --- panneau ---
+// --- model active (synchronisé entre les pages) ---
+let activeModelId = "";
+function getModel() { return activeModelId; }
+async function loadModels() {
+  const models = await api("/models");
+  const opts = models.length
+    ? models.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join("")
+    : '<option value="">— crée une model dans Réglages —</option>';
+  if (!activeModelId && models.length) activeModelId = models[0].id;
+  document.querySelectorAll(".js-model").forEach(sel => { sel.innerHTML = opts; if (activeModelId) sel.value = activeModelId; });
+}
+document.addEventListener("change", (e) => {
+  if (e.target.classList && e.target.classList.contains("js-model")) {
+    activeModelId = e.target.value;
+    document.querySelectorAll(".js-model").forEach(s => { if (s !== e.target) s.value = activeModelId; });
+    refreshEstimate();
+  }
+});
+
+// --- listes de catégories ---
 $("#cats").innerHTML = CATEGORIES.map(c =>
   `<div class="cat"><b>${c}</b><input type="number" min="0" value="0" data-cat="${c}"></div>`).join("");
+const CAT_OPTIONS = CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join("");
+["#t-cat", "#d-cat", "#cap-cat"].forEach(s => { $(s).innerHTML = CAT_OPTIONS; });
 
+// ================= RÉGLAGES : handlers =================
+$("#m-create").addEventListener("click", async () => {
+  try {
+    if (!$("#m-name").value) return toast("Nom manquant");
+    if (!$("#m-face").files[0]) return toast("Photo visage manquante");
+    const url = await uploadFile($("#m-face"));
+    await api("/models", {method: "POST", body: JSON.stringify({name: $("#m-name").value, face_reference_url: url})});
+    toast("Model créée"); $("#m-name").value = ""; $("#m-face").value = "";
+    await loadModels();
+  } catch (e) { toast("Model : " + e.message); }
+});
+$("#c-add").addEventListener("click", async () => {
+  try {
+    if (!getModel()) return toast("Crée/sélectionne d'abord une model");
+    if (!$("#c-photo").files[0]) return toast("Photo du trait manquante");
+    const url = await uploadFile($("#c-photo"));
+    await api(`/models/${getModel()}/characteristics`, {method: "POST", body: JSON.stringify({
+      label: $("#c-label").value, reference_image_url: url, injection_hint: $("#c-hint").value, always_include: true})});
+    toast("Caractéristique ajoutée"); $("#c-label").value = ""; $("#c-hint").value = ""; $("#c-photo").value = "";
+  } catch (e) { toast("Caractéristique : " + e.message); }
+});
+async function addImageBank(endpoint, fileSel, tagsSel, label) {
+  try {
+    if (!$(fileSel).files[0]) return toast("Image manquante");
+    const url = await uploadFile($(fileSel));
+    await api(`/banks/${endpoint}`, {method: "POST", body: JSON.stringify({image_url: url, tags: tags($(tagsSel).value)})});
+    toast(label + " ajouté"); $(fileSel).value = ""; $(tagsSel).value = "";
+  } catch (e) { toast(label + " : " + e.message); }
+}
+$("#o-add").addEventListener("click", () => addImageBank("outfits", "#o-photo", "#o-tags", "Outfit"));
+$("#b-add").addEventListener("click", () => addImageBank("backgrounds", "#b-photo", "#b-tags", "Background"));
+$("#load-templates").addEventListener("click", async () => {
+  try { const r = await api("/banks/templates/load-defaults", {method: "POST"});
+    toast(r.added + " template(s) chargé(s)"); }
+  catch (e) { toast("Templates : " + e.message); }
+});
+$("#t-add").addEventListener("click", async () => {
+  try {
+    await api("/banks/templates", {method: "POST", body: JSON.stringify({
+      category: $("#t-cat").value, template_text: $("#t-text").value, speaking: $("#t-speaking").checked})});
+    toast("Template ajouté"); $("#t-text").value = "";
+  } catch (e) { toast("Template : " + e.message); }
+});
+$("#d-add").addEventListener("click", async () => {
+  try {
+    await api("/banks/dialogues", {method: "POST", body: JSON.stringify({
+      category: $("#d-cat").value, raw_text: $("#d-text").value})});
+    toast("Dialogue ajouté"); $("#d-text").value = "";
+  } catch (e) { toast("Dialogue : " + e.message); }
+});
+$("#cap-add").addEventListener("click", async () => {
+  try {
+    await api("/banks/captions", {method: "POST", body: JSON.stringify({category: $("#cap-cat").value, text: $("#cap-text").value})});
+    toast("Caption ajoutée"); $("#cap-text").value = "";
+  } catch (e) { toast("Caption : " + e.message); }
+});
+$("#v-add").addEventListener("click", async () => {
+  try {
+    await api("/banks/voices", {method: "POST", body: JSON.stringify({
+      label: $("#v-label").value, elevenlabs_voice_id: $("#v-id").value, gender: $("#v-gender").value, tag: $("#v-tag").value})});
+    toast("Voix ajoutée"); $("#v-label").value = ""; $("#v-id").value = "";
+  } catch (e) { toast("Voix : " + e.message); }
+});
+
+// --- éditeur de tarifs ---
+async function loadPricing() {
+  const rows = await api("/pricing");
+  $("#pricing-rows").innerHTML = rows.map(r => `
+    <tr>
+      <td>${esc(r.model)}</td>
+      <td>${esc(r.resolution || "—")}</td>
+      <td>${r.with_ref == null ? "—" : (r.with_ref ? "oui" : "non")}</td>
+      <td class="muted">${esc(r.unit)}</td>
+      <td><input type="number" step="0.0001" min="0" value="${r.rate_usd}" data-price="${r.id}" style="width:110px"></td>
+    </tr>`).join("");
+}
+$("#pricing-rows").addEventListener("change", async (e) => {
+  const id = e.target.dataset.price;
+  if (!id) return;
+  try {
+    await api(`/pricing/${id}`, {method: "PUT", body: JSON.stringify({rate_usd: parseFloat(e.target.value)})});
+    toast("Tarif mis à jour");
+    refreshEstimate();
+  } catch (err) { toast("Tarif : " + err.message); }
+});
+
+// ================= VIDÉOS : génération + review =================
 document.querySelectorAll(".seg").forEach(seg => {
   seg.addEventListener("click", (e) => {
     if (e.target.tagName !== "BUTTON") return;
@@ -326,7 +530,6 @@ function counts() {
   });
   return out;
 }
-
 let estTimer = null;
 function refreshEstimate() { clearTimeout(estTimer); estTimer = setTimeout(doEstimate, 250); }
 async function doEstimate() {
@@ -357,96 +560,11 @@ async function doEstimate() {
   } catch (err) { toast("Estimation : " + err.message); }
 }
 
-// --- models ---
-async function loadModels() {
-  const models = await api("/models");
-  $("#model").innerHTML = models.length
-    ? models.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join("")
-    : '<option value="">— crée une model ci-dessous —</option>';
-}
-
-// --- Configuration : upload + création d'assets ---
-async function uploadFile(inputEl) {
-  const f = inputEl.files[0];
-  if (!f) throw new Error("Aucun fichier sélectionné");
-  const fd = new FormData();
-  fd.append("file", f);
-  const r = await fetch("/api/uploads", {method: "POST", body: fd});
-  if (r.status === 401) { location.href = "/login"; throw new Error("Non authentifié"); }
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || "upload échoué");
-  return (await r.json()).url;
-}
-const tags = (s) => s.split(",").map(t => t.trim()).filter(Boolean);
-const CAT_OPTIONS = CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join("");
-["#t-cat", "#d-cat", "#cap-cat"].forEach(s => { $(s).innerHTML = CAT_OPTIONS; });
-
-$("#m-create").addEventListener("click", async () => {
-  try {
-    if (!$("#m-name").value) return toast("Nom manquant");
-    if (!$("#m-face").files[0]) return toast("Photo visage manquante");
-    const url = await uploadFile($("#m-face"));
-    await api("/models", {method: "POST", body: JSON.stringify({name: $("#m-name").value, face_reference_url: url})});
-    toast("Model créée"); $("#m-name").value = ""; $("#m-face").value = "";
-    await loadModels();
-  } catch (e) { toast("Model : " + e.message); }
-});
-
-$("#c-add").addEventListener("click", async () => {
-  try {
-    if (!$("#model").value) return toast("Sélectionne d'abord une model en haut");
-    if (!$("#c-photo").files[0]) return toast("Photo du trait manquante");
-    const url = await uploadFile($("#c-photo"));
-    await api(`/models/${$("#model").value}/characteristics`, {method: "POST", body: JSON.stringify({
-      label: $("#c-label").value, reference_image_url: url, injection_hint: $("#c-hint").value, always_include: true})});
-    toast("Caractéristique ajoutée"); $("#c-label").value = ""; $("#c-hint").value = ""; $("#c-photo").value = "";
-  } catch (e) { toast("Caractéristique : " + e.message); }
-});
-
-async function addImageBank(endpoint, fileSel, tagsSel, label) {
-  try {
-    if (!$(fileSel).files[0]) return toast("Image manquante");
-    const url = await uploadFile($(fileSel));
-    await api(`/banks/${endpoint}`, {method: "POST", body: JSON.stringify({image_url: url, tags: tags($(tagsSel).value)})});
-    toast(label + " ajouté"); $(fileSel).value = ""; $(tagsSel).value = "";
-  } catch (e) { toast(label + " : " + e.message); }
-}
-$("#o-add").addEventListener("click", () => addImageBank("outfits", "#o-photo", "#o-tags", "Outfit"));
-$("#b-add").addEventListener("click", () => addImageBank("backgrounds", "#b-photo", "#b-tags", "Background"));
-
-$("#t-add").addEventListener("click", async () => {
-  try {
-    await api("/banks/templates", {method: "POST", body: JSON.stringify({
-      category: $("#t-cat").value, template_text: $("#t-text").value, speaking: $("#t-speaking").checked})});
-    toast("Template ajouté"); $("#t-text").value = "";
-  } catch (e) { toast("Template : " + e.message); }
-});
-$("#d-add").addEventListener("click", async () => {
-  try {
-    await api("/banks/dialogues", {method: "POST", body: JSON.stringify({
-      category: $("#d-cat").value, raw_text: $("#d-text").value})});
-    toast("Dialogue ajouté"); $("#d-text").value = "";
-  } catch (e) { toast("Dialogue : " + e.message); }
-});
-$("#cap-add").addEventListener("click", async () => {
-  try {
-    await api("/banks/captions", {method: "POST", body: JSON.stringify({category: $("#cap-cat").value, text: $("#cap-text").value})});
-    toast("Caption ajoutée"); $("#cap-text").value = "";
-  } catch (e) { toast("Caption : " + e.message); }
-});
-$("#v-add").addEventListener("click", async () => {
-  try {
-    await api("/banks/voices", {method: "POST", body: JSON.stringify({
-      label: $("#v-label").value, elevenlabs_voice_id: $("#v-id").value, gender: $("#v-gender").value, tag: $("#v-tag").value})});
-    toast("Voix ajoutée"); $("#v-label").value = ""; $("#v-id").value = "";
-  } catch (e) { toast("Voix : " + e.message); }
-});
-
-// --- generate ---
 $("#generate").addEventListener("click", async () => {
   const c = counts();
-  if (!$("#model").value) return toast("Aucune model sélectionnée");
+  if (!getModel()) return toast("Aucune model — configure-la dans Réglages");
   if (!Object.keys(c).length) return toast("Aucune vidéo demandée");
-  const body = { model_id: $("#model").value, counts_per_category: c,
+  const body = { model_id: getModel(), counts_per_category: c,
                  resolution: state.resolution, bitrate: state.bitrate,
                  duration_s: +$("#duration").value, model_variant: $("#variant").value };
   const budget = parseFloat($("#budget").value);
@@ -461,10 +579,7 @@ $("#generate").addEventListener("click", async () => {
   $("#generate").disabled = false;
 });
 
-// --- jobs / review ---
-const badge = (s) => `<span class="badge b-${s}">${s}</span>`;
 let currentJob = null;
-
 async function loadJobs() {
   const jobs = await api("/jobs");
   $("#jobs").innerHTML = jobs.map(j => `
@@ -476,7 +591,6 @@ async function loadJobs() {
       <td class="mono">${j.actual_cost_usd != null ? "$" + j.actual_cost_usd.toFixed(2) : "—"}</td>
     </tr>`).join("") || '<tr><td colspan="5" class="muted">aucun job</td></tr>';
 }
-
 async function openJob(id) {
   currentJob = id;
   const j = await api("/jobs/" + id);
@@ -484,7 +598,7 @@ async function openJob(id) {
     ? `<div class="warn-box" style="display:block">Combos épuisés : ${esc(JSON.stringify(j.compose_shortfall))}</div>` : "";
   $("#job-detail").innerHTML = `
     <div style="margin-top:16px; display:flex; justify-content:space-between; align-items:center">
-      <h2 style="margin:0">Job ${id.slice(0, 8)} ${badge(j.status)}</h2>
+      <h2 style="margin:0">Job ${esc(id.slice(0, 8))} ${badge(j.status)}</h2>
       <span><button class="btn small ghost" onclick="openJob('${id}')">↻</button>
       <button class="btn small" onclick="exportJob('${id}')">Exporter les approuvés</button></span>
     </div>${shortfall}
@@ -500,28 +614,22 @@ async function openJob(id) {
         </div>` : ""}
       </div>`).join("")}</div>`;
 }
-
 async function review(itemId, decision) {
   try { await api(`/items/${itemId}/review`, {method: "POST", body: JSON.stringify({decision})});
         if (currentJob) openJob(currentJob); }
   catch (err) { toast("Review : " + err.message); }
 }
-
 async function exportJob(id) {
   const e = await api(`/jobs/${id}/export`);
   if (!e.approved_count) return toast("Aucun item approuvé");
   const blob = new Blob([JSON.stringify(e, null, 2)], {type: "application/json"});
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `export_${id.slice(0, 8)}.json`;
-  a.click();
+  a.href = URL.createObjectURL(blob); a.download = `export_${id.slice(0, 8)}.json`; a.click();
 }
-
 window.openJob = openJob; window.review = review; window.exportJob = exportJob;
 
-// --- Pictures (nano banana) ---
+// ================= PHOTOS =================
 let currentPicJob = null;
-
 $("#pic-reverse").addEventListener("click", async () => {
   if (!$("#pic-ref-file").files[0]) return toast("Sélectionne une image de référence");
   try {
@@ -532,7 +640,6 @@ $("#pic-reverse").addEventListener("click", async () => {
     loadPrompts();
   } catch (err) { toast("Reverse : " + err.message); }
 });
-
 async function loadPrompts() {
   const prompts = await api("/pictures/prompts");
   $("#pic-prompts").innerHTML = prompts.length
@@ -544,7 +651,6 @@ async function delPrompt(id) {
   try { await api("/pictures/prompts/" + id, {method: "DELETE"}); loadPrompts(); }
   catch (err) { toast(err.message); }
 }
-
 let picEstTimer = null;
 function refreshPicEstimate() { clearTimeout(picEstTimer); picEstTimer = setTimeout(async () => {
   const count = parseInt($("#pic-count").value || "0", 10);
@@ -561,9 +667,8 @@ function refreshPicEstimate() { clearTimeout(picEstTimer); picEstTimer = setTime
 ["#pic-count", "#pic-budget"].forEach(s => $(s).addEventListener("input", refreshPicEstimate));
 
 $("#pic-generate").addEventListener("click", async () => {
-  if (!$("#model").value) return toast("Aucune model sélectionnée");
-  const body = {model_id: $("#model").value, count: +$("#pic-count").value,
-                image_size: $("#pic-size").value};
+  if (!getModel()) return toast("Aucune model — configure-la dans Réglages");
+  const body = {model_id: getModel(), count: +$("#pic-count").value, image_size: $("#pic-size").value};
   const b = parseFloat($("#pic-budget").value);
   if (!isNaN(b)) body.budget_cap_usd = b;
   $("#pic-generate").disabled = true;
@@ -574,29 +679,27 @@ $("#pic-generate").addEventListener("click", async () => {
   } catch (err) { toast("Photos : " + err.message); }
   $("#pic-generate").disabled = false;
 });
-
 async function loadPicJobs() {
   const jobs = await api("/pictures/jobs");
   $("#pic-jobs").innerHTML = jobs.length ? `<table>
     <thead><tr><th>#</th><th>photos</th><th>statut</th><th>estimé</th></tr></thead><tbody>${
     jobs.map(j => `<tr class="job-row" onclick="openPicJob('${j.id}')">
-      <td class="mono">${j.id.slice(0,8)}</td><td>${j.count}</td>
+      <td class="mono">${esc(j.id.slice(0,8))}</td><td>${j.count}</td>
       <td>${badge(j.status)}${j.compose_shortfall ? " ⚠"+j.compose_shortfall : ""}</td>
       <td class="mono">${j.estimated_cost_usd!=null?"$"+j.estimated_cost_usd.toFixed(2):"—"}</td></tr>`).join("")
     }</tbody></table>` : '<span class="muted">aucun job photo</span>';
 }
-
 async function openPicJob(id) {
   currentPicJob = id;
   const j = await api("/pictures/jobs/" + id);
   $("#pic-detail").innerHTML = `
     <div style="margin-top:14px; display:flex; justify-content:space-between; align-items:center">
-      <b>Photos ${id.slice(0,8)} ${badge(j.status)}</b>
+      <b>Photos ${esc(id.slice(0,8))} ${badge(j.status)}</b>
       <button class="btn small" onclick="exportPicJob('${id}')">Exporter approuvées</button>
     </div>
     <div class="items">${j.items.map(it => `
       <div class="item">
-        ${it.final_image_url ? `<img src="${esc(safeUrl(it.final_image_url))}" style="width:100%;border-radius:8px">` : ""}
+        ${it.final_image_url ? `<img src="${esc(safeUrl(it.final_image_url))}">` : ""}
         <div>${badge(it.status)} ${badge("qc: "+it.qc_status)} ${it.review_status!=="pending"?badge(it.review_status):""}</div>
         <div class="prompt">${esc((it.filled_prompt||"").slice(0,120))}</div>
         ${it.error ? `<div class="prompt" style="color:var(--err)">${esc(it.error.slice(0,100))}</div>` : ""}
@@ -620,11 +723,17 @@ async function exportPicJob(id) {
 window.delPrompt = delPrompt; window.openPicJob = openPicJob;
 window.reviewPic = reviewPic; window.exportPicJob = exportPicJob;
 
-// Bootstrap : auth d'abord, puis chargement des données
+// --- bootstrap ---
 requireAuth().then(() => {
   loadModels().catch(e => toast(e.message));
   loadJobs().catch(() => {});
-  setInterval(() => { loadJobs().catch(() => {}); if (currentJob) openJob(currentJob).catch(() => {}); }, 8000);
+  loadPrompts().catch(() => {});
+  loadPicJobs().catch(() => {});
+  loadPricing().catch(() => {});
+  setInterval(() => {
+    loadJobs().catch(() => {}); if (currentJob) openJob(currentJob).catch(() => {});
+    if (currentPicJob) openPicJob(currentPicJob).catch(() => {});
+  }, 8000);
   refreshEstimate();
 }).catch(() => {});
 </script>

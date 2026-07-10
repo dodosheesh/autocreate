@@ -24,8 +24,17 @@ from app.db.models import (
     User,
     VoiceProfile,
 )
+from app.services.template_library import load_default_templates
 
 router = APIRouter(prefix="/api/banks", tags=["banks"])
+
+
+@router.post("/templates/load-defaults")
+def load_defaults(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """Charge la bibliothèque de templates prêts à l'emploi (mise en scène par
+    catégorie) dans la banque du tenant. Idempotent (dédup par texte)."""
+    added = load_default_templates(db, user.tenant_id)
+    return {"added": added}
 
 
 def _register(
