@@ -155,7 +155,7 @@ class JobCreate(BaseModel):
     )
     count: int = Field(default=1, ge=1, le=100)
     resolution: Resolution = "720p"
-    duration_s: int = Field(default=10, ge=3, le=30)
+    duration_s: int = Field(default=10, ge=4, le=15)  # Seedance 2.0 : 4–15 s/clip
     bitrate: Bitrate = "standard"
     model_variant: str = "seedance_2.0"
     budget_cap_usd: float | None = None
@@ -172,7 +172,7 @@ class BatchJobCreate(BaseModel):
         description='Ex : {"skit": 20, "podcast": 10}', min_length=1
     )
     resolution: Resolution = "720p"
-    duration_s: int = Field(default=10, ge=3, le=30)
+    duration_s: int = Field(default=10, ge=4, le=15)  # Seedance 2.0 : 4–15 s/clip
     bitrate: Bitrate = "standard"
     model_variant: str = "seedance_2.0"
     music_url: HttpUrlStr | None = Field(default=None, description="Piste mixée à l'assemblage")
