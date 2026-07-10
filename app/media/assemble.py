@@ -49,9 +49,12 @@ def _snapchat_overlay(caption_file: str, height: int) -> str:
     bar_y = round(height * 0.16)
     bar_h = round(height * 0.075)
     font_size = round(height * 0.032)
+    # expansion=none : le contenu du caption (fourni par l'utilisateur) est
+    # rendu littéralement, sans que drawtext interprète les directives %{...}
+    # (sinon fuite de métadonnées de frame / erreur FFmpeg via un caption piégé).
     return (
         f"drawbox=x=0:y={bar_y}:w=iw:h={bar_h}:color=black@0.55:t=fill,"
-        f"drawtext=textfile='{caption_file}':font=Sans:fontcolor=white:"
+        f"drawtext=textfile='{caption_file}':expansion=none:font=Sans:fontcolor=white:"
         f"fontsize={font_size}:x=(w-text_w)/2:y={bar_y}+({bar_h}-text_h)/2"
     )
 

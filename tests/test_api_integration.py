@@ -113,7 +113,7 @@ def test_full_batch_flow(client, model_id, banks):
         first_id = str(items[0].id)
     with patch.object(wt.process_generated, "delay"):
         r = client.post(
-            "/api/webhooks/kie",
+            "/api/webhooks/kie?secret=test-webhook-secret",
             json={
                 "code": 200,
                 "data": {
@@ -128,7 +128,7 @@ def test_full_batch_flow(client, model_id, banks):
 
     # 4. le second échoue ; le premier termine → job finalisé + calibration
     client.post(
-        "/api/webhooks/kie",
+        "/api/webhooks/kie?secret=test-webhook-secret",
         json={"code": 200, "data": {"taskId": "itest_1", "state": "fail", "failMsg": "x"}},
     )
     with wt.db_session() as db:
@@ -188,3 +188,42 @@ def test_login_puis_me_et_logout():
     assert me.status_code == 200 and me.json()["email"] == ADMIN_EMAIL
     c.post("/api/auth/logout")
     assert c.get("/api/auth/me").status_code == 401
+
+
+def test_change_password_revoque_les_anciennes_sessions(client):
+    """Le token_version invalide un cookie volé après changement de mdp."""
+    stolen = TestClient(app)
+    stolen.post("/api/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
+    assert stolen.get("/api/auth/me").status_code == 200  # session active
+
+    # le propriétaire change son mot de passe depuis une autre session (le fixture client)
+    r = client.post(
+        "/api/auth/change-password",
+        json={"current_password": ADMIN_PASSWORD, "new_password": "nouveau-mdp-123"},
+    )
+    assert r.status_code == 200
+    # l'ancien cookie (token_version périmé) est désormais rejeté
+    assert stolen.get("/api/auth/me").status_code == 401
+    # remet le mot de passe d'origine pour ne pas polluer les autres tests
+    client.post(
+        "/api/auth/change-password",
+        json={"current_password": "nouveau-mdp-123", "new_password": ADMIN_PASSWORD},
+    )
+
+
+def test_webhook_refuse_sans_secret_ou_mauvais_secret(client):
+    # sans secret → 401 (secret configuré mais absent de la requête)
+    r = client.post("/api/webhooks/kie", json={"data": {"taskId": "x", "state": "success"}})
+    assert r.status_code == 401
+    # mauvais secret → 401
+    r = client.post(
+        "/api/webhooks/kie?secret=faux", json={"data": {"taskId": "x", "state": "success"}}
+    )
+    assert r.status_code == 401
+
+
+def test_url_non_http_rejettee_a_l_entree(client):
+    r = client.post(
+        "/api/models", json={"name": "x", "face_reference_url": "file:///etc/passwd"}
+    )
+    assert r.status_code == 422

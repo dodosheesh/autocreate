@@ -83,6 +83,9 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(String(16), default="owner")  # owner / member
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Incrémenté à chaque changement de mot de passe → invalide tous les jetons
+    # de session émis avant (révocation effective, pas seulement côté client).
+    token_version: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 

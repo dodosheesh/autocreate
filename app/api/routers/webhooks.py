@@ -24,7 +24,11 @@ async def kie_callback(request: Request, secret: str = "", db: Session = Depends
     éviter les re-livraisons en boucle ; `poll_pending_items` est le filet.
     """
     expected = get_settings().kie_webhook_secret
-    if expected and not hmac.compare_digest(secret, expected):
+    if not expected:
+        # Pas de secret configuré → on refuse plutôt que d'exposer l'endpoint
+        # (sinon n'importe qui peut injecter des résultats de jobs / URLs).
+        raise HTTPException(503, "Webhook non configuré (KIE_WEBHOOK_SECRET requis)")
+    if not hmac.compare_digest(secret, expected):
         raise HTTPException(401, "Secret webhook invalide")
     body = await request.json()
     result = parse_task_payload(body.get("data", body))

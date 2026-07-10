@@ -6,3 +6,5 @@ import tempfile
 
 _tmpdir = tempfile.mkdtemp(prefix="autocreate-tests-")
 os.environ.setdefault("DATABASE_URL", f"sqlite:///{_tmpdir}/test.db")
+# Secret webhook configuré pour les tests (le webhook est refusé s'il est vide)
+os.environ.setdefault("KIE_WEBHOOK_SECRET", "test-webhook-secret")

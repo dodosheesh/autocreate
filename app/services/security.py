@@ -40,6 +40,12 @@ def verify_password(password: str, stored: str) -> bool:
         return False
 
 
+# Hash factice au vrai coût (240k rounds) : le login le vérifie quand l'email
+# n'existe pas, pour que la latence soit identique à un compte réel → pas
+# d'énumération de comptes par timing. Calculé une fois au chargement.
+DUMMY_PASSWORD_HASH = hash_password("autocreate-dummy-password-never-matches")
+
+
 # ---------- jeton de session signé ----------
 
 
@@ -56,16 +62,22 @@ def _sign(payload_b64: str) -> str:
     return _b64e(hmac.new(key, payload_b64.encode(), hashlib.sha256).digest())
 
 
-def issue_session(user_id: str, *, now: int | None = None) -> str:
-    """Jeton `payload.signature` ; payload contient user_id + expiration."""
+def issue_session(user_id: str, token_version: int = 0, *, now: int | None = None) -> str:
+    """Jeton `payload.signature` ; payload = user_id + version + expiration.
+    La version lie le jeton à User.token_version pour la révocation."""
     now = int(time.time()) if now is None else now
-    payload = {"uid": user_id, "exp": now + get_settings().session_ttl_s}
+    payload = {
+        "uid": user_id,
+        "ver": token_version,
+        "exp": now + get_settings().session_ttl_s,
+    }
     payload_b64 = _b64e(json.dumps(payload, separators=(",", ":")).encode())
     return f"{payload_b64}.{_sign(payload_b64)}"
 
 
-def read_session(token: str, *, now: int | None = None) -> str | None:
-    """Renvoie le user_id si le jeton est valide et non expiré, sinon None."""
+def read_session(token: str, *, now: int | None = None) -> dict | None:
+    """Renvoie le payload {uid, ver, exp} si le jeton est valide et non
+    expiré, sinon None. L'appelant compare `ver` à User.token_version."""
     if not token or "." not in token:
         return None
     payload_b64, sig = token.rsplit(".", 1)
@@ -78,4 +90,6 @@ def read_session(token: str, *, now: int | None = None) -> str | None:
     now = int(time.time()) if now is None else now
     if payload.get("exp", 0) < now:
         return None
-    return payload.get("uid")
+    if "uid" not in payload:
+        return None
+    return payload

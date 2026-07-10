@@ -2,6 +2,8 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+DEV_SECRET_SENTINEL = "dev-insecure-change-me"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -66,14 +68,43 @@ class Settings(BaseSettings):
     # --- Auth ---
     # Clé de signature des cookies de session — OBLIGATOIRE de la surcharger
     # en prod (générer : python -c "import secrets; print(secrets.token_hex(32))")
-    secret_key: str = "dev-insecure-change-me"
+    secret_key: str = DEV_SECRET_SENTINEL
     session_ttl_s: int = 60 * 60 * 24 * 14  # 14 jours
     session_cookie: str = "autocreate_session"
-    # Compte propriétaire seedé au premier init_db (mot de passe à changer ensuite)
+    # Force le flag Secure du cookie ; None = déduit du https de public_base_url
+    # (mettre True derrière un proxy TLS où public_base_url resterait en http)
+    session_cookie_secure: bool | None = None
+    # Compte propriétaire seedé au premier init_db. Vide = mot de passe aléatoire
+    # généré et imprimé une fois (jamais de mot de passe par défaut exploitable).
     bootstrap_admin_email: str = "sydeincovind@gmail.com"
-    bootstrap_admin_password: str = "change-me-on-first-login"
+    bootstrap_admin_password: str = ""
     # Secret partagé kie.ai pour authentifier les webhooks (?secret=...)
     kie_webhook_secret: str = ""
+
+    @property
+    def is_production(self) -> bool:
+        return self.public_base_url.startswith("https")
+
+    @property
+    def cookie_secure(self) -> bool:
+        if self.session_cookie_secure is not None:
+            return self.session_cookie_secure
+        return self.is_production
+
+    def assert_secure_config(self) -> None:
+        """Bloque un démarrage en prod avec des secrets par défaut (fail-fast)."""
+        if not self.is_production:
+            return
+        problems = []
+        if self.secret_key == DEV_SECRET_SENTINEL or len(self.secret_key) < 32:
+            problems.append("SECRET_KEY (>= 32 octets aléatoires requis en prod)")
+        if not self.kie_webhook_secret:
+            problems.append("KIE_WEBHOOK_SECRET (requis pour authentifier les webhooks)")
+        if problems:
+            raise RuntimeError(
+                "Configuration non sécurisée pour la production : "
+                + ", ".join(problems)
+            )
 
 
 @lru_cache

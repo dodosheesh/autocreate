@@ -202,6 +202,13 @@ const CATEGORIES = ["skit","storytelling","showing_body","micro_trottoir","podca
 const $ = (s) => document.querySelector(s);
 const state = { resolution: "720p", bitrate: "standard" };
 
+// Échappe toute donnée non fiable avant insertion via innerHTML (prompts
+// générés par LLM, captions, erreurs, URLs…) → pas de XSS stockée.
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>(
+  {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+// N'accepte que des URLs http(s) pour les attributs src (bloque javascript: etc.)
+function safeUrl(u){u=String(u==null?"":u);return /^https?:\/\//i.test(u)?u:"";}
+
 function toast(msg) {
   const t = $("#toast"); t.textContent = msg; t.style.display = "block";
   setTimeout(() => t.style.display = "none", 3500);
@@ -271,7 +278,7 @@ async function doEstimate() {
     $("#est-per").textContent = `$${e.cost_per_delivered_video_usd.toFixed(3)}`;
     $("#est-qc").textContent = `${(e.qc_success_rate * 100).toFixed(0)} %`;
     $("#est-cats").innerHTML = Object.entries(e.per_category_usd).map(([k, v]) =>
-      `<div class="est-line"><span class="muted">· ${k}</span><span class="v">$${v.toFixed(2)}</span></div>`).join("");
+      `<div class="est-line"><span class="muted">· ${esc(k)}</span><span class="v">$${v.toFixed(2)}</span></div>`).join("");
     if (e.over_budget) {
       warn.style.display = "block";
       warn.textContent = `⚠ Dépasse le budget — max ~${e.max_videos_for_budget} vidéos livrables à cette config.`;
@@ -283,7 +290,7 @@ async function doEstimate() {
 async function loadModels() {
   const models = await api("/models");
   $("#model").innerHTML = models.length
-    ? models.map(m => `<option value="${m.id}">${m.name}</option>`).join("")
+    ? models.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join("")
     : '<option value="">— créer une model via POST /api/models —</option>';
 }
 
@@ -316,7 +323,7 @@ async function loadJobs() {
   $("#jobs").innerHTML = jobs.map(j => `
     <tr class="job-row" onclick="openJob('${j.id}')">
       <td class="mono">${(j.created_at || "").toString().slice(0, 16).replace("T", " ")}</td>
-      <td>${Object.entries(j.counts_per_category || {}).map(([k, v]) => `${k}:${v}`).join(" ")}</td>
+      <td>${Object.entries(j.counts_per_category || {}).map(([k, v]) => `${esc(k)}:${esc(v)}`).join(" ")}</td>
       <td>${badge(j.status)}${Object.keys(j.compose_shortfall || {}).length ? " ⚠" : ""}</td>
       <td class="mono">${j.estimated_cost_usd != null ? "$" + j.estimated_cost_usd.toFixed(2) : "—"}</td>
       <td class="mono">${j.actual_cost_usd != null ? "$" + j.actual_cost_usd.toFixed(2) : "—"}</td>
@@ -327,7 +334,7 @@ async function openJob(id) {
   currentJob = id;
   const j = await api("/jobs/" + id);
   const shortfall = Object.keys(j.compose_shortfall || {}).length
-    ? `<div class="warn-box" style="display:block">Combos épuisés : ${JSON.stringify(j.compose_shortfall)}</div>` : "";
+    ? `<div class="warn-box" style="display:block">Combos épuisés : ${esc(JSON.stringify(j.compose_shortfall))}</div>` : "";
   $("#job-detail").innerHTML = `
     <div style="margin-top:16px; display:flex; justify-content:space-between; align-items:center">
       <h2 style="margin:0">Job ${id.slice(0, 8)} ${badge(j.status)}</h2>
@@ -336,10 +343,10 @@ async function openJob(id) {
     </div>${shortfall}
     <div class="items">${j.items.map(it => `
       <div class="item">
-        ${it.final_video_url ? `<video src="${it.final_video_url}" controls preload="metadata"></video>` : ""}
+        ${it.final_video_url ? `<video src="${esc(safeUrl(it.final_video_url))}" controls preload="metadata"></video>` : ""}
         <div>${badge(it.status)} ${badge("qc: " + it.qc_status)} ${it.review_status !== "pending" ? badge(it.review_status) : ""}</div>
-        <div class="prompt">${it.category} — ${(it.filled_prompt || "").slice(0, 140)}</div>
-        ${it.error ? `<div class="prompt" style="color:var(--err)">${it.error.slice(0, 120)}</div>` : ""}
+        <div class="prompt">${esc(it.category)} — ${esc((it.filled_prompt || "").slice(0, 140))}</div>
+        ${it.error ? `<div class="prompt" style="color:var(--err)">${esc(it.error.slice(0, 120))}</div>` : ""}
         ${it.status === "done" ? `<div class="actions">
           <button class="btn small ok" onclick="review('${it.id}','approved')">✓ Approve</button>
           <button class="btn small bad" onclick="review('${it.id}','rejected')">✗ Reject</button>
@@ -381,7 +388,7 @@ $("#pic-reverse").addEventListener("click", async () => {
 async function loadPrompts() {
   const prompts = await api("/pictures/prompts");
   $("#pic-prompts").innerHTML = prompts.length
-    ? prompts.map(p => `<div class="est-line"><span class="muted">${badge(p.status)} ${(p.prompt_text || p.source_image_url).slice(0, 70)}</span>
+    ? prompts.map(p => `<div class="est-line"><span class="muted">${badge(p.status)} ${esc((p.prompt_text || p.source_image_url).slice(0, 70))}</span>
         <span><button class="btn small ghost" onclick="delPrompt('${p.id}')">✕</button></span></div>`).join("")
     : '<span class="muted">aucun prompt — reverse-engineer une image</span>';
 }
@@ -441,10 +448,10 @@ async function openPicJob(id) {
     </div>
     <div class="items">${j.items.map(it => `
       <div class="item">
-        ${it.final_image_url ? `<img src="${it.final_image_url}" style="width:100%;border-radius:8px">` : ""}
+        ${it.final_image_url ? `<img src="${esc(safeUrl(it.final_image_url))}" style="width:100%;border-radius:8px">` : ""}
         <div>${badge(it.status)} ${badge("qc: "+it.qc_status)} ${it.review_status!=="pending"?badge(it.review_status):""}</div>
-        <div class="prompt">${(it.filled_prompt||"").slice(0,120)}</div>
-        ${it.error ? `<div class="prompt" style="color:var(--err)">${it.error.slice(0,100)}</div>` : ""}
+        <div class="prompt">${esc((it.filled_prompt||"").slice(0,120))}</div>
+        ${it.error ? `<div class="prompt" style="color:var(--err)">${esc(it.error.slice(0,100))}</div>` : ""}
         ${it.status==="done" ? `<div class="actions">
           <button class="btn small ok" onclick="reviewPic('${it.id}','approved')">✓</button>
           <button class="btn small bad" onclick="reviewPic('${it.id}','rejected')">✗</button></div>` : ""}

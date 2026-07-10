@@ -1,9 +1,26 @@
 import uuid
-from typing import Literal
+from typing import Annotated, Literal
+from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AfterValidator, BaseModel, Field, field_validator
 
 from app.services.dialogue import DialogueParseError, parse_tagged_script
+
+
+def _http_url(value: str) -> str:
+    """Vérifie à l'entrée d'API que l'URL est bien http(s) avec un hôte
+    (défense en profondeur, sans I/O réseau). Le filtrage anti-SSRF complet
+    — résolution DNS + blocage des IP privées — se fait au téléchargement
+    (app/net.safe_download), pour ne pas faire de DNS dans le handler."""
+    if not value:
+        return value
+    parsed = urlparse(value)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise ValueError("URL invalide : http(s) avec un hôte requis")
+    return value
+
+
+HttpUrlStr = Annotated[str, AfterValidator(_http_url)]
 
 Resolution = Literal["480p", "720p", "1080p"]
 Bitrate = Literal["standard", "high"]
@@ -14,7 +31,7 @@ Bitrate = Literal["standard", "high"]
 
 class CharacteristicCreate(BaseModel):
     label: str
-    reference_image_url: str
+    reference_image_url: HttpUrlStr
     injection_hint: str
     always_include: bool = True
     priority: int = 0
@@ -28,7 +45,7 @@ class CharacteristicOut(CharacteristicCreate):
 
 class ModelCreate(BaseModel):
     name: str
-    face_reference_url: str
+    face_reference_url: HttpUrlStr
     notes: str | None = None
 
 
@@ -43,7 +60,7 @@ class ModelOut(ModelCreate):
 
 
 class OutfitCreate(BaseModel):
-    image_url: str
+    image_url: HttpUrlStr
     tags: list[str] = []
     weight: float = Field(default=1.0, ge=0)
 
@@ -142,7 +159,7 @@ class JobCreate(BaseModel):
     bitrate: Bitrate = "standard"
     model_variant: str = "seedance_2.0"
     budget_cap_usd: float | None = None
-    extra_reference_urls: list[str] = Field(
+    extra_reference_urls: list[HttpUrlStr] = Field(
         default_factory=list, description="Refs additionnelles (outfit, background) — Phase 1"
     )
 
@@ -158,7 +175,7 @@ class BatchJobCreate(BaseModel):
     duration_s: int = Field(default=10, ge=3, le=30)
     bitrate: Bitrate = "standard"
     model_variant: str = "seedance_2.0"
-    music_url: str | None = Field(default=None, description="Piste mixée à l'assemblage")
+    music_url: HttpUrlStr | None = Field(default=None, description="Piste mixée à l'assemblage")
     budget_cap_usd: float | None = None
 
 
@@ -229,7 +246,7 @@ ImageSize = Literal["1:1", "4:5", "9:16", "16:9", "3:4", "4:3"]
 
 
 class PicturePromptCreate(BaseModel):
-    source_image_url: str = Field(description="Image de référence uploadée (R2)")
+    source_image_url: HttpUrlStr = Field(description="Image de référence uploadée (R2)")
     tags: list[str] = []
     weight: float = Field(default=1.0, ge=0)
 

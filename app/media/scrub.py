@@ -12,15 +12,35 @@ le filigrane de provenance pixel.
 
 from PIL import Image
 
+# Garde-fou decompression bomb : l'image vient d'un tiers (sortie kie.ai).
+# Au-delà de ~50 Mpx on refuse plutôt que de matérialiser des centaines de Mo
+# en mémoire dans un worker Celery. Cohérent avec des tailles de reel/photo.
+MAX_IMAGE_PIXELS = 50_000_000
+
+
+class ImageTooLargeError(ValueError):
+    pass
+
 
 def strip_metadata(in_path: str, out_path: str, output_format: str | None = None) -> str:
     """Réécrit l'image sans aucune métadonnée. `output_format` force le
     format de sortie (déduit de l'extension sinon)."""
-    with Image.open(in_path) as src:
-        src.load()
-        mode = src.mode
-        size = src.size
-        raw = src.tobytes()
+    previous_limit = Image.MAX_IMAGE_PIXELS
+    Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS  # Pillow lève DecompressionBombError au-delà de 2x
+    try:
+        with Image.open(in_path) as src:
+            w, h = src.size
+            # Couvre la zone [limite, 2x limite[ que Pillow ne fait qu'avertir
+            if w * h > MAX_IMAGE_PIXELS:
+                raise ImageTooLargeError(f"Image {w}x{h} > {MAX_IMAGE_PIXELS} px — refusée")
+            src.load()
+            mode = src.mode
+            size = src.size
+            raw = src.tobytes()
+    except Image.DecompressionBombError as exc:
+        raise ImageTooLargeError(str(exc)) from exc
+    finally:
+        Image.MAX_IMAGE_PIXELS = previous_limit
 
     # Image neuve reconstruite depuis les seuls octets de pixels → zéro
     # info héritée (EXIF/XMP/IPTC/ICC/C2PA/chunks texte tous laissés de côté)

@@ -201,6 +201,32 @@ table `pricing`, taux QC calibré).
 > **ne retire pas** le watermark pixel — ce n'est pas ce que fait ce module et
 > ce n'est pas ce qui déclenche le labeling/ban côté plateforme (c'est le C2PA).
 
+## Sécurité
+
+Durcissements en place (revue de sécurité passée) :
+- **Auth** : sessions signées HMAC liées à `token_version` (un changement de mot
+  de passe révoque tous les jetons émis avant, y compris volés) ; hachage PBKDF2
+  salé + comparaison constante ; login à temps constant (hash factice au même coût
+  pour un email inconnu → pas d'énumération).
+- **Fail-fast prod** : l'app refuse de démarrer en https si `SECRET_KEY`
+  (< 32 octets ou valeur par défaut) ou `KIE_WEBHOOK_SECRET` manquent.
+- **Webhook** : `POST /api/webhooks/kie` exige le secret partagé (`?secret=…`) ;
+  refusé (503) si aucun secret n'est configuré.
+- **Anti-SSRF** : tout téléchargement (`app/net.safe_download`) n'accepte que
+  http/s public — DNS résolu, IP privées/loopback/link-local (169.254.169.254…)
+  bloquées, redirections re-validées à chaque saut, taille plafonnée. Les URLs
+  d'assets sont aussi validées (schéma) à l'entrée d'API.
+- **XSS** : le frontend échappe toute donnée non fiable (prompts LLM, captions,
+  erreurs) avant insertion, et n'accepte que des URLs http(s) en `src`.
+- **FFmpeg** : commandes en listes d'args (jamais `shell=True`) ; `drawtext`
+  avec `expansion=none` (le caption utilisateur n'interprète pas `%{…}`).
+- **Pillow** : garde-fou decompression bomb (`MAX_IMAGE_PIXELS`) sur les images
+  tierces.
+
+Limite connue : `tenant_id` est présent sur toutes les tables mais **pas encore
+filtré** dans les requêtes — à activer avant d'ouvrir un second compte (Phase
+multi-tenant). Aujourd'hui, tout utilisateur authentifié voit toutes les données.
+
 ## Authentification (Phase 5)
 
 Accès restreint par session (cookie signé HMAC, mot de passe haché PBKDF2 —

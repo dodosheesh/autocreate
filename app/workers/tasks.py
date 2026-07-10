@@ -17,11 +17,11 @@ import tempfile
 import uuid
 from pathlib import Path
 
-import httpx
 from sqlalchemy import select
 
 from app.config import get_settings
 from app.db.base import db_session
+from app.net import safe_download
 from app.db.models import (
     Background,
     Caption,
@@ -52,11 +52,9 @@ def _pk(value: str | uuid.UUID) -> uuid.UUID:
 
 
 def _download(url: str, dest: Path) -> None:
-    with httpx.stream("GET", url, timeout=300, follow_redirects=True) as resp:
-        resp.raise_for_status()
-        with open(dest, "wb") as f:
-            for chunk in resp.iter_bytes(1024 * 1024):
-                f.write(chunk)
+    """Téléchargement durci anti-SSRF (schéma http/s, IP publiques, taille max,
+    redirections re-validées) — cf. app/net.safe_download."""
+    safe_download(url, dest)
 
 
 def _fail_item(item_id: str, error: str) -> None:

@@ -4,6 +4,10 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 
 from app.api.routers import auth, banks, jobs, models, pictures, webhooks
+from app.config import get_settings
+
+# Fail-fast : refuse de démarrer en prod avec des secrets par défaut
+get_settings().assert_secure_config()
 
 app = FastAPI(title="autocreate", version="0.6.0")
 

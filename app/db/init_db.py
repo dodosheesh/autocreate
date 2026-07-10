@@ -10,6 +10,8 @@ sur kie.ai/pricing avant tout batch réel (la table reste la source de vérité,
 le code ne lit jamais un tarif en dur).
 """
 
+import secrets
+
 from sqlalchemy import select
 
 from app.config import get_settings
@@ -52,20 +54,25 @@ def init() -> None:
                     )
                 )
 
-        # Compte propriétaire (une seule fois)
+        # Compte propriétaire (une seule fois). Jamais de mot de passe par
+        # défaut exploitable : si BOOTSTRAP_ADMIN_PASSWORD n'est pas fourni,
+        # on en génère un aléatoire et on l'imprime une seule fois.
         admin_email = settings.bootstrap_admin_email.lower()
         if admin_email and not db.scalar(select(User).where(User.email == admin_email)):
+            password = settings.bootstrap_admin_password or secrets.token_urlsafe(18)
+            generated = not settings.bootstrap_admin_password
             db.add(
                 User(
                     email=admin_email,
-                    password_hash=hash_password(settings.bootstrap_admin_password),
+                    password_hash=hash_password(password),
                     role="owner",
                 )
             )
-            print(
-                f"Compte propriétaire créé : {admin_email} "
-                f"(mot de passe initial via BOOTSTRAP_ADMIN_PASSWORD, à changer)"
-            )
+            print(f"Compte propriétaire créé : {admin_email}")
+            if generated:
+                print(f"  Mot de passe initial (à noter, non ré-affiché) : {password}")
+            else:
+                print("  Mot de passe : via BOOTSTRAP_ADMIN_PASSWORD — à changer au 1er login")
         db.commit()
     print("Tables créées et pricing seedé.")
 

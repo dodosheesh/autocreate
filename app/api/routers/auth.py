@@ -8,6 +8,7 @@ from app.config import get_settings
 from app.db.base import get_db
 from app.db.models import User
 from app.services.security import (
+    DUMMY_PASSWORD_HASH,
     hash_password,
     issue_session,
     verify_password,
@@ -33,26 +34,27 @@ class UserOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-def _set_session_cookie(response: Response, user_id: str) -> None:
+def _set_session_cookie(response: Response, user: User) -> None:
     settings = get_settings()
     response.set_cookie(
         settings.session_cookie,
-        issue_session(user_id),
+        issue_session(str(user.id), user.token_version),
         max_age=settings.session_ttl_s,
         httponly=True,
         samesite="lax",
-        secure=settings.public_base_url.startswith("https"),
+        secure=settings.cookie_secure,
     )
 
 
 @router.post("/login", response_model=UserOut)
 def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)):
     user = db.scalar(select(User).where(User.email == payload.email.lower()))
-    # verify_password sur un hash bidon si l'user n'existe pas → temps constant
-    stored = user.password_hash if user else "pbkdf2_sha256$1$00$00"
+    # verify_password sur un hash factice AU MÊME COÛT (240k rounds) si l'user
+    # n'existe pas → latence identique, pas d'énumération de comptes par timing.
+    stored = user.password_hash if user else DUMMY_PASSWORD_HASH
     if not verify_password(payload.password, stored) or user is None or not user.is_active:
         raise HTTPException(401, "Identifiants invalides")
-    _set_session_cookie(response, str(user.id))
+    _set_session_cookie(response, user)
     return user
 
 
@@ -79,7 +81,9 @@ def change_password(
     if len(payload.new_password) < 8:
         raise HTTPException(422, "Nouveau mot de passe : 8 caractères minimum")
     user.password_hash = hash_password(payload.new_password)
+    # Invalide TOUS les jetons émis avant (y compris ceux d'un attaquant sur
+    # un autre appareil) puis ré-émet un cookie valide pour la session courante.
+    user.token_version += 1
     db.commit()
-    # Nouvelle session (invalide implicitement l'ancienne fenêtre côté client)
-    _set_session_cookie(response, str(user.id))
+    _set_session_cookie(response, user)
     return user

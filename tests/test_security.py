@@ -24,8 +24,10 @@ def test_verify_hash_corrompu_renvoie_false():
 
 
 def test_session_roundtrip():
-    token = issue_session("user-123")
-    assert read_session(token) == "user-123"
+    token = issue_session("user-123", 2)
+    payload = read_session(token)
+    assert payload["uid"] == "user-123"
+    assert payload["ver"] == 2
 
 
 def test_session_signature_invalide():

@@ -14,13 +14,16 @@ from app.services.security import read_session
 def current_user(request: Request, db: Session = Depends(get_db)) -> User:
     """401 si pas de cookie de session valide."""
     token = request.cookies.get(get_settings().session_cookie, "")
-    user_id = read_session(token)
-    if not user_id:
+    payload = read_session(token)
+    if not payload:
         raise HTTPException(401, "Authentification requise")
     try:
-        user = db.get(User, uuid.UUID(user_id))
-    except ValueError:
+        user = db.get(User, uuid.UUID(payload["uid"]))
+    except (ValueError, KeyError):
         raise HTTPException(401, "Session invalide")
     if user is None or not user.is_active:
         raise HTTPException(401, "Session invalide")
+    # Jeton émis avant le dernier changement de mot de passe → révoqué
+    if payload.get("ver", 0) != user.token_version:
+        raise HTTPException(401, "Session expirée")
     return user
