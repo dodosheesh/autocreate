@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEV_SECRET_SENTINEL = "dev-insecure-change-me"
@@ -10,6 +11,23 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/autocreate"
     redis_url: str = "redis://localhost:6379/0"
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _normalize_db_url(cls, value: str) -> str:
+        """Railway/Heroku fournissent `postgres://` ou `postgresql://` ;
+        SQLAlchemy + psycopg 3 exige le driver explicite `postgresql+psycopg://`.
+        On normalise pour que l'URL Railway marche sans retouche manuelle."""
+        if not isinstance(value, str):
+            return value
+        for prefix in ("postgresql+psycopg://", "postgresql+psycopg2://"):
+            if value.startswith(prefix):
+                return value
+        if value.startswith("postgresql://"):
+            return "postgresql+psycopg://" + value[len("postgresql://"):]
+        if value.startswith("postgres://"):
+            return "postgresql+psycopg://" + value[len("postgres://"):]
+        return value
 
     kie_api_key: str = ""
     kie_base_url: str = "https://api.kie.ai"

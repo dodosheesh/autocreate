@@ -1,0 +1,14 @@
+.git
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+.mypy_cache
+tests
+.env
+*.mp4
+*.wav
+*.m4a
+docker-compose.yml
+BACKLOG.md

@@ -65,6 +65,66 @@ models se gèrent via l'API (`/docs`).
 
 Tests : `.venv/bin/python -m pytest`
 
+## Déploiement Railway
+
+Le repo est prêt pour Railway (`Dockerfile` + `railway.json`). L'image embarque
+FFmpeg et les polices — rien à installer à la main. On déploie **deux services à
+partir du même repo** (web + worker) plus deux plugins (Postgres + Redis).
+
+### 1. Base de données et broker
+Dans le projet Railway : **New → Database → PostgreSQL**, puis **New → Database →
+Redis**. Railway crée les variables `DATABASE_URL` et `REDIS_URL`.
+
+### 2. Service web (API + UI)
+**New → GitHub Repo → dodosheesh/autocreate**. Railway détecte le `Dockerfile` et
+lit `railway.json` (start `uvicorn`, pré-déploiement `python -m app.db.init_db`).
+Réglages du service :
+- **Variables** (onglet Variables) :
+  ```
+  SECRET_KEY            = (openssl rand -hex 32  ou  python -c "import secrets;print(secrets.token_hex(32))")
+  KIE_WEBHOOK_SECRET    = (python -c "import secrets;print(secrets.token_hex(24))")
+  PUBLIC_BASE_URL       = https://<ton-service-web>.up.railway.app
+  KIE_API_KEY           = sk-...
+  ELEVENLABS_API_KEY    = ...           # si voice-swap
+  R2_ACCOUNT_ID         = ...
+  R2_ACCESS_KEY_ID      = ...
+  R2_SECRET_ACCESS_KEY  = ...
+  R2_BUCKET             = autocreate
+  R2_PUBLIC_BASE_URL    = https://pub-xxxx.r2.dev
+  DATABASE_URL          = ${{Postgres.DATABASE_URL}}   # référence le plugin
+  REDIS_URL             = ${{Redis.REDIS_URL}}
+  BOOTSTRAP_ADMIN_EMAIL = sydeincovind@gmail.com
+  # BOOTSTRAP_ADMIN_PASSWORD laissé vide → mot de passe aléatoire imprimé dans les
+  # logs du pré-déploiement au premier boot (à noter, non ré-affiché).
+  ```
+- **Settings → Healthcheck Path** : `/health` (web uniquement).
+- Railway expose une URL publique : reporte-la dans `PUBLIC_BASE_URL` puis redéploie.
+
+> `DATABASE_URL` fourni par Railway commence par `postgresql://` ; le code le
+> normalise automatiquement en `postgresql+psycopg://` — rien à faire.
+
+### 3. Service worker (Celery + beat)
+**New → GitHub Repo → même repo** (deuxième service, même image).
+- **Settings → Custom Start Command** :
+  ```
+  celery -A app.workers.celery_app worker --beat --loglevel=info --concurrency=4
+  ```
+- **Settings → Healthcheck** : aucun (le worker ne sert pas de HTTP).
+- **Variables** : les mêmes que le web (le plus simple : *Shared Variables* au
+  niveau projet pour tout ce qui est commun, chaque service les hérite).
+
+### 4. Premier login
+Au premier déploiement, le pré-déploiement `init_db` crée les tables, seed la
+table `pricing` et le compte propriétaire. Récupère le mot de passe initial dans
+les **logs de déploiement du service web**, connecte-toi sur
+`https://<web>.up.railway.app/login`, puis change-le via
+`POST /api/auth/change-password` (ou garde-le si tu as fixé `BOOTSTRAP_ADMIN_PASSWORD`).
+
+### 5. Webhooks kie.ai
+Les appels `createTask` envoient automatiquement `PUBLIC_BASE_URL/api/webhooks/kie?secret=KIE_WEBHOOK_SECRET`
+comme `callBackUrl`. Aucune config côté kie.ai : vérifie juste que `PUBLIC_BASE_URL`
+est bien l'URL publique https et que `KIE_WEBHOOK_SECRET` est identique sur les deux services.
+
 ## Utilisation Phase 1
 
 ```bash
