@@ -21,18 +21,18 @@ from app.services.security import hash_password
 
 SEED_PRICING = [
     # (model, resolution, with_ref, unit, rate_usd)
-    # Seedance 2.0 — facturé À LA SECONDE. Ces valeurs = tier image-to-video
-    # AVEC référence (notre cas : on envoie toujours visage + caractéristiques).
-    # Vérifiées via sources tierces (kie.ai bloque le scraping) → resynchronise
-    # les valeurs EXACTES de ton compte kie.ai via l'éditeur de tarifs (Réglages).
-    ("seedance_2.0", "480p", True, "per_sec", 0.0575),
-    ("seedance_2.0", "720p", True, "per_sec", 0.125),
+    # Seedance 2.0 FAST — facturé À LA SECONDE. On envoie des images de référence
+    # (pas de vidéo) → tier « no video input », le plus cher à l'unité :
+    #   480p = 0.0775 $/s, 720p = 0.165 $/s (source : page kie.ai seedance-2-fast).
+    # (Le 1080p n'existe pas en Fast ; la ligne sert si tu repasses en Standard.)
+    # Resynchronise les valeurs EXACTES de ton compte via l'éditeur de tarifs.
+    ("seedance_2.0", "480p", True, "per_sec", 0.0775),
+    ("seedance_2.0", "720p", True, "per_sec", 0.165),
     ("seedance_2.0", "1080p", True, "per_sec", 0.31),
-    # ElevenLabs Voice Changer — 1000 crédits/min ; ~0,12 $/min pay-as-you-go
-    # (jusqu'à ~0,20 $/min selon le plan). Facturé à la minute d'audio.
+    # ElevenLabs Voice Changer — 1000 crédits/min ; ~0,12 $/min pay-as-you-go.
     ("elevenlabs_s2s", None, None, "per_min", 0.12),
-    # Nano Banana Edit (Gemini 2.5 Flash Image) — ~0,02 $/image, confirmé.
-    ("nano_banana", None, None, "per_image", 0.02),
+    # Nano Banana Pro (Gemini 3 Pro Image) — ~0,09 $/image en 1K/2K (0,12 en 4K).
+    ("nano_banana", None, None, "per_image", 0.09),
 ]
 
 

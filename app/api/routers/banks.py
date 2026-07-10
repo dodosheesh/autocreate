@@ -25,6 +25,7 @@ from app.db.models import (
     VoiceProfile,
 )
 from app.services.template_library import load_default_templates
+from app.workers.picture_tasks import reverse_engineer_video
 
 router = APIRouter(prefix="/api/banks", tags=["banks"])
 
@@ -35,6 +36,32 @@ def load_defaults(db: Session = Depends(get_db), user: User = Depends(current_us
     catégorie) dans la banque du tenant. Idempotent (dédup par texte)."""
     added = load_default_templates(db, user.tenant_id)
     return {"added": added}
+
+
+@router.post("/templates/reverse-video", response_model=schemas.TemplateOut)
+def reverse_video(
+    payload: schemas.ReverseVideoRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """Reverse-engineering d'une vidéo de référence → template réutilisable.
+
+    Crée un PromptTemplate en statut `pending` puis lance l'analyse async
+    (keyframes + vision). Une fois `ready`, il est tiré dans la génération
+    de sa catégorie comme n'importe quel template."""
+    tmpl = PromptTemplate(
+        tenant_id=user.tenant_id,
+        category=payload.category,
+        template_text="(analyse en cours…)",
+        speaking=payload.speaking,
+        status="pending",
+        source_video_url=payload.source_video_url,
+    )
+    db.add(tmpl)
+    db.commit()
+    db.refresh(tmpl)
+    reverse_engineer_video.delay(str(tmpl.id))
+    return tmpl
 
 
 def _register(

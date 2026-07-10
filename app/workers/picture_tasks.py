@@ -29,15 +29,19 @@ from app.db.models import (
     PictureJob,
     PicturePrompt,
     PromptStatus,
+    PromptTemplate,
     QcStatus,
 )
 from app.integrations import kie, r2
 from app.integrations.vision import reverse_engineer_prompt as _vision_reverse
+from app.integrations.vision import reverse_engineer_video_prompt as _vision_reverse_video
+from app.media.frames import extract_keyframes
 from app.media.scrub import strip_metadata
 from app.services import picture_composer
 from app.services.composer import CharacteristicInput
 from app.services.estimator import estimate_pictures
 from app.services.pricing import load_rates
+from app.services.template_library import ensure_slots
 from app.services.variation import Option, outfit_option
 from app.workers.celery_app import celery_app
 from app.workers.tasks import _download, _pk
@@ -64,6 +68,39 @@ def reverse_engineer_prompt(self, prompt_id: str) -> None:
             if row:
                 row.status = PromptStatus.FAILED
                 row.error = str(exc)[:2000]
+        if self.request.retries < self.max_retries:
+            raise self.retry(exc=exc)
+
+
+@celery_app.task(bind=True, max_retries=2)
+def reverse_engineer_video(self, template_id: str) -> None:
+    """Vidéo de référence → template vidéo réutilisable (avec slots), stocké
+    comme PromptTemplate. download → keyframes FFmpeg → vision → ensure_slots."""
+    try:
+        with db_session() as db:
+            tmpl = db.get(PromptTemplate, _pk(template_id))
+            if tmpl is None or tmpl.status != "pending":
+                return
+            source_url = tmpl.source_video_url
+            speaking = tmpl.speaking
+
+        with tempfile.TemporaryDirectory() as tmp:
+            video_path = Path(tmp) / "ref.mp4"
+            _download(source_url, video_path)
+            frames = extract_keyframes(str(video_path), tmp, n=6)
+            raw = _vision_reverse_video(frames, model_description=None, speaking=speaking)
+        template_text = ensure_slots(raw, speaking)
+
+        with db_session() as db:
+            tmpl = db.get(PromptTemplate, _pk(template_id))
+            tmpl.template_text = template_text
+            tmpl.status = "ready"
+    except Exception as exc:
+        with db_session() as db:
+            tmpl = db.get(PromptTemplate, _pk(template_id))
+            if tmpl:
+                tmpl.status = "failed"
+                tmpl.error = str(exc)[:2000]
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)
 

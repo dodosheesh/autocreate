@@ -1,11 +1,14 @@
-"""Reverse-engineering image → prompt via un LLM vision.
+"""Reverse-engineering image/vidéo → prompt via un LLM vision.
 
 kie.ai expose ses LLM (Gemini, GPT-4o…) derrière un endpoint
-OpenAI-compatible (`/v1/chat/completions`). On envoie l'image en message
-`image_url` et on demande un prompt de génération réutilisable. Le modèle
-et l'URL sont configurables (`KIE_VISION_MODEL`, `KIE_VISION_BASE_URL`) :
-aucune valeur kie-spécifique n'est devinée en dur.
+OpenAI-compatible (`/v1/chat/completions`). On envoie une ou plusieurs images
+en messages `image_url` et on demande un prompt de génération réutilisable.
+Le modèle et l'URL sont configurables (`KIE_VISION_MODEL`,
+`KIE_VISION_BASE_URL`) : aucune valeur kie-spécifique n'est devinée en dur.
 """
+
+import base64
+import mimetypes
 
 import httpx
 
@@ -23,35 +26,36 @@ REVERSE_ENGINEER_SYSTEM = (
 )
 
 
+# Reverse-engineering VIDÉO : on veut un TEMPLATE réutilisable qui transfère
+# l'action / le mouvement de caméra / le rythme / l'ambiance de la vidéo de
+# référence, mais PAS l'outfit, le décor ni le visage (remplacés par les assets
+# et la model). Le template doit contenir les slots littéraux à remplir.
+REVERSE_ENGINEER_VIDEO_SYSTEM = (
+    "You are a prompt engineer for an image-to-video model. You receive ordered "
+    "keyframes sampled from a reference video. Write ONE reusable video-generation "
+    "TEMPLATE that captures the SUBJECT'S ACTION, CAMERA MOVEMENT, FRAMING, PACING, "
+    "LIGHTING and MOOD of the clip, as a 9:16 vertical video. "
+    "Do NOT describe the specific outfit, the specific location, or the person's "
+    "facial identity — those are replaced. Refer to the subject generically as 'a woman'. "
+    "The template MUST include these literal placeholder tokens where relevant: "
+    "{outfit} for her clothing, {background} for the location, {characteristics} for her "
+    "distinctive traits. Output ONLY the template text, no preamble, no markdown."
+)
+
+
 class VisionError(RuntimeError):
     pass
 
 
-def reverse_engineer_prompt(image_url: str, model_description: str | None = None) -> str:
-    """Renvoie un prompt de génération décrivant l'image, adapté à la model.
-
-    model_description : traits de la model injectés en contexte pour que le
-    prompt colle à son style (le visage/les caractéristiques précises sont
-    ajoutés comme images de référence à la génération, pas décrits ici)."""
+def _call_vision(system: str, content_parts: list[dict]) -> str:
     settings = get_settings()
     if not settings.kie_api_key:
         raise VisionError("KIE_API_KEY manquant")
-    user_text = "Reverse-engineer this photo into a reusable generation prompt."
-    if model_description:
-        user_text += (
-            f" Adapt the wording so it fits this recurring model: {model_description}."
-        )
     body = {
         "model": settings.kie_vision_model,
         "messages": [
-            {"role": "system", "content": REVERSE_ENGINEER_SYSTEM},
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": user_text},
-                    {"type": "image_url", "image_url": {"url": image_url}},
-                ],
-            },
+            {"role": "system", "content": system},
+            {"role": "user", "content": content_parts},
         ],
     }
     resp = httpx.post(
@@ -61,7 +65,7 @@ def reverse_engineer_prompt(image_url: str, model_description: str | None = None
             "Content-Type": "application/json",
         },
         json=body,
-        timeout=120,
+        timeout=180,
     )
     if resp.status_code != 200:
         raise VisionError(f"vision HTTP {resp.status_code} : {resp.text[:500]}")
@@ -76,3 +80,49 @@ def reverse_engineer_prompt(image_url: str, model_description: str | None = None
     if not text:
         raise VisionError("Le modèle vision a renvoyé un prompt vide")
     return text
+
+
+def _frame_data_uri(path: str) -> str:
+    mime = mimetypes.guess_type(path)[0] or "image/jpeg"
+    with open(path, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode()
+    return f"data:{mime};base64,{b64}"
+
+
+def reverse_engineer_prompt(image_url: str, model_description: str | None = None) -> str:
+    """Renvoie un prompt de génération décrivant l'image, adapté à la model.
+
+    model_description : traits de la model injectés en contexte pour que le
+    prompt colle à son style (le visage/les caractéristiques précises sont
+    ajoutés comme images de référence à la génération, pas décrits ici)."""
+    user_text = "Reverse-engineer this photo into a reusable generation prompt."
+    if model_description:
+        user_text += f" Adapt the wording so it fits this recurring model: {model_description}."
+    return _call_vision(
+        REVERSE_ENGINEER_SYSTEM,
+        [
+            {"type": "text", "text": user_text},
+            {"type": "image_url", "image_url": {"url": image_url}},
+        ],
+    )
+
+
+def reverse_engineer_video_prompt(
+    frame_paths: list[str], model_description: str | None = None, speaking: bool = False
+) -> str:
+    """À partir des images-clés d'une vidéo, renvoie un TEMPLATE réutilisable
+    (avec slots) transférant l'action/caméra/rythme à la model."""
+    if not frame_paths:
+        raise VisionError("Aucune frame fournie pour le reverse-engineering vidéo")
+    user_text = (
+        "These are ordered keyframes from a reference video. Reverse-engineer it into a "
+        "reusable video-generation template as instructed."
+    )
+    if speaking:
+        user_text += " The subject is talking, so also include the literal token {dialogue}."
+    if model_description:
+        user_text += f" Fit it to this recurring model: {model_description}."
+    parts = [{"type": "text", "text": user_text}]
+    for path in frame_paths:
+        parts.append({"type": "image_url", "image_url": {"url": _frame_data_uri(path)}})
+    return _call_vision(REVERSE_ENGINEER_VIDEO_SYSTEM, parts)

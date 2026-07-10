@@ -154,6 +154,11 @@ class PromptTemplate(Base):
     default_duration_s: Mapped[int | None] = mapped_column(Integer)
     default_resolution: Mapped[str | None] = mapped_column(String(16))
     weight: Mapped[float] = mapped_column(Float, default=1.0)
+    # Reverse-engineering vidéo : ready | pending | failed. Un template pending
+    # (reverse-eng en cours) n'est pas tiré à la composition.
+    status: Mapped[str] = mapped_column(String(16), default="ready")
+    source_video_url: Mapped[str | None] = mapped_column(Text)
+    error: Mapped[str | None] = mapped_column(Text)
 
 
 class DialogueLine(Base):

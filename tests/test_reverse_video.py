@@ -1,0 +1,100 @@
+"""Reverse-engineering vidéo → template réutilisable."""
+
+import uuid
+from unittest.mock import patch
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.db.base import Base, SessionLocal, engine
+from app.db.models import PromptTemplate, User
+from app.main import app
+from app.services.security import hash_password
+from app.services.template_library import ensure_slots
+from app.workers import picture_tasks as pt
+
+EMAIL = "rv@example.com"
+PW = "reverse-video-1"
+
+
+# ---------- ensure_slots (pur) ----------
+
+
+def test_ensure_slots_ajoute_les_manquants():
+    out = ensure_slots("A woman dances energetically, handheld tracking shot.", speaking=False)
+    assert "{outfit}" in out and "{background}" in out and "{characteristics}" in out
+    assert "{dialogue}" not in out
+
+
+def test_ensure_slots_dialogue_si_speaking():
+    out = ensure_slots("She talks to camera. {outfit} {background} {characteristics}", speaking=True)
+    assert "{dialogue}" in out
+
+
+def test_ensure_slots_preserve_les_slots_presents():
+    src = "Scene {outfit} in {background}. {characteristics}."
+    out = ensure_slots(src, speaking=False)
+    assert out.count("{outfit}") == 1  # pas de duplication
+
+
+# ---------- endpoint + tâche ----------
+
+
+@pytest.fixture(scope="module")
+def client():
+    Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
+    with SessionLocal() as db:
+        db.add(User(email=EMAIL, password_hash=hash_password(PW), tenant_id="tnt-rv"))
+        db.commit()
+    c = TestClient(app)
+    c.post("/api/auth/login", json={"email": EMAIL, "password": PW})
+    return c
+
+
+def test_reverse_video_flow(client):
+    # 1. POST crée un template pending + dispatch async
+    with patch("app.api.routers.banks.reverse_engineer_video") as mock_task:
+        r = client.post(
+            "/api/banks/templates/reverse-video",
+            json={"source_video_url": "https://r2.example/ref.mp4",
+                  "category": "storytelling", "speaking": True},
+        )
+        assert r.status_code == 200, r.text
+        tmpl = r.json()
+        assert tmpl["status"] == "pending"
+        assert mock_task.delay.call_count == 1
+
+    # 2. exécuter la tâche inline : download + keyframes + vision mockés
+    with patch("app.workers.picture_tasks._download"):
+        with patch("app.workers.picture_tasks.extract_keyframes", return_value=["f0.jpg", "f1.jpg"]):
+            with patch(
+                "app.workers.picture_tasks._vision_reverse_video",
+                return_value="A woman dances energetically down a street, handheld tracking shot, neon night mood.",
+            ):
+                pt.reverse_engineer_video(tmpl["id"])
+
+    # 3. le template est ready, avec slots garantis + dialogue (speaking)
+    got = client.get("/api/banks/templates").json()
+    ready = next(t for t in got if t["id"] == tmpl["id"])
+    assert ready["status"] == "ready"
+    assert "{outfit}" in ready["template_text"]
+    assert "{characteristics}" in ready["template_text"]
+    assert "{dialogue}" in ready["template_text"]
+    assert "handheld tracking shot" in ready["template_text"]
+
+
+def test_pending_template_non_tire_a_la_composition(client):
+    # un template pending ne doit pas être utilisable en génération
+    from app.workers.tasks import _build_pools
+
+    with SessionLocal() as db:
+        db.add(PromptTemplate(
+            tenant_id="tnt-rv", category="skit", template_text="{outfit} {background}",
+            status="pending", source_video_url="https://r2.example/x.mp4"))
+        db.add(PromptTemplate(
+            tenant_id="tnt-rv", category="skit", template_text="ready one {outfit} {background}",
+            status="ready"))
+        db.commit()
+        pools = _build_pools(db, ["skit"], "tnt-rv")
+    assert len(pools["skit"].templates) == 1  # seul le ready

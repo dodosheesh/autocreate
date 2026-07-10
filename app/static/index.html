@@ -271,6 +271,19 @@
         </div>
 
         <div class="card">
+          <h2>Répliquer une vidéo (reverse-engineering)</h2>
+          <div class="hint">Uploade une vidéo à répliquer : elle devient un <b>template</b> réutilisable
+            (action, caméra, rythme, ambiance) — ta model et tes assets remplacent l'original.</div>
+          <div class="row" style="margin-top:0">
+            <div><label>Vidéo de référence</label><input type="file" id="rv-file" accept="video/*"></div>
+            <div><label>Catégorie du template</label><select id="rv-cat"></select></div>
+          </div>
+          <label style="margin-top:8px"><input type="checkbox" id="rv-speaking" style="width:auto"> la model parle (ajoute le slot dialogue)</label>
+          <button class="btn small" id="rv-go" style="margin-top:10px">Uploader &amp; analyser</button>
+          <div id="rv-templates" style="margin-top:12px; font-size:12px"></div>
+        </div>
+
+        <div class="card">
           <h2>Jobs vidéo</h2>
           <table>
             <thead><tr><th>créé</th><th>catégories</th><th>statut</th><th>estimé</th><th>réel</th></tr></thead>
@@ -420,7 +433,7 @@ document.addEventListener("change", (e) => {
 $("#cats").innerHTML = CATEGORIES.map(c =>
   `<div class="cat"><b>${c}</b><input type="number" min="0" value="0" data-cat="${c}"></div>`).join("");
 const CAT_OPTIONS = CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join("");
-["#t-cat", "#d-cat", "#cap-cat"].forEach(s => { $(s).innerHTML = CAT_OPTIONS; });
+["#t-cat", "#d-cat", "#cap-cat", "#rv-cat"].forEach(s => { $(s).innerHTML = CAT_OPTIONS; });
 
 // ================= RÉGLAGES : handlers =================
 $("#m-create").addEventListener("click", async () => {
@@ -579,6 +592,28 @@ $("#generate").addEventListener("click", async () => {
   $("#generate").disabled = false;
 });
 
+// --- répliquer une vidéo ---
+$("#rv-go").addEventListener("click", async () => {
+  if (!$("#rv-file").files[0]) return toast("Sélectionne une vidéo");
+  $("#rv-go").disabled = true;
+  try {
+    const url = await uploadFile($("#rv-file"));
+    await api("/banks/templates/reverse-video", {method: "POST", body: JSON.stringify({
+      source_video_url: url, category: $("#rv-cat").value, speaking: $("#rv-speaking").checked})});
+    $("#rv-file").value = "";
+    toast("Vidéo uploadée — analyse en cours");
+    loadTemplates();
+  } catch (err) { toast("Répliquer : " + err.message); }
+  $("#rv-go").disabled = false;
+});
+async function loadTemplates() {
+  const tmpls = await api("/banks/templates");
+  const rv = tmpls.filter(t => t.source_video_url);
+  $("#rv-templates").innerHTML = rv.length
+    ? rv.map(t => `<div class="est-line"><span class="muted">${badge(t.status)} [${esc(t.category)}] ${esc((t.template_text || "").slice(0, 70))}</span></div>`).join("")
+    : '<span class="muted">aucune vidéo répliquée</span>';
+}
+
 let currentJob = null;
 async function loadJobs() {
   const jobs = await api("/jobs");
@@ -730,9 +765,11 @@ requireAuth().then(() => {
   loadPrompts().catch(() => {});
   loadPicJobs().catch(() => {});
   loadPricing().catch(() => {});
+  loadTemplates().catch(() => {});
   setInterval(() => {
     loadJobs().catch(() => {}); if (currentJob) openJob(currentJob).catch(() => {});
     if (currentPicJob) openPicJob(currentPicJob).catch(() => {});
+    loadTemplates().catch(() => {});
   }, 8000);
   refreshEstimate();
 }).catch(() => {});

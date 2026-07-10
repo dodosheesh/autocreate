@@ -160,6 +160,23 @@ DEFAULT_TEMPLATES: list[tuple[str, str, bool]] = [
 ]
 
 
+def ensure_slots(template_text: str, speaking: bool) -> str:
+    """Garantit que le template issu du reverse-engineering vidéo porte bien les
+    slots nécessaires pour que les assets/caractéristiques/dialogue se mélangent,
+    même si le LLM les a oubliés."""
+    text = template_text.strip()
+    if "{outfit}" not in text:
+        sep = "" if text.endswith((".", "!", "?")) else "."
+        text = f"{text}{sep} She is {{outfit}}."
+    if "{background}" not in text:
+        text = f"{text} Background: {{background}}."
+    if "{characteristics}" not in text:
+        text = f"{text} {{characteristics}}."
+    if speaking and "{dialogue}" not in text:
+        text = f"{text} {{dialogue}}"
+    return text
+
+
 def load_default_templates(db: Session, tenant_id: str) -> int:
     """Insère les templates par défaut manquants pour ce tenant (dédup par
     (catégorie, texte)). Renvoie le nombre réellement ajouté."""

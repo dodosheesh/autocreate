@@ -28,8 +28,12 @@ ALLOWED_TYPES = {
     "audio/mp3": "mp3",
     "audio/wav": "wav",
     "audio/x-wav": "wav",
+    # vidéos de référence (reverse-engineering vidéo)
+    "video/mp4": "mp4",
+    "video/quicktime": "mov",
+    "video/webm": "webm",
 }
-MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 Mo
+MAX_UPLOAD_BYTES = 200 * 1024 * 1024  # 200 Mo (vidéos de référence)
 
 
 @router.post("")

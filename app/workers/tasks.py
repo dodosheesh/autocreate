@@ -98,6 +98,7 @@ def _build_pools(db, categories: list[str], tenant_id: str) -> dict[str, variati
                 select(PromptTemplate).where(
                     PromptTemplate.tenant_id == tenant_id,
                     PromptTemplate.category == category,
+                    PromptTemplate.status == "ready",
                 )
             ).all()
         ]

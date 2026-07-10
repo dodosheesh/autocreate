@@ -93,8 +93,17 @@ class TemplateCreate(BaseModel):
 
 class TemplateOut(TemplateCreate):
     id: uuid.UUID
+    status: str = "ready"
+    source_video_url: str | None = None
+    error: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+class ReverseVideoRequest(BaseModel):
+    source_video_url: HttpUrlStr = Field(description="Vidéo de référence uploadée (R2)")
+    category: str = Field(description="Catégorie du template généré")
+    speaking: bool = False
 
 
 class DialogueLineCreate(BaseModel):

@@ -235,6 +235,23 @@ pour bypasser en test.
 le voice-swap. Le taux de réussite observé alimente `calibration_log` et recalibre
 automatiquement le coût effectif affiché par `/api/estimate`.
 
+## Répliquer une vidéo (reverse-engineering vidéo)
+
+Upload d'une vidéo à répliquer → `POST /api/banks/templates/reverse-video`
+`{source_video_url, category, speaking}` :
+1. FFmpeg extrait ~6 images-clés réparties sur la durée.
+2. Le LLM vision (Gemini) en tire un **template réutilisable** capturant l'action,
+   le mouvement de caméra, le cadrage, le rythme et l'ambiance — **sans** l'outfit,
+   le décor ni le visage (remplacés). `ensure_slots` garantit les slots
+   `{outfit} {background} {characteristics} {dialogue}`.
+3. Le template est stocké comme `prompt_template` (statut `pending → ready`) dans sa
+   catégorie ; un template `pending` n'est pas tiré à la composition.
+4. Ensuite il se génère **comme n'importe quel template** : ta model remplace la
+   personne d'origine, tes assets se mélangent. Le prompt est gardé à vie.
+
+Modèles configurés : **Seedance 2.0 Fast** (720p, moins cher, `bytedance/seedance-2-fast`)
+et **Nano Banana Pro** (`google/nano-banana-pro`, meilleure consistance personnage).
+
 ## Pictures — nano banana (génération de photos)
 
 Même logique que la vidéo, appliquée à l'image fixe :

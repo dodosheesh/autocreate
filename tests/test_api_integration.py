@@ -89,8 +89,8 @@ def test_full_batch_flow(client, model_id, banks):
         json={"counts_per_category": {"podcast": 10}, "duration_s": 10, "resolution": "720p"},
     )
     assert r.status_code == 200
-    # 10 × (0.125×10 vidéo + 10/60×0.12 voix) = 10 × 1.27 = 12.70
-    assert r.json()["gross_usd"] == pytest.approx(12.70, abs=0.01)
+    # 10 × (0.165×10 vidéo Fast 720p + 10/60×0.12 voix) = 10 × 1.67 = 16.70
+    assert r.json()["gross_usd"] == pytest.approx(16.70, abs=0.01)
 
     # 2. batch → compose inline → dispatched
     with patch("app.api.routers.jobs.compose_job"):
