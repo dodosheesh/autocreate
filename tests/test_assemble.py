@@ -22,3 +22,24 @@ def test_commande_1080p_high():
 def test_resolution_inconnue():
     with pytest.raises(ValueError):
         build_assemble_command("in.mp4", "out.mp4", AssembleParams("4k", "standard"))
+
+
+def test_overlay_caption_snapchat():
+    cmd = build_assemble_command(
+        "in.mp4", "out.mp4", AssembleParams("720p", "standard", caption_file="cap.txt")
+    )
+    vf = cmd[cmd.index("-vf") + 1]
+    assert "drawbox=" in vf and "color=black@0.55" in vf
+    assert "drawtext=textfile='cap.txt'" in vf
+    assert "fontcolor=white" in vf
+
+
+def test_mix_musique():
+    cmd = build_assemble_command(
+        "in.mp4", "out.mp4", AssembleParams("720p", "standard", music_path="music.mp3")
+    )
+    fc = cmd[cmd.index("-filter_complex") + 1]
+    assert "amix=inputs=2:duration=first" in fc
+    assert "volume=-18.0dB" in fc
+    assert "-stream_loop" in cmd  # musique bouclée sur la durée de la vidéo
+    assert "[vout]" in fc and "[aout]" in fc

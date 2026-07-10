@@ -37,10 +37,11 @@ from app.db.models import (
 )
 from app.integrations import kie, r2
 from app.media.assemble import AssembleParams, assemble
-from app.services import variation
+from app.services import calibration, variation
 from app.services.composer import CharacteristicInput
 from app.services.estimator import ItemSpec, estimate_item
 from app.services.pricing import load_rates
+from app.services.voice_swap import swap_voices
 from app.workers.celery_app import celery_app
 
 
@@ -253,45 +254,114 @@ def dispatch_seedance(self, item_id: str) -> None:
         raise self.retry(exc=exc)
 
 
+def _voice_map(db) -> dict[str, str]:
+    """tag ([H]/[F]) → elevenlabs_voice_id depuis la table voice_profiles."""
+    from app.db.models import VoiceProfile
+
+    return {
+        profile.tag: profile.elevenlabs_voice_id
+        for profile in db.scalars(select(VoiceProfile)).all()
+    }
+
+
+def _finalize_job_if_done(db, job) -> None:
+    """Quand tous les items sont terminaux : statut final du job + ligne de
+    calibration (estimé vs réel + taux QC observé)."""
+    statuses = {i.status for i in job.items}
+    if not statuses or not statuses <= {ItemStatus.DONE, ItemStatus.FAILED}:
+        return
+    job.status = JobStatus.COMPLETED if ItemStatus.DONE in statuses else JobStatus.FAILED
+    calibration.record_job_calibration(db, job)
+
+
 @celery_app.task(bind=True, max_retries=3)
 def process_generated(self, item_id: str) -> None:
-    """Après retour kie.ai : télécharge la vidéo brute, assemble, upload R2."""
+    """Après retour kie.ai : download → QC face-match → voice-swap (si
+    catégorie parlante) → assemblage (caption/musique) → upload R2."""
+    settings = get_settings()
     try:
         with db_session() as db:
             item = db.get(JobItem, _pk(item_id))
             if item is None or item.status != ItemStatus.GENERATED:
                 return
             job = item.job
+            model = db.get(Model, job.model_id)
             raw_url = item.raw_video_url
+            dialogue_script = item.dialogue_script
+            caption_text = item.caption_text
             resolution, bitrate = job.resolution, job.bitrate
+            music_url = job.music_url
+            face_url = model.face_reference_url
+            voices = _voice_map(db) if dialogue_script else {}
             job_id = str(job.id)
 
         with tempfile.TemporaryDirectory() as tmp:
             raw_path = Path(tmp) / "raw.mp4"
-            final_path = Path(tmp) / "final.mp4"
             _download(raw_url, raw_path)
-            # Phase 1 : pas de QC ni de voice-swap — passage direct à l'assemblage
+            current_path = raw_path
+
+            # --- QC gate (brief §9) ---
+            if settings.qc_enabled:
+                from app.services import qc
+
+                face_ref = Path(tmp) / "face_ref.jpg"
+                _download(face_url, face_ref)
+                score, passed = qc.check_video(str(raw_path), str(face_ref), tmp)
+                with db_session() as db:
+                    item = db.get(JobItem, _pk(item_id))
+                    item.face_match_score = round(score, 4)
+                    item.qc_status = QcStatus.PASS if passed else QcStatus.FAIL
+                    if not passed:
+                        item.status = ItemStatus.FAILED
+                        item.error = f"qc: face_match_score={score:.3f} < {settings.qc_threshold}"
+                        _finalize_job_if_done(db, item.job)
+                        return
+                    item.status = ItemStatus.QC
+            else:
+                with db_session() as db:
+                    item = db.get(JobItem, _pk(item_id))
+                    item.qc_status = QcStatus.SKIPPED
+
+            # --- Voice-swap (brief §7) ---
+            if dialogue_script and settings.voice_swap_enabled:
+                swapped_path = Path(tmp) / "swapped.mp4"
+                swap_voices(
+                    str(current_path), str(swapped_path), dialogue_script, voices, tmp
+                )
+                current_path = swapped_path
+                with db_session() as db:
+                    item = db.get(JobItem, _pk(item_id))
+                    item.status = ItemStatus.VOICED
+
+            # --- Assemblage (brief §10) ---
+            music_path = None
+            if music_url:
+                music_path = str(Path(tmp) / "music_input")
+                _download(music_url, Path(music_path))
+            final_path = Path(tmp) / "final.mp4"
             assemble(
-                str(raw_path),
+                str(current_path),
                 str(final_path),
-                AssembleParams(resolution=resolution, bitrate=bitrate),
+                AssembleParams(
+                    resolution=resolution, bitrate=bitrate, music_path=music_path
+                ),
+                caption_text=caption_text,
+                workdir=tmp,
             )
             final_url = r2.upload_file(str(final_path), f"outputs/{job_id}/{item_id}.mp4")
 
         with db_session() as db:
             item = db.get(JobItem, _pk(item_id))
-            item.qc_status = QcStatus.SKIPPED
             item.final_video_url = final_url
             item.status = ItemStatus.DONE
-            job = item.job
-            statuses = {i.status for i in job.items}
-            if statuses <= {ItemStatus.DONE, ItemStatus.FAILED}:
-                job.status = (
-                    JobStatus.COMPLETED if ItemStatus.DONE in statuses else JobStatus.FAILED
-                )
+            _finalize_job_if_done(db, item.job)
     except Exception as exc:
         if self.request.retries >= self.max_retries:
             _fail_item(item_id, f"process: {exc}")
+            with db_session() as db:
+                item = db.get(JobItem, _pk(item_id))
+                if item:
+                    _finalize_job_if_done(db, item.job)
             raise
         raise self.retry(exc=exc)
 
@@ -318,7 +388,17 @@ def apply_kie_result(item_id: str, result: kie.KieTaskResult) -> None:
             if item is None or item.status != ItemStatus.DISPATCHED:
                 return
             item.raw_video_url = result.result_urls[0]
+            if result.cost_usd is not None:
+                item.item_actual_cost = result.cost_usd
             item.status = ItemStatus.GENERATED
         process_generated.delay(item_id)
     elif result.state == "fail":
-        _fail_item(item_id, f"kie.ai: {result.fail_msg or 'génération échouée'}")
+        with db_session() as db:
+            item = db.get(JobItem, _pk(item_id))
+            if item is None:
+                return
+            item.status = ItemStatus.FAILED
+            item.error = f"kie.ai: {result.fail_msg or 'génération échouée'}"
+            if result.cost_usd is not None:
+                item.item_actual_cost = result.cost_usd
+            _finalize_job_if_done(db, item.job)

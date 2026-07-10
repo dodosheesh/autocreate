@@ -3,7 +3,7 @@
 Content factory — moteur de génération de Reels IA en masse pour une model IA.
 Seedance 2.0 via [kie.ai](https://kie.ai) (audio natif), voice-swap ElevenLabs, assemblage FFmpeg, stockage R2.
 
-**État actuel : Phase 2** — banques d'assets + moteur de composition : je remplis les banques (outfits, backgrounds, templates, dialogues, captions), je demande N vidéos par catégorie, le moteur compose des variantes **dédupliquées** (tirage pondéré + `combo_hash`), estime, gate le budget et dispatche vers Seedance. Le trigger manuel mono-prompt de la Phase 1 reste disponible.
+**État actuel : Phase 3** — pipeline complet post-génération : QC face-match (ArcFace vs photo de référence), **voice-swap ElevenLabs** (deux timbres fixes `[H]`/`[F]` par reel, lèvres synchro préservées), assemblage avec **overlay caption façon Snapchat** et piste musique, **calibration estimé/réel** qui affine l'estimateur batch après batch. Les flows Phase 1 (mono-prompt) et Phase 2 (batch depuis les banques) restent disponibles.
 
 ## Stack
 
@@ -18,9 +18,15 @@ POST /api/jobs/batch ──► compose_job : tirage pondéré template+outfit+ba
                      ──► estimate_and_gate : coût item par item (table pricing),
                          blocage budget_cap AVANT dépense
                      ──► dispatch_seedance ──► kie.ai createTask
-                                                    │  (callback)
+                                                    │  (callback, coût réel capturé)
 POST /api/webhooks/kie ◄────────────────────────────┘
-                     ──► process_generated : download → assemble FFmpeg (9:16, bitrate) → R2
+                     ──► process_generated :
+                           download → QC face-match (frame → ArcFace → seuil)
+                           → voice-swap (démux → VAD → ElevenLabs sts par segment
+                             → timeline reconstruite → remux, lèvres intactes)
+                           → assemblage (9:16, bitrate, caption Snapchat, musique)
+                           → upload R2
+                     ──► job terminé → calibration_log (estimé vs réel + taux QC)
 ```
 
 Statuts job : `pending → composing → dispatched → completed | blocked_budget | failed`
@@ -35,8 +41,10 @@ reporte le manque dans `compose_shortfall` (jamais de doublon ni de cap silencie
 # 1. Postgres + Redis
 docker compose up -d
 
-# 2. Dépendances
+# 2. Dépendances (+ ffmpeg requis : apt install ffmpeg fontconfig)
 python3.13 -m venv .venv && .venv/bin/pip install -e ".[dev]"
+# QC face-match (optionnel, lourd — insightface/onnxruntime) :
+# .venv/bin/pip install -e ".[qc]" puis QC_ENABLED=true dans .env
 
 # 3. Config
 cp .env.example .env   # remplir KIE_API_KEY, R2_*, PUBLIC_BASE_URL
@@ -135,6 +143,30 @@ Le slot `{characteristics}` dans le prompt reçoit les `injection_hint` des cara
 Les images de référence envoyées à Seedance = visage + photos des caractéristiques + refs
 additionnelles, **plafonnées à 12** (contrainte Seedance 2.0), le visage n'étant jamais évincé.
 
+## Pipeline voix (Phase 3)
+
+1. Deux `voice_profiles` fixes à créer une fois (`tag` `H` = masculin grave, `F` = féminin) —
+   le timbre est 100 % consistant sur tous les reels.
+2. Seedance génère la vidéo **avec son audio** (lèvres synchro). Le script taggé sert de
+   carte de segments : VAD par énergie détecte les blocs de parole, bloc i ↔ ligne i.
+   Plus de blocs que de lignes → fusion des plus petits silences ; moins → item rejeté
+   (erreur explicite plutôt qu'une voix sur la mauvaise ligne).
+3. Chaque segment passe par ElevenLabs `speech-to-speech` (timbre changé, timing/émotion
+   préservés), est calé à la durée exacte du slot, puis la timeline est reconstruite
+   (ambiances/silences d'origine conservés) et remuxée — **zéro lipsync nécessaire**.
+
+Réglages : `ELEVENLABS_STABILITY` (delivery stable inter-reels),
+`ELEVENLABS_SIMILARITY_BOOST` (collé au timbre cible), `VOICE_SWAP_ENABLED=false`
+pour bypasser en test.
+
+## QC face-match (Phase 3)
+
+`QC_ENABLED=true` + extra `[qc]` : une frame de la vidéo brute → embedding ArcFace
+(insightface buffalo_l) → similarité cosinus vs `face_reference_url` → sous
+`QC_THRESHOLD` (0.35 par défaut) l'item est rejeté (`qc_status=fail`) avant de dépenser
+le voice-swap. Le taux de réussite observé alimente `calibration_log` et recalibre
+automatiquement le coût effectif affiché par `/api/estimate`.
+
 ## Notes
 
 - **Pricing** : la table `pricing` est la seule source de vérité tarifaire (seedée avec les
@@ -150,7 +182,8 @@ additionnelles, **plafonnées à 12** (contrainte Seedance 2.0), le visage n'ét
 ## Roadmap
 
 - ~~**Phase 2** — banques d'assets + moteur de composition pondéré + dédup `combo_hash`~~ ✔
-- **Phase 3** — QC face-match (insightface), pipeline voix (VAD → ElevenLabs speech-to-speech
-  par segment → reconcat), calibration estimé/réel, Alembic pour les migrations
-- **Phase 4** — panneau de génération multi-catégories, estimateur live UI, grille de review
-- **Phase 5** — multi-tenant, billing
+- ~~**Phase 3** — QC face-match, pipeline voix, calibration estimé/réel~~ ✔
+- **Phase 4** — panneau de génération multi-catégories (UI), estimateur live UI, grille de
+  review (approuver/rejeter/exporter), celery beat pour le polling filet de sécurité
+- **Phase 5** — multi-tenant, billing, Alembic (create_all suffit tant que la base
+  n'est pas encore déployée)

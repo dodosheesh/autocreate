@@ -28,6 +28,7 @@ class KieTaskResult:
     result_urls: list[str]
     fail_msg: str | None
     cost_time: float | None
+    cost_usd: float | None  # coût réel si le payload l'expose (calibration)
     raw: dict
 
 
@@ -90,12 +91,19 @@ def parse_task_payload(data: dict) -> KieTaskResult:
             result_urls = parsed.get("resultUrls") or []
         except (json.JSONDecodeError, AttributeError):
             pass
+    cost_usd = None
+    for key in ("costUsd", "cost_usd", "costUSD", "cost"):
+        value = data.get(key)
+        if isinstance(value, (int, float)):
+            cost_usd = float(value)
+            break
     return KieTaskResult(
         task_id=data.get("taskId", ""),
         state=data.get("state", ""),
         result_urls=result_urls,
         fail_msg=data.get("failMsg"),
         cost_time=data.get("costTime"),
+        cost_usd=cost_usd,
         raw=data,
     )
 

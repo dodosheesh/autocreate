@@ -158,6 +158,7 @@ class BatchJobCreate(BaseModel):
     duration_s: int = Field(default=10, ge=3, le=30)
     bitrate: Bitrate = "standard"
     model_variant: str = "seedance_2.0"
+    music_url: str | None = Field(default=None, description="Piste mixée à l'assemblage")
     budget_cap_usd: float | None = None
 
 

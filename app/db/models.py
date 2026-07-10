@@ -185,6 +185,7 @@ class GenerationJob(Base):
     bitrate: Mapped[str] = mapped_column(String(16), default="standard")  # standard / high
     aspect: Mapped[str] = mapped_column(String(8), default="9:16")
     model_variant: Mapped[str] = mapped_column(String(64), default="seedance_2.0")
+    music_url: Mapped[str | None] = mapped_column(Text)  # piste mixée à l'assemblage
     budget_cap_usd: Mapped[float | None] = mapped_column(Float)
     estimated_cost_usd: Mapped[float | None] = mapped_column(Float)
     actual_cost_usd: Mapped[float | None] = mapped_column(Float)

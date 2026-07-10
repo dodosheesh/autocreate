@@ -30,6 +30,29 @@ class Settings(BaseSettings):
     # Taux de réussite QC par défaut pour l'estimateur (recalibré via calibration_log)
     default_qc_success_rate: float = 0.80
 
+    # --- ElevenLabs (voice-swap speech-to-speech) ---
+    elevenlabs_api_key: str = ""
+    elevenlabs_base_url: str = "https://api.elevenlabs.io"
+    elevenlabs_sts_model: str = "eleven_multilingual_sts_v2"
+    # stability haut = delivery plus stable inter-reels ;
+    # similarity_boost haut = plus collé au timbre cible
+    elevenlabs_stability: float = 0.5
+    elevenlabs_similarity_boost: float = 0.75
+    voice_swap_enabled: bool = True
+
+    # --- QC face-match ---
+    # Nécessite l'extra [qc] (insightface + onnxruntime) ; off par défaut
+    qc_enabled: bool = False
+    qc_threshold: float = 0.35  # similarité cosinus ArcFace min
+    qc_frame_time_s: float = 1.0  # instant de la frame échantillonnée
+
+    # --- Segmentation voix (VAD énergie) ---
+    vad_min_silence_s: float = 0.25  # gap min entre deux segments de parole
+    vad_min_speech_s: float = 0.15  # durée min d'un segment retenu
+
+    # --- Assemblage ---
+    music_volume_db: float = -18.0  # volume de la piste musique sous la voix
+
 
 @lru_cache
 def get_settings() -> Settings:

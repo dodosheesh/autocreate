@@ -8,6 +8,7 @@ from app.config import get_settings
 from app.db.base import get_db
 from app.db.models import GenerationJob, JobItem, JobStatus, Model
 from app.services import composer
+from app.services.calibration import get_calibrated_qc_rate
 from app.services.estimator import ItemSpec, estimate_batch, max_videos_for_budget
 from app.services.pricing import load_rates
 from app.workers.tasks import compose_job, dispatch_seedance
@@ -35,6 +36,7 @@ def create_batch_job(payload: schemas.BatchJobCreate, db: Session = Depends(get_
         duration_s=payload.duration_s,
         bitrate=payload.bitrate,
         model_variant=payload.model_variant,
+        music_url=payload.music_url,
         budget_cap_usd=payload.budget_cap_usd,
     )
     db.add(job)
@@ -46,10 +48,13 @@ def create_batch_job(payload: schemas.BatchJobCreate, db: Session = Depends(get_
 
 @router.post("/estimate", response_model=schemas.EstimateResponse)
 def estimate(payload: schemas.EstimateRequest, db: Session = Depends(get_db)):
-    """Estimation live (fonction pure sur la table pricing, zéro appel API)."""
+    """Estimation live (fonction pure sur la table pricing, zéro appel API).
+    Le taux QC par défaut est recalibré sur les derniers jobs (calibration_log)."""
     settings = get_settings()
     rates = load_rates(db)
-    qc_rate = payload.qc_success_rate or settings.default_qc_success_rate
+    qc_rate = payload.qc_success_rate or get_calibrated_qc_rate(
+        db, settings.default_qc_success_rate
+    )
     spec = ItemSpec(
         count=payload.count,
         duration_s=payload.duration_s,

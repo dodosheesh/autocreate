@@ -14,12 +14,19 @@ dependencies = [
     "pydantic-settings>=2.6",
     "boto3>=1.35",
     "httpx>=0.27",
+    "numpy>=2.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
     "pytest-mock>=3.14",
+]
+# QC face-match (lourd : modèles ONNX téléchargés au premier run)
+qc = [
+    "insightface>=0.7",
+    "onnxruntime>=1.19",
+    "opencv-python-headless>=4.10",
 ]
 
 [tool.setuptools]
