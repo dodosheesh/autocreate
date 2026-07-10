@@ -53,6 +53,18 @@ class Settings(BaseSettings):
     # --- Assemblage ---
     music_volume_db: float = -18.0  # volume de la piste musique sous la voix
 
+    # --- Auth ---
+    # Clé de signature des cookies de session — OBLIGATOIRE de la surcharger
+    # en prod (générer : python -c "import secrets; print(secrets.token_hex(32))")
+    secret_key: str = "dev-insecure-change-me"
+    session_ttl_s: int = 60 * 60 * 24 * 14  # 14 jours
+    session_cookie: str = "autocreate_session"
+    # Compte propriétaire seedé au premier init_db (mot de passe à changer ensuite)
+    bootstrap_admin_email: str = "sydeincovind@gmail.com"
+    bootstrap_admin_password: str = "change-me-on-first-login"
+    # Secret partagé kie.ai pour authentifier les webhooks (?secret=...)
+    kie_webhook_secret: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

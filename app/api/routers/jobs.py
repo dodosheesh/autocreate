@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api import schemas
+from app.api.deps import current_user
 from app.config import get_settings
 from app.db.base import get_db
 from app.db.models import (
@@ -22,7 +23,7 @@ from app.services.estimator import ItemSpec, estimate_batch, max_videos_for_budg
 from app.services.pricing import load_rates
 from app.workers.tasks import compose_job, dispatch_seedance
 
-router = APIRouter(prefix="/api", tags=["jobs"])
+router = APIRouter(prefix="/api", tags=["jobs"], dependencies=[Depends(current_user)])
 
 
 @router.post("/jobs/batch", response_model=schemas.JobOut)

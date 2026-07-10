@@ -5,10 +5,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api import schemas
+from app.api.deps import current_user
 from app.db.base import get_db
 from app.db.models import Model, ModelCharacteristic
 
-router = APIRouter(prefix="/api/models", tags=["models"])
+router = APIRouter(prefix="/api/models", tags=["models"], dependencies=[Depends(current_user)])
 
 
 @router.post("", response_model=schemas.ModelOut)

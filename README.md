@@ -3,7 +3,7 @@
 Content factory — moteur de génération de Reels IA en masse pour une model IA.
 Seedance 2.0 via [kie.ai](https://kie.ai) (audio natif), voice-swap ElevenLabs, assemblage FFmpeg, stockage R2.
 
-**État actuel : Phase 4 — stack complète.** Panneau de génération web sur `/` (compteurs par catégorie, toggles résolution/durée/bitrate, **coût estimé en direct**, budget cap), grille de review (préviews vidéo, approuver/rejeter, export JSON des approuvés), pipeline complet : composition dédupliquée → gate budget → Seedance (kie.ai) → QC face-match → voice-swap ElevenLabs → assemblage (caption Snapchat, musique) → R2, avec calibration estimé/réel automatique. Backlog des features suivantes : `BACKLOG.md`.
+**État actuel : Phase 5 — stack complète + accès restreint.** Le logiciel est protégé par une page de connexion (`/login`) ; toutes les routes API (hors webhook kie.ai) exigent une session. Panneau de génération web sur `/` (compteurs par catégorie, toggles résolution/durée/bitrate, **coût estimé en direct**, budget cap), grille de review (préviews vidéo, approuver/rejeter, export JSON des approuvés), pipeline complet : composition dédupliquée → gate budget → Seedance (kie.ai) → QC face-match → voice-swap ElevenLabs → assemblage (caption Snapchat, musique) → R2, avec calibration estimé/réel automatique. Backlog des features suivantes : `BACKLOG.md`.
 
 ## Stack
 
@@ -173,6 +173,26 @@ pour bypasser en test.
 le voice-swap. Le taux de réussite observé alimente `calibration_log` et recalibre
 automatiquement le coût effectif affiché par `/api/estimate`.
 
+## Authentification (Phase 5)
+
+Accès restreint par session (cookie signé HMAC, mot de passe haché PBKDF2 —
+zéro dépendance externe). `init_db` crée le compte propriétaire depuis
+`BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD` (défaut : `sydeincovind@gmail.com`).
+
+À faire au premier démarrage en prod :
+1. Générer une vraie clé : `SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")`
+   (changer `SECRET_KEY` invalide toutes les sessions existantes).
+2. Se connecter sur `/login`, puis changer le mot de passe via
+   `POST /api/auth/change-password` (`{current_password, new_password}`).
+3. Définir `KIE_WEBHOOK_SECRET` : le webhook kie.ai n'utilise pas de cookie
+   (l'appelant est kie.ai), il est authentifié par ce secret partagé passé
+   en query (`/api/webhooks/kie?secret=…`, injecté automatiquement dans le
+   `callBackUrl`).
+
+Endpoints : `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`,
+`POST /api/auth/change-password`. Table `users` (`tenant_id`, `email`,
+`password_hash`, `role` owner/member) — prête pour le multi-tenant.
+
 ## Notes
 
 - **Pricing** : la table `pricing` est la seule source de vérité tarifaire (seedée avec les
@@ -190,6 +210,7 @@ automatiquement le coût effectif affiché par `/api/estimate`.
 - ~~**Phase 2** — banques d'assets + moteur de composition pondéré + dédup `combo_hash`~~ ✔
 - ~~**Phase 3** — QC face-match, pipeline voix, calibration estimé/réel~~ ✔
 - ~~**Phase 4** — panneau de génération (UI), estimateur live, grille de review, celery beat~~ ✔
-- **Phase 5** — multi-tenant, billing, Alembic (create_all suffit tant que la base
-  n'est pas encore déployée)
+- ~~**Phase 5** — auth + accès restreint (login, sessions, compte propriétaire)~~ ✔
+- **Reste Phase 5+** — multi-tenant complet (scoping des données par `tenant_id`),
+  billing, Alembic (create_all suffit tant que la base n'est pas encore déployée)
 - **Backlog** — feature « Pictures » nano banana : voir `BACKLOG.md`

@@ -10,9 +10,13 @@ from fastapi.testclient import TestClient
 
 from app.db.base import Base, SessionLocal, engine
 from app.db.init_db import SEED_PRICING
-from app.db.models import GenerationJob, ItemStatus, JobItem, Pricing
+from app.db.models import GenerationJob, ItemStatus, JobItem, Pricing, User
 from app.main import app
+from app.services.security import hash_password
 from app.workers import tasks as wt
+
+ADMIN_EMAIL = "owner@example.com"
+ADMIN_PASSWORD = "test-password-123"
 
 
 @pytest.fixture(scope="module")
@@ -26,8 +30,13 @@ def client():
                     model=model, resolution=resolution, with_ref=with_ref, unit=unit, rate_usd=rate
                 )
             )
+        db.add(User(email=ADMIN_EMAIL, password_hash=hash_password(ADMIN_PASSWORD), role="owner"))
         db.commit()
-    return TestClient(app)
+    c = TestClient(app)
+    # Authentifie le client pour toute la session de test (cookie persistant)
+    r = c.post("/api/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
+    assert r.status_code == 200, r.text
+    return c
 
 
 @pytest.fixture(scope="module")
@@ -156,3 +165,26 @@ def test_ui_servie(client):
     r = client.get("/")
     assert r.status_code == 200
     assert "Generate" in r.text
+
+
+def test_routes_protegees_sans_session():
+    anon = TestClient(app)
+    assert anon.get("/api/models").status_code == 401
+    assert anon.get("/api/jobs").status_code == 401
+    assert anon.post("/api/estimate/batch", json={"counts_per_category": {"skit": 1}}).status_code == 401
+
+
+def test_login_mauvais_mot_de_passe():
+    anon = TestClient(app)
+    r = anon.post("/api/auth/login", json={"email": ADMIN_EMAIL, "password": "faux"})
+    assert r.status_code == 401
+
+
+def test_login_puis_me_et_logout():
+    c = TestClient(app)
+    assert c.get("/api/auth/me").status_code == 401
+    c.post("/api/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
+    me = c.get("/api/auth/me")
+    assert me.status_code == 200 and me.json()["email"] == ADMIN_EMAIL
+    c.post("/api/auth/logout")
+    assert c.get("/api/auth/me").status_code == 401

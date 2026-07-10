@@ -12,8 +12,10 @@ le code ne lit jamais un tarif en dur).
 
 from sqlalchemy import select
 
+from app.config import get_settings
 from app.db.base import Base, SessionLocal, engine
-from app.db.models import Pricing
+from app.db.models import Pricing, User
+from app.services.security import hash_password
 
 SEED_PRICING = [
     # (model, resolution, with_ref, unit, rate_usd)
@@ -25,6 +27,7 @@ SEED_PRICING = [
 
 
 def init() -> None:
+    settings = get_settings()
     Base.metadata.create_all(engine)
     with SessionLocal() as db:
         for model, resolution, with_ref, unit, rate in SEED_PRICING:
@@ -46,6 +49,21 @@ def init() -> None:
                         rate_usd=rate,
                     )
                 )
+
+        # Compte propriétaire (une seule fois)
+        admin_email = settings.bootstrap_admin_email.lower()
+        if admin_email and not db.scalar(select(User).where(User.email == admin_email)):
+            db.add(
+                User(
+                    email=admin_email,
+                    password_hash=hash_password(settings.bootstrap_admin_password),
+                    role="owner",
+                )
+            )
+            print(
+                f"Compte propriétaire créé : {admin_email} "
+                f"(mot de passe initial via BOOTSTRAP_ADMIN_PASSWORD, à changer)"
+            )
         db.commit()
     print("Tables créées et pricing seedé.")
 

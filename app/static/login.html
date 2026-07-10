@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>autocreate — connexion</title>
+<style>
+  :root { --bg:#0e0f13; --panel:#16181f; --panel2:#1d2029; --border:#2a2e3a;
+          --text:#e8eaf0; --muted:#8b90a0; --accent:#7c5cff; --err:#ef5b5b; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+         background:var(--bg); color:var(--text); font:14px/1.5 system-ui,sans-serif; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:14px;
+          padding:32px; width:340px; }
+  h1 { font-size:24px; margin:0 0 4px; text-align:center; }
+  h1 span { color:var(--accent); }
+  .sub { color:var(--muted); text-align:center; font-size:13px; margin-bottom:24px; }
+  label { display:block; color:var(--muted); font-size:12px; margin:14px 0 4px; }
+  input { width:100%; background:var(--panel2); color:var(--text); border:1px solid var(--border);
+          border-radius:8px; padding:10px 12px; font-size:14px; outline:none; }
+  input:focus { border-color:var(--accent); }
+  button { width:100%; margin-top:22px; background:var(--accent); color:#fff; border:0;
+           border-radius:10px; padding:12px; font-size:15px; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .err { color:var(--err); font-size:13px; margin-top:14px; text-align:center; min-height:18px; }
+</style>
+</head>
+<body>
+<form class="card" id="form">
+  <h1>auto<span>create</span></h1>
+  <div class="sub">Accès réservé</div>
+  <label for="email">Email</label>
+  <input id="email" type="email" autocomplete="username" required>
+  <label for="password">Mot de passe</label>
+  <input id="password" type="password" autocomplete="current-password" required>
+  <button id="btn" type="submit">Se connecter</button>
+  <div class="err" id="err"></div>
+</form>
+<script>
+const $ = (s) => document.querySelector(s);
+$("#form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("#btn").disabled = true; $("#err").textContent = "";
+  try {
+    const r = await fetch("/api/auth/login", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({email: $("#email").value, password: $("#password").value}),
+    });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || "Échec de connexion");
+    location.href = "/";
+  } catch (err) { $("#err").textContent = err.message; $("#btn").disabled = false; }
+});
+</script>
+</body>
+</html>

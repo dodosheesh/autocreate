@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api import schemas
+from app.api.deps import current_user
 from app.db.base import get_db
 from app.db.models import (
     Background,
@@ -23,7 +24,7 @@ from app.db.models import (
     VoiceProfile,
 )
 
-router = APIRouter(prefix="/api/banks", tags=["banks"])
+router = APIRouter(prefix="/api/banks", tags=["banks"], dependencies=[Depends(current_user)])
 
 
 def _register(

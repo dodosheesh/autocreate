@@ -63,9 +63,12 @@ def build_seedance_input(
 def create_seedance_task(input_payload: dict[str, Any], callback_path: str = "/api/webhooks/kie") -> str:
     """Lance une génération, renvoie le taskId kie.ai."""
     settings = get_settings()
+    callback_url = f"{settings.public_base_url.rstrip('/')}{callback_path}"
+    if settings.kie_webhook_secret:
+        callback_url += f"?secret={settings.kie_webhook_secret}"
     body = {
         "model": settings.kie_seedance_model,
-        "callBackUrl": f"{settings.public_base_url.rstrip('/')}{callback_path}",
+        "callBackUrl": callback_url,
         "input": input_payload,
     }
     resp = httpx.post(
