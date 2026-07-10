@@ -20,9 +20,11 @@ COPY app ./app
 # /app par app.main, et les dépendances sont installées.
 RUN pip install --no-cache-dir -e .
 
-ENV PORT=8000
-EXPOSE 8000
+# 8080 = port par défaut de Railway (et cible du domaine). Railway peut
+# surcharger $PORT ; l'app suit toujours $PORT, avec 8080 en repli.
+ENV PORT=8080
+EXPOSE 8080
 
 # Commande par défaut = service web. Le service worker surcharge cette commande
 # dans Railway (voir README → Déploiement Railway).
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
