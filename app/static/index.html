@@ -142,6 +142,77 @@
       </div>
 
       <div class="card">
+        <h2>Configuration — model &amp; banques</h2>
+        <p class="muted" style="font-size:12px;margin:0 0 12px">
+          Uploade les images directement ici (elles partent sur R2). Pas besoin de coller d'URL.
+        </p>
+
+        <details open><summary style="cursor:pointer;font-weight:600;margin-bottom:8px">Model</summary>
+          <div class="row" style="margin-top:0">
+            <div><label>Nom</label><input type="text" id="m-name" placeholder="Ma model"></div>
+            <div><label>Photo visage (référence)</label><input type="file" id="m-face" accept="image/*"></div>
+          </div>
+          <button class="btn small" id="m-create" style="margin-top:8px">Créer la model</button>
+        </details>
+
+        <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600;margin-bottom:8px">Caractéristique spéciale (pour la model sélectionnée en haut)</summary>
+          <div class="row" style="margin-top:0">
+            <div><label>Label</label><input type="text" id="c-label" placeholder="tatouage avant-bras gauche"></div>
+            <div><label>Photo du trait</label><input type="file" id="c-photo" accept="image/*"></div>
+          </div>
+          <label>Injection hint (comment le décrire dans le prompt)</label>
+          <input type="text" id="c-hint" placeholder="a delicate floral tattoo on her left forearm">
+          <button class="btn small" id="c-add" style="margin-top:8px">Ajouter la caractéristique</button>
+        </details>
+
+        <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600;margin-bottom:8px">Outfits &amp; Backgrounds</summary>
+          <div class="row" style="margin-top:0">
+            <div><label>Outfit — image</label><input type="file" id="o-photo" accept="image/*"></div>
+            <div><label>Tags (virgules)</label><input type="text" id="o-tags" placeholder="red dress, heels"></div>
+          </div>
+          <button class="btn small" id="o-add" style="margin-top:8px">Ajouter l'outfit</button>
+          <div class="row">
+            <div><label>Background — image</label><input type="file" id="b-photo" accept="image/*"></div>
+            <div><label>Tags (virgules)</label><input type="text" id="b-tags" placeholder="beach at sunset"></div>
+          </div>
+          <button class="btn small" id="b-add" style="margin-top:8px">Ajouter le background</button>
+        </details>
+
+        <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600;margin-bottom:8px">Templates / dialogues / captions / voix (texte)</summary>
+          <label>Template — catégorie</label>
+          <select id="t-cat"></select>
+          <label style="margin-top:8px">Texte (slots : {outfit} {background} {characteristics} {dialogue} {caption})</label>
+          <input type="text" id="t-text" placeholder="A woman {outfit}, {background}, {characteristics}. {dialogue}">
+          <label style="margin-top:8px"><input type="checkbox" id="t-speaking"> speaking (déclenche la voix)</label>
+          <button class="btn small" id="t-add" style="margin-top:8px">Ajouter le template</button>
+
+          <div class="row" style="margin-top:12px">
+            <div><label>Dialogue — catégorie</label><select id="d-cat"></select></div>
+            <div><label>Caption — catégorie</label><select id="cap-cat"></select></div>
+          </div>
+          <label>Dialogue taggé ([H] / [F] / [beat], une ligne = une voix)</label>
+          <textarea id="d-text" rows="3" placeholder="[H] première ligne&#10;[F] deuxième ligne"
+            style="width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:14px;font-family:inherit"></textarea>
+          <button class="btn small" id="d-add" style="margin-top:8px">Ajouter le dialogue</button>
+          <label style="margin-top:8px">Caption (barre de texte Snapchat)</label>
+          <input type="text" id="cap-text" placeholder="légende…">
+          <button class="btn small" id="cap-add" style="margin-top:8px">Ajouter la caption</button>
+
+          <div class="row" style="margin-top:12px">
+            <div><label>Voix — tag</label>
+              <select id="v-tag"><option value="H">H (grave masculin)</option><option value="F">F (féminin)</option></select></div>
+            <div><label>Genre</label>
+              <select id="v-gender"><option value="male">male</option><option value="female">female</option></select></div>
+          </div>
+          <div class="row">
+            <div><label>Label</label><input type="text" id="v-label" placeholder="grave masculin"></div>
+            <div><label>ElevenLabs voice_id</label><input type="text" id="v-id" placeholder="21m00…"></div>
+          </div>
+          <button class="btn small" id="v-add" style="margin-top:8px">Ajouter la voix</button>
+        </details>
+      </div>
+
+      <div class="card">
         <h2>Jobs vidéo</h2>
         <table>
           <thead><tr><th>créé</th><th>catégories</th><th>statut</th>
@@ -154,10 +225,10 @@
       <div class="card">
         <h2>Pictures — nano banana</h2>
         <div class="row" style="margin-top:0">
-          <div><label>Image de référence (URL R2) → prompt</label>
-            <input type="url" id="pic-ref" placeholder="https://…/reference.jpg"></div>
+          <div><label>Image de référence (upload) → prompt</label>
+            <input type="file" id="pic-ref-file" accept="image/*"></div>
           <div style="display:flex; align-items:flex-end">
-            <button class="btn small" id="pic-reverse" style="width:100%">Reverse-engineer</button></div>
+            <button class="btn small" id="pic-reverse" style="width:100%">Uploader &amp; reverse-engineer</button></div>
         </div>
         <div id="pic-prompts" style="margin-top:10px; font-size:12px"></div>
         <div class="row">
@@ -291,8 +362,84 @@ async function loadModels() {
   const models = await api("/models");
   $("#model").innerHTML = models.length
     ? models.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join("")
-    : '<option value="">— créer une model via POST /api/models —</option>';
+    : '<option value="">— crée une model ci-dessous —</option>';
 }
+
+// --- Configuration : upload + création d'assets ---
+async function uploadFile(inputEl) {
+  const f = inputEl.files[0];
+  if (!f) throw new Error("Aucun fichier sélectionné");
+  const fd = new FormData();
+  fd.append("file", f);
+  const r = await fetch("/api/uploads", {method: "POST", body: fd});
+  if (r.status === 401) { location.href = "/login"; throw new Error("Non authentifié"); }
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || "upload échoué");
+  return (await r.json()).url;
+}
+const tags = (s) => s.split(",").map(t => t.trim()).filter(Boolean);
+const CAT_OPTIONS = CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join("");
+["#t-cat", "#d-cat", "#cap-cat"].forEach(s => { $(s).innerHTML = CAT_OPTIONS; });
+
+$("#m-create").addEventListener("click", async () => {
+  try {
+    if (!$("#m-name").value) return toast("Nom manquant");
+    if (!$("#m-face").files[0]) return toast("Photo visage manquante");
+    const url = await uploadFile($("#m-face"));
+    await api("/models", {method: "POST", body: JSON.stringify({name: $("#m-name").value, face_reference_url: url})});
+    toast("Model créée"); $("#m-name").value = ""; $("#m-face").value = "";
+    await loadModels();
+  } catch (e) { toast("Model : " + e.message); }
+});
+
+$("#c-add").addEventListener("click", async () => {
+  try {
+    if (!$("#model").value) return toast("Sélectionne d'abord une model en haut");
+    if (!$("#c-photo").files[0]) return toast("Photo du trait manquante");
+    const url = await uploadFile($("#c-photo"));
+    await api(`/models/${$("#model").value}/characteristics`, {method: "POST", body: JSON.stringify({
+      label: $("#c-label").value, reference_image_url: url, injection_hint: $("#c-hint").value, always_include: true})});
+    toast("Caractéristique ajoutée"); $("#c-label").value = ""; $("#c-hint").value = ""; $("#c-photo").value = "";
+  } catch (e) { toast("Caractéristique : " + e.message); }
+});
+
+async function addImageBank(endpoint, fileSel, tagsSel, label) {
+  try {
+    if (!$(fileSel).files[0]) return toast("Image manquante");
+    const url = await uploadFile($(fileSel));
+    await api(`/banks/${endpoint}`, {method: "POST", body: JSON.stringify({image_url: url, tags: tags($(tagsSel).value)})});
+    toast(label + " ajouté"); $(fileSel).value = ""; $(tagsSel).value = "";
+  } catch (e) { toast(label + " : " + e.message); }
+}
+$("#o-add").addEventListener("click", () => addImageBank("outfits", "#o-photo", "#o-tags", "Outfit"));
+$("#b-add").addEventListener("click", () => addImageBank("backgrounds", "#b-photo", "#b-tags", "Background"));
+
+$("#t-add").addEventListener("click", async () => {
+  try {
+    await api("/banks/templates", {method: "POST", body: JSON.stringify({
+      category: $("#t-cat").value, template_text: $("#t-text").value, speaking: $("#t-speaking").checked})});
+    toast("Template ajouté"); $("#t-text").value = "";
+  } catch (e) { toast("Template : " + e.message); }
+});
+$("#d-add").addEventListener("click", async () => {
+  try {
+    await api("/banks/dialogues", {method: "POST", body: JSON.stringify({
+      category: $("#d-cat").value, raw_text: $("#d-text").value})});
+    toast("Dialogue ajouté"); $("#d-text").value = "";
+  } catch (e) { toast("Dialogue : " + e.message); }
+});
+$("#cap-add").addEventListener("click", async () => {
+  try {
+    await api("/banks/captions", {method: "POST", body: JSON.stringify({category: $("#cap-cat").value, text: $("#cap-text").value})});
+    toast("Caption ajoutée"); $("#cap-text").value = "";
+  } catch (e) { toast("Caption : " + e.message); }
+});
+$("#v-add").addEventListener("click", async () => {
+  try {
+    await api("/banks/voices", {method: "POST", body: JSON.stringify({
+      label: $("#v-label").value, elevenlabs_voice_id: $("#v-id").value, gender: $("#v-gender").value, tag: $("#v-tag").value})});
+    toast("Voix ajoutée"); $("#v-label").value = ""; $("#v-id").value = "";
+  } catch (e) { toast("Voix : " + e.message); }
+});
 
 // --- generate ---
 $("#generate").addEventListener("click", async () => {
@@ -376,11 +523,12 @@ window.openJob = openJob; window.review = review; window.exportJob = exportJob;
 let currentPicJob = null;
 
 $("#pic-reverse").addEventListener("click", async () => {
-  if (!$("#pic-ref").value) return toast("URL de référence manquante");
+  if (!$("#pic-ref-file").files[0]) return toast("Sélectionne une image de référence");
   try {
-    await api("/pictures/prompts", {method: "POST", body: JSON.stringify({source_image_url: $("#pic-ref").value})});
-    $("#pic-ref").value = "";
-    toast("Reverse-engineering lancé");
+    const url = await uploadFile($("#pic-ref-file"));
+    await api("/pictures/prompts", {method: "POST", body: JSON.stringify({source_image_url: url})});
+    $("#pic-ref-file").value = "";
+    toast("Upload OK — reverse-engineering lancé");
     loadPrompts();
   } catch (err) { toast("Reverse : " + err.message); }
 });
