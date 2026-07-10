@@ -223,6 +223,79 @@ class ExportOut(BaseModel):
     videos: list[dict]
 
 
+# --- Pictures (nano banana) ---
+
+ImageSize = Literal["1:1", "4:5", "9:16", "16:9", "3:4", "4:3"]
+
+
+class PicturePromptCreate(BaseModel):
+    source_image_url: str = Field(description="Image de référence uploadée (R2)")
+    tags: list[str] = []
+    weight: float = Field(default=1.0, ge=0)
+
+
+class PicturePromptOut(BaseModel):
+    id: uuid.UUID
+    source_image_url: str
+    prompt_text: str | None
+    status: str
+    tags: list[str] = []
+    weight: float
+    error: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class PictureJobCreate(BaseModel):
+    model_id: uuid.UUID
+    count: int = Field(ge=1, le=200)
+    image_size: ImageSize = "1:1"
+    output_format: Literal["png", "jpeg"] = "png"
+    model_variant: str = "nano_banana"
+    budget_cap_usd: float | None = None
+
+
+class PictureItemOut(BaseModel):
+    id: uuid.UUID
+    status: str
+    qc_status: str
+    review_status: str
+    filled_prompt: str
+    face_match_score: float | None = None
+    kie_task_id: str | None
+    raw_image_url: str | None
+    final_image_url: str | None
+    item_estimated_cost: float | None
+    item_actual_cost: float | None = None
+    error: str | None
+
+    model_config = {"from_attributes": True}
+
+
+class PictureJobOut(BaseModel):
+    id: uuid.UUID
+    status: str
+    count: int
+    image_size: str
+    output_format: str
+    model_variant: str
+    budget_cap_usd: float | None
+    estimated_cost_usd: float | None
+    actual_cost_usd: float | None
+    compose_shortfall: int = 0
+    error: str | None = None
+    items: list[PictureItemOut] = []
+
+    model_config = {"from_attributes": True}
+
+
+class PictureEstimateRequest(BaseModel):
+    count: int = Field(ge=1)
+    model_variant: str = "nano_banana"
+    qc_success_rate: float | None = Field(default=None, gt=0, le=1)
+    budget_usd: float | None = None
+
+
 # --- Estimation live ---
 
 

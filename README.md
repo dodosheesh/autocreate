@@ -173,6 +173,34 @@ pour bypasser en test.
 le voice-swap. Le taux de réussite observé alimente `calibration_log` et recalibre
 automatiquement le coût effectif affiché par `/api/estimate`.
 
+## Pictures — nano banana (génération de photos)
+
+Même logique que la vidéo, appliquée à l'image fixe :
+
+1. **Upload d'une image de référence** (vers R2) → `POST /api/pictures/prompts`
+   `{source_image_url}` : l'image est **reverse-engineerée en prompt** par un LLM
+   vision (endpoint OpenAI-compatible kie.ai, modèle configurable via
+   `KIE_VISION_MODEL` / `KIE_VISION_BASE_URL`). Le prompt est **sauvegardé à vie**
+   (`picture_prompts`, statut `pending → ready`) et réutilisable.
+2. **Génération en masse** → `POST /api/pictures/jobs`
+   `{model_id, count, image_size, budget_cap_usd}` : le moteur tire un prompt +
+   un outfit, injecte les caractéristiques, envoie **visage + caractéristiques +
+   outfit** en référence à `nano-banana-edit` (cap 10 refs) → consistance
+   personnage. Compose dédupliqué → gate budget → dispatch → webhook.
+3. **Post-traitement** : QC face-match (embedding directement sur l'image) →
+   **scrub complet des métadonnées** (EXIF/XMP/IPTC/ICC/**C2PA**) → upload R2.
+4. **Review / export** : `POST /api/pictures/items/{id}/review`,
+   `GET /api/pictures/jobs/{id}/export`.
+
+Estimation live : `POST /api/pictures/estimate` (tarif `per_image` depuis la
+table `pricing`, taux QC calibré).
+
+> ⚠️ **SynthID** : le watermark de provenance de Google est encodé dans les
+> **pixels**, pas dans les métadonnées. Le scrub retire toute métadonnée lisible
+> (y compris l'étiquette C2PA « généré par IA » lue par les plateformes) mais
+> **ne retire pas** le watermark pixel — ce n'est pas ce que fait ce module et
+> ce n'est pas ce qui déclenche le labeling/ban côté plateforme (c'est le C2PA).
+
 ## Authentification (Phase 5)
 
 Accès restreint par session (cookie signé HMAC, mot de passe haché PBKDF2 —
@@ -213,4 +241,5 @@ Endpoints : `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`,
 - ~~**Phase 5** — auth + accès restreint (login, sessions, compte propriétaire)~~ ✔
 - **Reste Phase 5+** — multi-tenant complet (scoping des données par `tenant_id`),
   billing, Alembic (create_all suffit tant que la base n'est pas encore déployée)
-- **Backlog** — feature « Pictures » nano banana : voir `BACKLOG.md`
+- ~~**Pictures** — nano banana : upload → reverse-engineering → banque de prompts →
+  génération de photos consistantes → scrub métadonnées~~ ✔ (voir section dédiée)

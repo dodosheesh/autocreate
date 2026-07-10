@@ -251,6 +251,78 @@ class JobItem(Base):
     __table_args__ = (UniqueConstraint("job_id", "combo_hash", name="uq_combo_per_job"),)
 
 
+class PromptStatus(StrEnum):
+    PENDING = "pending"  # reverse-engineering en cours
+    READY = "ready"
+    FAILED = "failed"
+
+
+class PicturePrompt(Base):
+    """Prompt reverse-engineeré depuis une image de référence uploadée,
+    sauvegardé à vie pour réutilisation (feature Pictures / nano banana)."""
+
+    __tablename__ = "picture_prompts"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(64), default=DEFAULT_TENANT, index=True)
+    source_image_url: Mapped[str] = mapped_column(Text)  # l'upload de référence (R2)
+    prompt_text: Mapped[str | None] = mapped_column(Text)  # rempli par le reverse-engineering
+    status: Mapped[str] = mapped_column(String(16), default=PromptStatus.PENDING)
+    tags: Mapped[list] = mapped_column(JSON, default=list)
+    weight: Mapped[float] = mapped_column(Float, default=1.0)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class PictureJob(Base):
+    __tablename__ = "picture_jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(64), default=DEFAULT_TENANT, index=True)
+    model_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("models.id"))
+    status: Mapped[str] = mapped_column(String(32), default=JobStatus.PENDING)
+    count: Mapped[int] = mapped_column(Integer, default=1)
+    image_size: Mapped[str] = mapped_column(String(16), default="1:1")  # aspect ratio
+    output_format: Mapped[str] = mapped_column(String(8), default="png")
+    model_variant: Mapped[str] = mapped_column(String(64), default="nano_banana")
+    budget_cap_usd: Mapped[float | None] = mapped_column(Float)
+    estimated_cost_usd: Mapped[float | None] = mapped_column(Float)
+    actual_cost_usd: Mapped[float | None] = mapped_column(Float)
+    compose_shortfall: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    items: Mapped[list["PictureItem"]] = relationship(back_populates="job")
+
+
+class PictureItem(Base):
+    __tablename__ = "picture_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    job_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("picture_jobs.id"), index=True)
+    prompt_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("picture_prompts.id"))
+    outfit_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("outfits.id"))
+    characteristic_ids: Mapped[list] = mapped_column(JSON, default=list)
+    combo_hash: Mapped[str] = mapped_column(String(64), index=True)
+    filled_prompt: Mapped[str] = mapped_column(Text)
+    reference_image_urls: Mapped[list] = mapped_column(JSON, default=list)
+    kie_task_id: Mapped[str | None] = mapped_column(String(128), index=True)
+    raw_image_url: Mapped[str | None] = mapped_column(Text)  # sortie brute nano banana
+    qc_status: Mapped[str] = mapped_column(String(16), default=QcStatus.PENDING)
+    face_match_score: Mapped[float | None] = mapped_column(Float)
+    final_image_url: Mapped[str | None] = mapped_column(Text)  # scrubbée, prête au DL
+    review_status: Mapped[str] = mapped_column(String(16), default=ReviewStatus.PENDING)
+    item_estimated_cost: Mapped[float | None] = mapped_column(Float)
+    item_actual_cost: Mapped[float | None] = mapped_column(Float)
+    status: Mapped[str] = mapped_column(String(32), default=ItemStatus.COMPOSED)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    job: Mapped[PictureJob] = relationship(back_populates="items")
+
+    __table_args__ = (UniqueConstraint("job_id", "combo_hash", name="uq_pic_combo_per_job"),)
+
+
 class Pricing(Base):
     """Source de vérité tarifaire — jamais hardcodée (brief §4.11).
     Synchronisée depuis kie.ai/pricing."""

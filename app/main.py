@@ -3,14 +3,15 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 
-from app.api.routers import auth, banks, jobs, models, webhooks
+from app.api.routers import auth, banks, jobs, models, pictures, webhooks
 
-app = FastAPI(title="autocreate", version="0.5.0")
+app = FastAPI(title="autocreate", version="0.6.0")
 
 app.include_router(auth.router)
 app.include_router(models.router)
 app.include_router(banks.router)
 app.include_router(jobs.router)
+app.include_router(pictures.router)
 app.include_router(webhooks.router)
 
 _STATIC = Path(__file__).parent / "static"

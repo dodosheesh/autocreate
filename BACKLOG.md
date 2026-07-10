@@ -1,6 +1,18 @@
 # Backlog — features notées pour après la stack actuelle
 
-## Feature « Pictures » (nano banana) — à faire en toute fin
+## ✅ Feature « Pictures » (nano banana) — LIVRÉE
+
+Implémentée : tables `picture_prompts`/`picture_jobs`/`picture_items`, reverse-
+engineering vision (`app/integrations/vision.py`), génération nano-banana-edit
+(consistance visage + caractéristiques + outfits), scrub métadonnées Pillow
+(`app/media/scrub.py`), API `/api/pictures/*`, section UI. Voir README §Pictures.
+
+Rappel de la limite tenue : scrub métadonnées (EXIF/XMP/IPTC/C2PA) oui,
+retrait du watermark pixel SynthID non.
+
+---
+
+## (Archive de la spec initiale) Feature « Pictures » (nano banana)
 
 Génération de photos en masse de la model, même logique que la vidéo :
 

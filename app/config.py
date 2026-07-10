@@ -12,6 +12,16 @@ class Settings(BaseSettings):
     kie_api_key: str = ""
     kie_base_url: str = "https://api.kie.ai"
     kie_seedance_model: str = "bytedance/seedance-2"
+    # Nano Banana Edit : édition d'image avec images de référence (consistance
+    # personnage). cf. docs.kie.ai/market/google/nano-banana-edit
+    kie_nano_banana_model: str = "google/nano-banana-edit"
+    # Modèle vision pour le reverse-engineering image → prompt (endpoint
+    # OpenAI-compatible de kie.ai). Le modèle et l'URL sont configurables :
+    # aucune valeur devinée, l'utilisateur pointe le modèle vision de son choix.
+    kie_vision_model: str = "google/gemini-3-pro"
+    kie_vision_base_url: str = "https://api.kie.ai/gemini-3-pro/v1"
+    # Nombre max d'images de référence acceptées par nano-banana-edit
+    nano_banana_max_refs: int = 10
 
     public_base_url: str = "http://localhost:8000"
 

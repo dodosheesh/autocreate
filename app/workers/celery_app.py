@@ -8,7 +8,7 @@ celery_app = Celery(
     "autocreate",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.workers.tasks"],
+    include=["app.workers.tasks", "app.workers.picture_tasks"],
 )
 
 celery_app.conf.update(

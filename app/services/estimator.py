@@ -107,6 +107,41 @@ def estimate_batch(
     )
 
 
+def estimate_pictures(
+    count: int,
+    rates: list[Rate],
+    model: str = "nano_banana",
+    qc_success_rate: float = 0.80,
+) -> Estimate:
+    """Estimation d'un batch d'images (nano banana) — tarif per_image."""
+    if count < 0:
+        raise ValueError("count négatif")
+    if not 0 < qc_success_rate <= 1:
+        raise ValueError("qc_success_rate doit être dans ]0, 1]")
+    unit = _find_rate(rates, model, None, None, "per_image")
+    per_item = [unit] * count
+    gross = sum(per_item)
+    return Estimate(
+        gross_usd=round(gross, 4),
+        effective_usd=round(gross / qc_success_rate, 4),
+        qc_success_rate=qc_success_rate,
+        total_items=count,
+        per_item_usd=per_item,
+    )
+
+
+def max_pictures_for_budget(
+    budget_usd: float,
+    rates: list[Rate],
+    model: str = "nano_banana",
+    qc_success_rate: float = 0.80,
+) -> int:
+    unit = _find_rate(rates, model, None, None, "per_image") / qc_success_rate
+    if unit <= 0:
+        return 0
+    return int(budget_usd // unit)
+
+
 def max_videos_for_budget(
     budget_usd: float,
     spec: ItemSpec,

@@ -23,6 +23,8 @@ SEED_PRICING = [
     ("seedance_2.0", "720p", True, "per_sec", 0.125),
     ("seedance_2.0", "1080p", True, "per_sec", 0.31),
     ("elevenlabs_s2s", None, None, "per_min", 0.10),
+    # Nano Banana (image) — tarif indicatif kie.ai, à resynchroniser
+    ("nano_banana", None, None, "per_image", 0.02),
 ]
 
 

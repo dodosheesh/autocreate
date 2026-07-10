@@ -6,8 +6,9 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db.base import get_db
-from app.db.models import JobItem
+from app.db.models import JobItem, PictureItem
 from app.integrations.kie import parse_task_payload
+from app.workers.picture_tasks import apply_kie_picture_result
 from app.workers.tasks import apply_kie_result
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
@@ -29,8 +30,14 @@ async def kie_callback(request: Request, secret: str = "", db: Session = Depends
     result = parse_task_payload(body.get("data", body))
     if not result.task_id:
         return {"ok": False, "reason": "taskId manquant"}
-    item = db.scalar(select(JobItem).where(JobItem.seedance_task_id == result.task_id))
-    if item is None:
-        return {"ok": False, "reason": "item inconnu"}
-    apply_kie_result(str(item.id), result)
-    return {"ok": True}
+    # Le même endpoint sert vidéo (JobItem) et image (PictureItem) — on route
+    # selon la table qui porte ce task_id.
+    video_item = db.scalar(select(JobItem).where(JobItem.seedance_task_id == result.task_id))
+    if video_item is not None:
+        apply_kie_result(str(video_item.id), result)
+        return {"ok": True, "kind": "video"}
+    picture_item = db.scalar(select(PictureItem).where(PictureItem.kie_task_id == result.task_id))
+    if picture_item is not None:
+        apply_kie_picture_result(str(picture_item.id), result)
+        return {"ok": True, "kind": "picture"}
+    return {"ok": False, "reason": "item inconnu"}

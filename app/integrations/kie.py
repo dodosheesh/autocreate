@@ -60,17 +60,14 @@ def build_seedance_input(
     }
 
 
-def create_seedance_task(input_payload: dict[str, Any], callback_path: str = "/api/webhooks/kie") -> str:
-    """Lance une génération, renvoie le taskId kie.ai."""
+def create_task(model: str, input_payload: dict[str, Any], callback_path: str = "/api/webhooks/kie") -> str:
+    """Lance une tâche kie.ai (Market Jobs), renvoie le taskId.
+    Générique : sert Seedance (vidéo) comme nano banana (image)."""
     settings = get_settings()
     callback_url = f"{settings.public_base_url.rstrip('/')}{callback_path}"
     if settings.kie_webhook_secret:
         callback_url += f"?secret={settings.kie_webhook_secret}"
-    body = {
-        "model": settings.kie_seedance_model,
-        "callBackUrl": callback_url,
-        "input": input_payload,
-    }
+    body = {"model": model, "callBackUrl": callback_url, "input": input_payload}
     resp = httpx.post(
         f"{settings.kie_base_url.rstrip('/')}/api/v1/jobs/createTask",
         headers=_headers(),
@@ -82,6 +79,30 @@ def create_seedance_task(input_payload: dict[str, Any], callback_path: str = "/a
     if data.get("code") != 200 or not data.get("data", {}).get("taskId"):
         raise KieError(f"createTask a échoué : {data}")
     return data["data"]["taskId"]
+
+
+def create_seedance_task(input_payload: dict[str, Any], callback_path: str = "/api/webhooks/kie") -> str:
+    return create_task(get_settings().kie_seedance_model, input_payload, callback_path)
+
+
+def build_nano_banana_input(
+    prompt: str,
+    reference_image_urls: list[str],
+    image_size: str = "1:1",
+    output_format: str = "png",
+) -> dict[str, Any]:
+    """Input nano-banana-edit : édition guidée par images de référence
+    (visage + caractéristiques + outfit) → consistance personnage."""
+    return {
+        "prompt": prompt,
+        "image_urls": reference_image_urls,
+        "image_size": image_size,
+        "output_format": output_format,
+    }
+
+
+def create_nano_banana_task(input_payload: dict[str, Any], callback_path: str = "/api/webhooks/kie") -> str:
+    return create_task(get_settings().kie_nano_banana_model, input_payload, callback_path)
 
 
 def parse_task_payload(data: dict) -> KieTaskResult:

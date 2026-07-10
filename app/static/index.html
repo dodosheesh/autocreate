@@ -142,13 +142,42 @@
       </div>
 
       <div class="card">
-        <h2>Jobs</h2>
+        <h2>Jobs vidéo</h2>
         <table>
           <thead><tr><th>créé</th><th>catégories</th><th>statut</th>
                      <th>estimé</th><th>réel</th></tr></thead>
           <tbody id="jobs"></tbody>
         </table>
         <div id="job-detail"></div>
+      </div>
+
+      <div class="card">
+        <h2>Pictures — nano banana</h2>
+        <div class="row" style="margin-top:0">
+          <div><label>Image de référence (URL R2) → prompt</label>
+            <input type="url" id="pic-ref" placeholder="https://…/reference.jpg"></div>
+          <div style="display:flex; align-items:flex-end">
+            <button class="btn small" id="pic-reverse" style="width:100%">Reverse-engineer</button></div>
+        </div>
+        <div id="pic-prompts" style="margin-top:10px; font-size:12px"></div>
+        <div class="row">
+          <div><label>Photos à générer</label>
+            <input type="number" id="pic-count" min="1" value="10"></div>
+          <div><label>Format</label>
+            <select id="pic-size">
+              <option value="1:1">1:1</option><option value="4:5">4:5 (IG)</option>
+              <option value="9:16">9:16</option><option value="16:9">16:9</option>
+            </select></div>
+        </div>
+        <div class="row">
+          <div><label>Budget max (USD)</label>
+            <input type="number" id="pic-budget" min="0" step="1" placeholder="—"></div>
+          <div style="display:flex; align-items:flex-end">
+            <span class="muted mono" id="pic-est" style="font-size:13px">—</span></div>
+        </div>
+        <button class="btn" id="pic-generate">🖼️ Générer les photos</button>
+        <div id="pic-jobs" style="margin-top:14px"></div>
+        <div id="pic-detail"></div>
       </div>
     </div>
 
@@ -335,6 +364,106 @@ async function exportJob(id) {
 }
 
 window.openJob = openJob; window.review = review; window.exportJob = exportJob;
+
+// --- Pictures (nano banana) ---
+let currentPicJob = null;
+
+$("#pic-reverse").addEventListener("click", async () => {
+  if (!$("#pic-ref").value) return toast("URL de référence manquante");
+  try {
+    await api("/pictures/prompts", {method: "POST", body: JSON.stringify({source_image_url: $("#pic-ref").value})});
+    $("#pic-ref").value = "";
+    toast("Reverse-engineering lancé");
+    loadPrompts();
+  } catch (err) { toast("Reverse : " + err.message); }
+});
+
+async function loadPrompts() {
+  const prompts = await api("/pictures/prompts");
+  $("#pic-prompts").innerHTML = prompts.length
+    ? prompts.map(p => `<div class="est-line"><span class="muted">${badge(p.status)} ${(p.prompt_text || p.source_image_url).slice(0, 70)}</span>
+        <span><button class="btn small ghost" onclick="delPrompt('${p.id}')">✕</button></span></div>`).join("")
+    : '<span class="muted">aucun prompt — reverse-engineer une image</span>';
+}
+async function delPrompt(id) {
+  try { await api("/pictures/prompts/" + id, {method: "DELETE"}); loadPrompts(); }
+  catch (err) { toast(err.message); }
+}
+
+let picEstTimer = null;
+function refreshPicEstimate() { clearTimeout(picEstTimer); picEstTimer = setTimeout(async () => {
+  const count = parseInt($("#pic-count").value || "0", 10);
+  if (count <= 0) { $("#pic-est").textContent = "—"; return; }
+  try {
+    const body = {count};
+    const b = parseFloat($("#pic-budget").value);
+    if (!isNaN(b)) body.budget_usd = b;
+    const e = await api("/pictures/estimate", {method: "POST", body: JSON.stringify(body)});
+    $("#pic-est").textContent = `$${e.gross_usd.toFixed(2)} brut · $${e.effective_usd.toFixed(2)} livré`
+      + (e.over_budget ? ` ⚠ max ${e.max_videos_for_budget}` : "");
+  } catch (err) { $("#pic-est").textContent = err.message; }
+}, 250); }
+["#pic-count", "#pic-budget"].forEach(s => $(s).addEventListener("input", refreshPicEstimate));
+
+$("#pic-generate").addEventListener("click", async () => {
+  if (!$("#model").value) return toast("Aucune model sélectionnée");
+  const body = {model_id: $("#model").value, count: +$("#pic-count").value,
+                image_size: $("#pic-size").value};
+  const b = parseFloat($("#pic-budget").value);
+  if (!isNaN(b)) body.budget_cap_usd = b;
+  $("#pic-generate").disabled = true;
+  try {
+    const job = await api("/pictures/jobs", {method: "POST", body: JSON.stringify(body)});
+    toast("Génération photos lancée");
+    await loadPicJobs(); await openPicJob(job.id);
+  } catch (err) { toast("Photos : " + err.message); }
+  $("#pic-generate").disabled = false;
+});
+
+async function loadPicJobs() {
+  const jobs = await api("/pictures/jobs");
+  $("#pic-jobs").innerHTML = jobs.length ? `<table>
+    <thead><tr><th>#</th><th>photos</th><th>statut</th><th>estimé</th></tr></thead><tbody>${
+    jobs.map(j => `<tr class="job-row" onclick="openPicJob('${j.id}')">
+      <td class="mono">${j.id.slice(0,8)}</td><td>${j.count}</td>
+      <td>${badge(j.status)}${j.compose_shortfall ? " ⚠"+j.compose_shortfall : ""}</td>
+      <td class="mono">${j.estimated_cost_usd!=null?"$"+j.estimated_cost_usd.toFixed(2):"—"}</td></tr>`).join("")
+    }</tbody></table>` : '<span class="muted">aucun job photo</span>';
+}
+
+async function openPicJob(id) {
+  currentPicJob = id;
+  const j = await api("/pictures/jobs/" + id);
+  $("#pic-detail").innerHTML = `
+    <div style="margin-top:14px; display:flex; justify-content:space-between; align-items:center">
+      <b>Photos ${id.slice(0,8)} ${badge(j.status)}</b>
+      <button class="btn small" onclick="exportPicJob('${id}')">Exporter approuvées</button>
+    </div>
+    <div class="items">${j.items.map(it => `
+      <div class="item">
+        ${it.final_image_url ? `<img src="${it.final_image_url}" style="width:100%;border-radius:8px">` : ""}
+        <div>${badge(it.status)} ${badge("qc: "+it.qc_status)} ${it.review_status!=="pending"?badge(it.review_status):""}</div>
+        <div class="prompt">${(it.filled_prompt||"").slice(0,120)}</div>
+        ${it.error ? `<div class="prompt" style="color:var(--err)">${it.error.slice(0,100)}</div>` : ""}
+        ${it.status==="done" ? `<div class="actions">
+          <button class="btn small ok" onclick="reviewPic('${it.id}','approved')">✓</button>
+          <button class="btn small bad" onclick="reviewPic('${it.id}','rejected')">✗</button></div>` : ""}
+      </div>`).join("")}</div>`;
+}
+async function reviewPic(itemId, decision) {
+  try { await api(`/pictures/items/${itemId}/review`, {method:"POST", body: JSON.stringify({decision})});
+        if (currentPicJob) openPicJob(currentPicJob); }
+  catch (err) { toast("Review : " + err.message); }
+}
+async function exportPicJob(id) {
+  const e = await api(`/pictures/jobs/${id}/export`);
+  if (!e.approved_count) return toast("Aucune photo approuvée");
+  const blob = new Blob([JSON.stringify(e, null, 2)], {type: "application/json"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = `pictures_${id.slice(0,8)}.json`; a.click();
+}
+window.delPrompt = delPrompt; window.openPicJob = openPicJob;
+window.reviewPic = reviewPic; window.exportPicJob = exportPicJob;
 
 // Bootstrap : auth d'abord, puis chargement des données
 requireAuth().then(() => {
