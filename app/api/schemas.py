@@ -1,7 +1,9 @@
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.services.dialogue import DialogueParseError, parse_tagged_script
 
 Resolution = Literal["480p", "720p", "1080p"]
 Bitrate = Literal["standard", "high"]
@@ -37,6 +39,93 @@ class ModelOut(ModelCreate):
     model_config = {"from_attributes": True}
 
 
+# --- Banques d'assets ---
+
+
+class OutfitCreate(BaseModel):
+    image_url: str
+    tags: list[str] = []
+    weight: float = Field(default=1.0, ge=0)
+
+
+class OutfitOut(OutfitCreate):
+    id: uuid.UUID
+
+    model_config = {"from_attributes": True}
+
+
+class BackgroundCreate(OutfitCreate):
+    pass
+
+
+class BackgroundOut(OutfitOut):
+    pass
+
+
+class TemplateCreate(BaseModel):
+    category: str
+    template_text: str = Field(
+        description="Slots : {outfit} {background} {characteristics} {dialogue} {caption}"
+    )
+    speaking: bool = False
+    recommended_model: str | None = None
+    default_duration_s: int | None = None
+    default_resolution: str | None = None
+    weight: float = Field(default=1.0, ge=0)
+
+
+class TemplateOut(TemplateCreate):
+    id: uuid.UUID
+
+    model_config = {"from_attributes": True}
+
+
+class DialogueLineCreate(BaseModel):
+    category: str
+    raw_text: str = Field(description="Lignes taggées [H]/[F]/[beat], ordre chronologique")
+    weight: float = Field(default=1.0, ge=0)
+
+    @field_validator("raw_text")
+    @classmethod
+    def _valid_tagged_script(cls, value: str) -> str:
+        try:
+            parse_tagged_script(value)
+        except DialogueParseError as exc:
+            raise ValueError(str(exc)) from exc
+        return value
+
+
+class DialogueLineOut(DialogueLineCreate):
+    id: uuid.UUID
+
+    model_config = {"from_attributes": True}
+
+
+class CaptionCreate(BaseModel):
+    category: str
+    text: str
+    weight: float = Field(default=1.0, ge=0)
+
+
+class CaptionOut(CaptionCreate):
+    id: uuid.UUID
+
+    model_config = {"from_attributes": True}
+
+
+class VoiceProfileCreate(BaseModel):
+    label: str
+    elevenlabs_voice_id: str
+    gender: Literal["male", "female"]
+    tag: str = Field(pattern=r"^[A-Z]$", description="Tag du script (H ou F)")
+
+
+class VoiceProfileOut(VoiceProfileCreate):
+    id: uuid.UUID
+
+    model_config = {"from_attributes": True}
+
+
 # --- Jobs (Phase 1 : trigger manuel, une catégorie, prompt fourni) ---
 
 
@@ -58,6 +147,20 @@ class JobCreate(BaseModel):
     )
 
 
+class BatchJobCreate(BaseModel):
+    """Job batch Phase 2 : composition depuis les banques, N items par catégorie."""
+
+    model_id: uuid.UUID
+    counts_per_category: dict[str, int] = Field(
+        description='Ex : {"skit": 20, "podcast": 10}', min_length=1
+    )
+    resolution: Resolution = "720p"
+    duration_s: int = Field(default=10, ge=3, le=30)
+    bitrate: Bitrate = "standard"
+    model_variant: str = "seedance_2.0"
+    budget_cap_usd: float | None = None
+
+
 class ItemOut(BaseModel):
     id: uuid.UUID
     category: str
@@ -76,6 +179,7 @@ class ItemOut(BaseModel):
 class JobOut(BaseModel):
     id: uuid.UUID
     status: str
+    counts_per_category: dict[str, int] = {}
     resolution: str
     duration_s: int
     bitrate: str
@@ -83,6 +187,8 @@ class JobOut(BaseModel):
     budget_cap_usd: float | None
     estimated_cost_usd: float | None
     actual_cost_usd: float | None
+    compose_shortfall: dict[str, int] = {}
+    error: str | None = None
     items: list[ItemOut] = []
 
     model_config = {"from_attributes": True}

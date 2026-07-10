@@ -188,6 +188,9 @@ class GenerationJob(Base):
     budget_cap_usd: Mapped[float | None] = mapped_column(Float)
     estimated_cost_usd: Mapped[float | None] = mapped_column(Float)
     actual_cost_usd: Mapped[float | None] = mapped_column(Float)
+    # Combos uniques épuisés : {category: nb manquant} — jamais de cap silencieux
+    compose_shortfall: Mapped[dict] = mapped_column(JSON, default=dict)
+    error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     items: Mapped[list["JobItem"]] = relationship(back_populates="job")
@@ -201,8 +204,12 @@ class JobItem(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
     job_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("generation_jobs.id"), index=True)
     category: Mapped[str] = mapped_column(String(32))
+    template_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("prompt_templates.id"))
     outfit_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("outfits.id"))
     background_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("backgrounds.id"))
+    dialogue_line_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("dialogue_lines.id"))
+    caption_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("captions.id"))
+    caption_text: Mapped[str | None] = mapped_column(Text)
     characteristic_ids: Mapped[list] = mapped_column(JSON, default=list)
     combo_hash: Mapped[str] = mapped_column(String(64), index=True)
     filled_prompt: Mapped[str] = mapped_column(Text)

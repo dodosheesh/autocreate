@@ -10,9 +10,38 @@ from app.db.models import GenerationJob, JobItem, JobStatus, Model
 from app.services import composer
 from app.services.estimator import ItemSpec, estimate_batch, max_videos_for_budget
 from app.services.pricing import load_rates
-from app.workers.tasks import dispatch_seedance
+from app.workers.tasks import compose_job, dispatch_seedance
 
 router = APIRouter(prefix="/api", tags=["jobs"])
+
+
+@router.post("/jobs/batch", response_model=schemas.JobOut)
+def create_batch_job(payload: schemas.BatchJobCreate, db: Session = Depends(get_db)):
+    """Job batch Phase 2 : le moteur compose N variantes dédupliquées par
+    catégorie depuis les banques (templates, outfits, backgrounds, dialogues,
+    captions), puis estime, gate le budget et dispatche — tout en asynchrone.
+
+    Suivre l'avancement via GET /api/jobs/{id} (statuts, shortfall, coûts)."""
+    model = db.get(Model, payload.model_id)
+    if model is None:
+        raise HTTPException(404, "Model introuvable")
+    if any(count < 0 for count in payload.counts_per_category.values()):
+        raise HTTPException(422, "counts_per_category : valeurs négatives interdites")
+
+    job = GenerationJob(
+        model_id=model.id,
+        counts_per_category=payload.counts_per_category,
+        resolution=payload.resolution,
+        duration_s=payload.duration_s,
+        bitrate=payload.bitrate,
+        model_variant=payload.model_variant,
+        budget_cap_usd=payload.budget_cap_usd,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    compose_job.delay(str(job.id))
+    return job
 
 
 @router.post("/estimate", response_model=schemas.EstimateResponse)
