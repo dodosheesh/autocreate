@@ -16,4 +16,12 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     task_default_retry_delay=30,
     broker_connection_retry_on_startup=True,
+    # Filet de sécurité : les webhooks kie.ai restent le chemin nominal,
+    # le polling rattrape un callback perdu (item bloqué en dispatched)
+    beat_schedule={
+        "poll-pending-items": {
+            "task": "app.workers.tasks.poll_pending_items",
+            "schedule": 120.0,
+        },
+    },
 )

@@ -68,6 +68,12 @@ class QcStatus(StrEnum):
     SKIPPED = "skipped"  # Phase 1 : QC pas encore branché
 
 
+class ReviewStatus(StrEnum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
 class Model(Base):
     __tablename__ = "models"
 
@@ -221,6 +227,7 @@ class JobItem(Base):
     qc_status: Mapped[str] = mapped_column(String(16), default=QcStatus.PENDING)
     face_match_score: Mapped[float | None] = mapped_column(Float)
     final_video_url: Mapped[str | None] = mapped_column(Text)
+    review_status: Mapped[str] = mapped_column(String(16), default=ReviewStatus.PENDING)
     item_estimated_cost: Mapped[float | None] = mapped_column(Float)
     item_actual_cost: Mapped[float | None] = mapped_column(Float)
     status: Mapped[str] = mapped_column(String(32), default=ItemStatus.COMPOSED)

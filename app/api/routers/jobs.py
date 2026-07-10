@@ -1,12 +1,21 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api import schemas
 from app.config import get_settings
 from app.db.base import get_db
-from app.db.models import GenerationJob, JobItem, JobStatus, Model
+from app.db.models import (
+    GenerationJob,
+    ItemStatus,
+    JobItem,
+    JobStatus,
+    Model,
+    PromptTemplate,
+    ReviewStatus,
+)
 from app.services import composer
 from app.services.calibration import get_calibrated_qc_rate
 from app.services.estimator import ItemSpec, estimate_batch, max_videos_for_budget
@@ -169,9 +178,122 @@ def create_job(payload: schemas.JobCreate, db: Session = Depends(get_db)):
     return job
 
 
+@router.post("/estimate/batch", response_model=schemas.BatchEstimateResponse)
+def estimate_batch_endpoint(payload: schemas.BatchEstimateRequest, db: Session = Depends(get_db)):
+    """Estimation live du panneau de génération, multi-catégories.
+
+    Une catégorie est considérée parlante (coût voice-swap inclus) si au
+    moins un de ses templates est `speaking`. Le taux QC vient de la
+    calibration (calibration_log) sauf s'il est fourni explicitement."""
+    settings = get_settings()
+    rates = load_rates(db)
+    qc_rate = payload.qc_success_rate or get_calibrated_qc_rate(
+        db, settings.default_qc_success_rate
+    )
+    speaking_categories = set(
+        db.scalars(
+            select(PromptTemplate.category).where(PromptTemplate.speaking.is_(True)).distinct()
+        ).all()
+    )
+    specs: list[tuple[str, ItemSpec]] = [
+        (
+            category,
+            ItemSpec(
+                count=count,
+                duration_s=payload.duration_s,
+                resolution=payload.resolution,
+                model=payload.model_variant,
+                speaking=category in speaking_categories,
+            ),
+        )
+        for category, count in payload.counts_per_category.items()
+        if count > 0
+    ]
+    est = estimate_batch([spec for _, spec in specs], rates, qc_success_rate=qc_rate)
+    per_category = {
+        category: round(
+            estimate_batch([spec], rates, qc_success_rate=qc_rate).gross_usd, 4
+        )
+        for category, spec in specs
+    }
+    max_videos = over = None
+    if payload.budget_usd is not None:
+        over = est.effective_usd > payload.budget_usd
+        if specs:
+            max_videos = max_videos_for_budget(
+                payload.budget_usd,
+                ItemSpec(
+                    count=1,
+                    duration_s=payload.duration_s,
+                    resolution=payload.resolution,
+                    model=payload.model_variant,
+                    speaking=bool(speaking_categories),
+                ),
+                rates,
+                qc_rate,
+            )
+    return schemas.BatchEstimateResponse(
+        gross_usd=est.gross_usd,
+        effective_usd=est.effective_usd,
+        qc_success_rate=round(qc_rate, 4),
+        cost_per_delivered_video_usd=round(est.cost_per_delivered_video_usd, 4),
+        max_videos_for_budget=max_videos,
+        over_budget=over,
+        total_items=est.total_items,
+        per_category_usd=per_category,
+    )
+
+
+@router.get("/jobs", response_model=list[schemas.JobSummaryOut])
+def list_jobs(limit: int = 50, db: Session = Depends(get_db)):
+    return db.scalars(
+        select(GenerationJob).order_by(GenerationJob.created_at.desc()).limit(limit)
+    ).all()
+
+
 @router.get("/jobs/{job_id}", response_model=schemas.JobOut)
 def get_job(job_id: uuid.UUID, db: Session = Depends(get_db)):
     job = db.get(GenerationJob, job_id)
     if job is None:
         raise HTTPException(404, "Job introuvable")
     return job
+
+
+@router.post("/items/{item_id}/review", response_model=schemas.ItemOut)
+def review_item(item_id: uuid.UUID, payload: schemas.ReviewRequest, db: Session = Depends(get_db)):
+    """Grille de review : approuver / rejeter un item livré."""
+    item = db.get(JobItem, item_id)
+    if item is None:
+        raise HTTPException(404, "Item introuvable")
+    if item.status != ItemStatus.DONE:
+        raise HTTPException(409, f"Item non livrable (statut {item.status})")
+    item.review_status = payload.decision
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@router.get("/jobs/{job_id}/export", response_model=schemas.ExportOut)
+def export_job(job_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Export des items approuvés : URLs finales + contexte (caption, catégorie)."""
+    job = db.get(GenerationJob, job_id)
+    if job is None:
+        raise HTTPException(404, "Job introuvable")
+    approved = [
+        item
+        for item in job.items
+        if item.review_status == ReviewStatus.APPROVED and item.final_video_url
+    ]
+    return schemas.ExportOut(
+        job_id=job.id,
+        approved_count=len(approved),
+        videos=[
+            {
+                "item_id": str(item.id),
+                "category": item.category,
+                "url": item.final_video_url,
+                "caption": item.caption_text,
+            }
+            for item in approved
+        ],
+    )

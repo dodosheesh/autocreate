@@ -3,7 +3,7 @@
 Content factory — moteur de génération de Reels IA en masse pour une model IA.
 Seedance 2.0 via [kie.ai](https://kie.ai) (audio natif), voice-swap ElevenLabs, assemblage FFmpeg, stockage R2.
 
-**État actuel : Phase 3** — pipeline complet post-génération : QC face-match (ArcFace vs photo de référence), **voice-swap ElevenLabs** (deux timbres fixes `[H]`/`[F]` par reel, lèvres synchro préservées), assemblage avec **overlay caption façon Snapchat** et piste musique, **calibration estimé/réel** qui affine l'estimateur batch après batch. Les flows Phase 1 (mono-prompt) et Phase 2 (batch depuis les banques) restent disponibles.
+**État actuel : Phase 4 — stack complète.** Panneau de génération web sur `/` (compteurs par catégorie, toggles résolution/durée/bitrate, **coût estimé en direct**, budget cap), grille de review (préviews vidéo, approuver/rejeter, export JSON des approuvés), pipeline complet : composition dédupliquée → gate budget → Seedance (kie.ai) → QC face-match → voice-swap ElevenLabs → assemblage (caption Snapchat, musique) → R2, avec calibration estimé/réel automatique. Backlog des features suivantes : `BACKLOG.md`.
 
 ## Stack
 
@@ -53,9 +53,15 @@ cp .env.example .env   # remplir KIE_API_KEY, R2_*, PUBLIC_BASE_URL
 .venv/bin/python -m app.db.init_db
 
 # 5. Lancer
-.venv/bin/uvicorn app.main:app --reload           # API (docs sur /docs)
-.venv/bin/celery -A app.workers.celery_app worker --loglevel=info   # worker
+.venv/bin/uvicorn app.main:app --reload           # UI sur /, docs API sur /docs
+.venv/bin/celery -A app.workers.celery_app worker --beat --loglevel=info   # worker + beat
 ```
+
+L'UI sur `http://localhost:8000/` couvre tout le flow quotidien : choisir la model,
+saisir les counts par catégorie, régler résolution/durée/bitrate, voir le coût brut +
+effectif bouger en direct (taux QC calibré), poser un budget max, Generate, puis suivre
+les jobs et approuver/rejeter/exporter dans la grille de review. Les banques et les
+models se gèrent via l'API (`/docs`).
 
 Tests : `.venv/bin/python -m pytest`
 
@@ -183,7 +189,7 @@ automatiquement le coût effectif affiché par `/api/estimate`.
 
 - ~~**Phase 2** — banques d'assets + moteur de composition pondéré + dédup `combo_hash`~~ ✔
 - ~~**Phase 3** — QC face-match, pipeline voix, calibration estimé/réel~~ ✔
-- **Phase 4** — panneau de génération multi-catégories (UI), estimateur live UI, grille de
-  review (approuver/rejeter/exporter), celery beat pour le polling filet de sécurité
+- ~~**Phase 4** — panneau de génération (UI), estimateur live, grille de review, celery beat~~ ✔
 - **Phase 5** — multi-tenant, billing, Alembic (create_all suffit tant que la base
   n'est pas encore déployée)
+- **Backlog** — feature « Pictures » nano banana : voir `BACKLOG.md`

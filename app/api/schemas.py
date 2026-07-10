@@ -167,11 +167,15 @@ class ItemOut(BaseModel):
     category: str
     status: str
     qc_status: str
+    review_status: str
     filled_prompt: str
+    caption_text: str | None = None
+    face_match_score: float | None = None
     seedance_task_id: str | None
     raw_video_url: str | None
     final_video_url: str | None
     item_estimated_cost: float | None
+    item_actual_cost: float | None = None
     error: str | None
 
     model_config = {"from_attributes": True}
@@ -195,6 +199,30 @@ class JobOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class JobSummaryOut(BaseModel):
+    id: uuid.UUID
+    status: str
+    counts_per_category: dict[str, int] = {}
+    resolution: str
+    duration_s: int
+    estimated_cost_usd: float | None
+    actual_cost_usd: float | None
+    compose_shortfall: dict[str, int] = {}
+    created_at: object = None
+
+    model_config = {"from_attributes": True}
+
+
+class ReviewRequest(BaseModel):
+    decision: Literal["approved", "rejected"]
+
+
+class ExportOut(BaseModel):
+    job_id: uuid.UUID
+    approved_count: int
+    videos: list[dict]
+
+
 # --- Estimation live ---
 
 
@@ -215,3 +243,20 @@ class EstimateResponse(BaseModel):
     cost_per_delivered_video_usd: float
     max_videos_for_budget: int | None = None
     over_budget: bool | None = None
+
+
+class BatchEstimateRequest(BaseModel):
+    """Estimation live du panneau de génération : mêmes paramètres que
+    BatchJobCreate, sans rien créer."""
+
+    counts_per_category: dict[str, int] = Field(min_length=1)
+    duration_s: float = Field(default=10, gt=0)
+    resolution: Resolution = "720p"
+    model_variant: str = "seedance_2.0"
+    qc_success_rate: float | None = Field(default=None, gt=0, le=1)
+    budget_usd: float | None = None
+
+
+class BatchEstimateResponse(EstimateResponse):
+    total_items: int
+    per_category_usd: dict[str, float] = {}
