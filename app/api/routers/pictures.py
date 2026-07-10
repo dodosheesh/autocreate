@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.api import schemas
 from app.api.deps import current_user
+from app.api.scope import owned, tenant_query
 from app.config import get_settings
 from app.db.base import get_db
 from app.db.models import (
@@ -22,23 +23,28 @@ from app.db.models import (
     PicturePrompt,
     ItemStatus,
     ReviewStatus,
+    User,
 )
 from app.services.calibration import get_calibrated_qc_rate
 from app.services.estimator import estimate_pictures, max_pictures_for_budget
 from app.services.pricing import load_rates
 from app.workers.picture_tasks import compose_picture_job, reverse_engineer_prompt
 
-router = APIRouter(prefix="/api/pictures", tags=["pictures"], dependencies=[Depends(current_user)])
+router = APIRouter(prefix="/api/pictures", tags=["pictures"])
 
 
 # ---------- banque de prompts ----------
 
 
 @router.post("/prompts", response_model=schemas.PicturePromptOut)
-def create_prompt(payload: schemas.PicturePromptCreate, db: Session = Depends(get_db)):
+def create_prompt(
+    payload: schemas.PicturePromptCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
     """Enregistre une image de référence et lance le reverse-engineering
     (async). Le prompt obtenu est réutilisable à vie."""
-    prompt = PicturePrompt(**payload.model_dump())
+    prompt = PicturePrompt(tenant_id=user.tenant_id, **payload.model_dump())
     db.add(prompt)
     db.commit()
     db.refresh(prompt)
@@ -47,15 +53,17 @@ def create_prompt(payload: schemas.PicturePromptCreate, db: Session = Depends(ge
 
 
 @router.get("/prompts", response_model=list[schemas.PicturePromptOut])
-def list_prompts(db: Session = Depends(get_db)):
-    return db.scalars(select(PicturePrompt).order_by(PicturePrompt.created_at.desc())).all()
+def list_prompts(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    return db.scalars(
+        tenant_query(PicturePrompt, user).order_by(PicturePrompt.created_at.desc())
+    ).all()
 
 
 @router.delete("/prompts/{prompt_id}")
-def delete_prompt(prompt_id: uuid.UUID, db: Session = Depends(get_db)):
-    row = db.get(PicturePrompt, prompt_id)
-    if row is None:
-        raise HTTPException(404, "Prompt introuvable")
+def delete_prompt(
+    prompt_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    row = owned(db, PicturePrompt, prompt_id, user)
     db.delete(row)
     db.commit()
     return {"deleted": str(prompt_id)}
@@ -65,7 +73,11 @@ def delete_prompt(prompt_id: uuid.UUID, db: Session = Depends(get_db)):
 
 
 @router.post("/estimate", response_model=schemas.EstimateResponse)
-def estimate(payload: schemas.PictureEstimateRequest, db: Session = Depends(get_db)):
+def estimate(
+    payload: schemas.PictureEstimateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
     settings = get_settings()
     rates = load_rates(db)
     qc_rate = payload.qc_success_rate or get_calibrated_qc_rate(
@@ -90,19 +102,23 @@ def estimate(payload: schemas.PictureEstimateRequest, db: Session = Depends(get_
 
 
 @router.post("/jobs", response_model=schemas.PictureJobOut)
-def create_job(payload: schemas.PictureJobCreate, db: Session = Depends(get_db)):
+def create_job(
+    payload: schemas.PictureJobCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
     """Batch de génération de photos : compose (prompt+outfit+caractéristiques),
     estime, gate le budget et dispatche vers nano banana — tout en async."""
-    if db.get(Model, payload.model_id) is None:
-        raise HTTPException(404, "Model introuvable")
+    owned(db, Model, payload.model_id, user)
     ready = db.scalar(
-        select(PicturePrompt).where(PicturePrompt.status == "ready").limit(1)
+        tenant_query(PicturePrompt, user).where(PicturePrompt.status == "ready").limit(1)
     )
     if ready is None:
         raise HTTPException(
             409, "Aucun prompt prêt : reverse-engineerer au moins une image d'abord"
         )
     job = PictureJob(
+        tenant_id=user.tenant_id,
         model_id=payload.model_id,
         count=payload.count,
         image_size=payload.image_size,
@@ -118,24 +134,30 @@ def create_job(payload: schemas.PictureJobCreate, db: Session = Depends(get_db))
 
 
 @router.get("/jobs", response_model=list[schemas.PictureJobOut])
-def list_jobs(limit: int = 50, db: Session = Depends(get_db)):
+def list_jobs(
+    limit: int = 50, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
     return db.scalars(
-        select(PictureJob).order_by(PictureJob.created_at.desc()).limit(limit)
+        tenant_query(PictureJob, user).order_by(PictureJob.created_at.desc()).limit(limit)
     ).all()
 
 
 @router.get("/jobs/{job_id}", response_model=schemas.PictureJobOut)
-def get_job(job_id: uuid.UUID, db: Session = Depends(get_db)):
-    job = db.get(PictureJob, job_id)
-    if job is None:
-        raise HTTPException(404, "Job introuvable")
-    return job
+def get_job(
+    job_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    return owned(db, PictureJob, job_id, user)
 
 
 @router.post("/items/{item_id}/review", response_model=schemas.PictureItemOut)
-def review_item(item_id: uuid.UUID, payload: schemas.ReviewRequest, db: Session = Depends(get_db)):
+def review_item(
+    item_id: uuid.UUID,
+    payload: schemas.ReviewRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
     item = db.get(PictureItem, item_id)
-    if item is None:
+    if item is None or item.job.tenant_id != user.tenant_id:
         raise HTTPException(404, "Item introuvable")
     if item.status != ItemStatus.DONE:
         raise HTTPException(409, f"Item non livrable (statut {item.status})")
@@ -146,10 +168,10 @@ def review_item(item_id: uuid.UUID, payload: schemas.ReviewRequest, db: Session 
 
 
 @router.get("/jobs/{job_id}/export", response_model=schemas.ExportOut)
-def export_job(job_id: uuid.UUID, db: Session = Depends(get_db)):
-    job = db.get(PictureJob, job_id)
-    if job is None:
-        raise HTTPException(404, "Job introuvable")
+def export_job(
+    job_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    job = owned(db, PictureJob, job_id, user)
     approved = [
         i for i in job.items
         if i.review_status == ReviewStatus.APPROVED and i.final_image_url

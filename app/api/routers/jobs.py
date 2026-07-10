@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api import schemas
 from app.api.deps import current_user
+from app.api.scope import owned, tenant_query
 from app.config import get_settings
 from app.db.base import get_db
 from app.db.models import (
@@ -16,6 +17,7 @@ from app.db.models import (
     Model,
     PromptTemplate,
     ReviewStatus,
+    User,
 )
 from app.services import composer
 from app.services.calibration import get_calibrated_qc_rate
@@ -23,24 +25,27 @@ from app.services.estimator import ItemSpec, estimate_batch, max_videos_for_budg
 from app.services.pricing import load_rates
 from app.workers.tasks import compose_job, dispatch_seedance
 
-router = APIRouter(prefix="/api", tags=["jobs"], dependencies=[Depends(current_user)])
+router = APIRouter(prefix="/api", tags=["jobs"])
 
 
 @router.post("/jobs/batch", response_model=schemas.JobOut)
-def create_batch_job(payload: schemas.BatchJobCreate, db: Session = Depends(get_db)):
+def create_batch_job(
+    payload: schemas.BatchJobCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
     """Job batch Phase 2 : le moteur compose N variantes dédupliquées par
     catégorie depuis les banques (templates, outfits, backgrounds, dialogues,
     captions), puis estime, gate le budget et dispatche — tout en asynchrone.
 
     Suivre l'avancement via GET /api/jobs/{id} (statuts, shortfall, coûts)."""
-    model = db.get(Model, payload.model_id)
-    if model is None:
-        raise HTTPException(404, "Model introuvable")
+    owned(db, Model, payload.model_id, user)
     if any(count < 0 for count in payload.counts_per_category.values()):
         raise HTTPException(422, "counts_per_category : valeurs négatives interdites")
 
     job = GenerationJob(
-        model_id=model.id,
+        tenant_id=user.tenant_id,
+        model_id=payload.model_id,
         counts_per_category=payload.counts_per_category,
         resolution=payload.resolution,
         duration_s=payload.duration_s,
@@ -57,7 +62,11 @@ def create_batch_job(payload: schemas.BatchJobCreate, db: Session = Depends(get_
 
 
 @router.post("/estimate", response_model=schemas.EstimateResponse)
-def estimate(payload: schemas.EstimateRequest, db: Session = Depends(get_db)):
+def estimate(
+    payload: schemas.EstimateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
     """Estimation live (fonction pure sur la table pricing, zéro appel API).
     Le taux QC par défaut est recalibré sur les derniers jobs (calibration_log)."""
     settings = get_settings()
@@ -88,16 +97,18 @@ def estimate(payload: schemas.EstimateRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/jobs", response_model=schemas.JobOut)
-def create_job(payload: schemas.JobCreate, db: Session = Depends(get_db)):
+def create_job(
+    payload: schemas.JobCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
     """Trigger manuel Phase 1 : une model, une catégorie, un prompt fourni.
 
     Compose les items (injection caractéristiques + refs), estime le coût,
     applique le budget cap, puis dispatche vers kie.ai via Celery.
     """
     settings = get_settings()
-    model = db.get(Model, payload.model_id)
-    if model is None:
-        raise HTTPException(404, "Model introuvable")
+    model = owned(db, Model, payload.model_id, user)
 
     characteristics = [
         composer.CharacteristicInput(
@@ -131,6 +142,7 @@ def create_job(payload: schemas.JobCreate, db: Session = Depends(get_db)):
     est = estimate_batch([spec], rates, qc_success_rate=settings.default_qc_success_rate)
 
     job = GenerationJob(
+        tenant_id=user.tenant_id,
         model_id=model.id,
         counts_per_category={payload.category: payload.count},
         resolution=payload.resolution,
@@ -180,7 +192,11 @@ def create_job(payload: schemas.JobCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/estimate/batch", response_model=schemas.BatchEstimateResponse)
-def estimate_batch_endpoint(payload: schemas.BatchEstimateRequest, db: Session = Depends(get_db)):
+def estimate_batch_endpoint(
+    payload: schemas.BatchEstimateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
     """Estimation live du panneau de génération, multi-catégories.
 
     Une catégorie est considérée parlante (coût voice-swap inclus) si au
@@ -193,7 +209,10 @@ def estimate_batch_endpoint(payload: schemas.BatchEstimateRequest, db: Session =
     )
     speaking_categories = set(
         db.scalars(
-            select(PromptTemplate.category).where(PromptTemplate.speaking.is_(True)).distinct()
+            tenant_query(PromptTemplate, user)
+            .where(PromptTemplate.speaking.is_(True))
+            .with_only_columns(PromptTemplate.category)
+            .distinct()
         ).all()
     )
     specs: list[tuple[str, ItemSpec]] = [
@@ -246,25 +265,33 @@ def estimate_batch_endpoint(payload: schemas.BatchEstimateRequest, db: Session =
 
 
 @router.get("/jobs", response_model=list[schemas.JobSummaryOut])
-def list_jobs(limit: int = 50, db: Session = Depends(get_db)):
+def list_jobs(
+    limit: int = 50, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
     return db.scalars(
-        select(GenerationJob).order_by(GenerationJob.created_at.desc()).limit(limit)
+        tenant_query(GenerationJob, user)
+        .order_by(GenerationJob.created_at.desc())
+        .limit(limit)
     ).all()
 
 
 @router.get("/jobs/{job_id}", response_model=schemas.JobOut)
-def get_job(job_id: uuid.UUID, db: Session = Depends(get_db)):
-    job = db.get(GenerationJob, job_id)
-    if job is None:
-        raise HTTPException(404, "Job introuvable")
-    return job
+def get_job(
+    job_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    return owned(db, GenerationJob, job_id, user)
 
 
 @router.post("/items/{item_id}/review", response_model=schemas.ItemOut)
-def review_item(item_id: uuid.UUID, payload: schemas.ReviewRequest, db: Session = Depends(get_db)):
+def review_item(
+    item_id: uuid.UUID,
+    payload: schemas.ReviewRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
     """Grille de review : approuver / rejeter un item livré."""
     item = db.get(JobItem, item_id)
-    if item is None:
+    if item is None or item.job.tenant_id != user.tenant_id:
         raise HTTPException(404, "Item introuvable")
     if item.status != ItemStatus.DONE:
         raise HTTPException(409, f"Item non livrable (statut {item.status})")
@@ -275,11 +302,11 @@ def review_item(item_id: uuid.UUID, payload: schemas.ReviewRequest, db: Session 
 
 
 @router.get("/jobs/{job_id}/export", response_model=schemas.ExportOut)
-def export_job(job_id: uuid.UUID, db: Session = Depends(get_db)):
+def export_job(
+    job_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
     """Export des items approuvés : URLs finales + contexte (caption, catégorie)."""
-    job = db.get(GenerationJob, job_id)
-    if job is None:
-        raise HTTPException(404, "Job introuvable")
+    job = owned(db, GenerationJob, job_id, user)
     approved = [
         item
         for item in job.items

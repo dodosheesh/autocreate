@@ -9,11 +9,11 @@ from typing import Type
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api import schemas
 from app.api.deps import current_user
+from app.api.scope import tenant_query
 from app.db.base import get_db
 from app.db.models import (
     Background,
@@ -21,10 +21,11 @@ from app.db.models import (
     DialogueLine,
     Outfit,
     PromptTemplate,
+    User,
     VoiceProfile,
 )
 
-router = APIRouter(prefix="/api/banks", tags=["banks"], dependencies=[Depends(current_user)])
+router = APIRouter(prefix="/api/banks", tags=["banks"])
 
 
 def _register(
@@ -34,24 +35,36 @@ def _register(
     out_schema: Type[BaseModel],
 ) -> None:
     @router.post(f"/{name}", response_model=out_schema, name=f"create_{name}")
-    def create(payload: create_schema, db: Session = Depends(get_db)):  # type: ignore[valid-type]
-        row = db_model(**payload.model_dump())
+    def create(
+        payload: create_schema,  # type: ignore[valid-type]
+        db: Session = Depends(get_db),
+        user: User = Depends(current_user),
+    ):
+        row = db_model(tenant_id=user.tenant_id, **payload.model_dump())
         db.add(row)
         db.commit()
         db.refresh(row)
         return row
 
     @router.get(f"/{name}", response_model=list[out_schema], name=f"list_{name}")
-    def list_all(category: str | None = None, db: Session = Depends(get_db)):
-        query = select(db_model)
+    def list_all(
+        category: str | None = None,
+        db: Session = Depends(get_db),
+        user: User = Depends(current_user),
+    ):
+        query = tenant_query(db_model, user)
         if category is not None and hasattr(db_model, "category"):
             query = query.where(db_model.category == category)
         return db.scalars(query).all()
 
     @router.delete(f"/{name}/{{row_id}}", name=f"delete_{name}")
-    def delete(row_id: uuid.UUID, db: Session = Depends(get_db)):
+    def delete(
+        row_id: uuid.UUID,
+        db: Session = Depends(get_db),
+        user: User = Depends(current_user),
+    ):
         row = db.get(db_model, row_id)
-        if row is None:
+        if row is None or row.tenant_id != user.tenant_id:
             raise HTTPException(404, f"{name} : entrée introuvable")
         db.delete(row)
         db.commit()

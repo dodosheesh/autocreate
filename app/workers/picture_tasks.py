@@ -68,16 +68,19 @@ def reverse_engineer_prompt(self, prompt_id: str) -> None:
             raise self.retry(exc=exc)
 
 
-def _picture_pools(db) -> tuple[list[Option], list[Option]]:
+def _picture_pools(db, tenant_id: str) -> tuple[list[Option], list[Option]]:
     prompts = [
         Option(id=str(p.id), weight=p.weight, text=p.prompt_text or "")
         for p in db.scalars(
-            select(PicturePrompt).where(PicturePrompt.status == PromptStatus.READY)
+            select(PicturePrompt).where(
+                PicturePrompt.tenant_id == tenant_id,
+                PicturePrompt.status == PromptStatus.READY,
+            )
         ).all()
     ]
     outfits = [
         outfit_option(str(o.id), o.tags, o.image_url, o.weight)
-        for o in db.scalars(select(Outfit)).all()
+        for o in db.scalars(select(Outfit).where(Outfit.tenant_id == tenant_id)).all()
     ]
     return prompts, outfits
 
@@ -102,7 +105,7 @@ def compose_picture_job(job_id: str) -> None:
                 for c in model.characteristics
             ]
             charac_ids = [str(c.id) for c in model.characteristics if c.always_include]
-            prompts, outfits = _picture_pools(db)
+            prompts, outfits = _picture_pools(db, job.tenant_id)
 
             result = picture_composer.compose_pictures(
                 count=job.count,

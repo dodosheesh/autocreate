@@ -223,9 +223,12 @@ Durcissements en place (revue de sécurité passée) :
 - **Pillow** : garde-fou decompression bomb (`MAX_IMAGE_PIXELS`) sur les images
   tierces.
 
-Limite connue : `tenant_id` est présent sur toutes les tables mais **pas encore
-filtré** dans les requêtes — à activer avant d'ouvrir un second compte (Phase
-multi-tenant). Aujourd'hui, tout utilisateur authentifié voit toutes les données.
+- **Isolation multi-tenant** : chaque ressource (models, banques, jobs, prompts,
+  contenu généré) est estampillée avec le `tenant_id` de son créateur ; toute
+  lecture/écriture est filtrée par le tenant de l'utilisateur, et un accès
+  cross-tenant renvoie **404** (on ne révèle pas l'existence). La composition
+  Celery ne tire que dans les banques du tenant du job. Le seul état partagé
+  reste la table `pricing` (tarifs) et le `calibration_log` (heuristique QC).
 
 ## Authentification (Phase 5)
 

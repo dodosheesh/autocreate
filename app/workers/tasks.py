@@ -73,17 +73,17 @@ def _fail_job(job_id: str, error: str) -> None:
             job.error = error[:4000]
 
 
-def _build_pools(db, categories: list[str]) -> dict[str, variation.CategoryPools]:
-    """Charge les banques Postgres en pools purs pour le moteur de variation.
-    Outfits/backgrounds sont partagés entre catégories ; templates, dialogues
-    et captions sont filtrés par catégorie."""
+def _build_pools(db, categories: list[str], tenant_id: str) -> dict[str, variation.CategoryPools]:
+    """Charge les banques Postgres en pools purs pour le moteur de variation,
+    scopées au tenant du job. Outfits/backgrounds sont partagés entre catégories ;
+    templates, dialogues et captions sont filtrés par catégorie."""
     outfits = [
         variation.outfit_option(str(o.id), o.tags, o.image_url, o.weight)
-        for o in db.scalars(select(Outfit)).all()
+        for o in db.scalars(select(Outfit).where(Outfit.tenant_id == tenant_id)).all()
     ]
     backgrounds = [
         variation.background_option(str(b.id), b.tags, b.image_url, b.weight)
-        for b in db.scalars(select(Background)).all()
+        for b in db.scalars(select(Background).where(Background.tenant_id == tenant_id)).all()
     ]
     pools: dict[str, variation.CategoryPools] = {}
     for category in categories:
@@ -95,18 +95,28 @@ def _build_pools(db, categories: list[str]) -> dict[str, variation.CategoryPools
                 weight=t.weight,
             )
             for t in db.scalars(
-                select(PromptTemplate).where(PromptTemplate.category == category)
+                select(PromptTemplate).where(
+                    PromptTemplate.tenant_id == tenant_id,
+                    PromptTemplate.category == category,
+                )
             ).all()
         ]
         dialogues = [
             variation.Option(id=str(d.id), weight=d.weight, text=d.raw_text)
             for d in db.scalars(
-                select(DialogueLine).where(DialogueLine.category == category)
+                select(DialogueLine).where(
+                    DialogueLine.tenant_id == tenant_id,
+                    DialogueLine.category == category,
+                )
             ).all()
         ]
         captions = [
             variation.Option(id=str(c.id), weight=c.weight, text=c.text)
-            for c in db.scalars(select(Caption).where(Caption.category == category)).all()
+            for c in db.scalars(
+                select(Caption).where(
+                    Caption.tenant_id == tenant_id, Caption.category == category
+                )
+            ).all()
         ]
         pools[category] = variation.CategoryPools(
             templates=templates,
@@ -141,7 +151,7 @@ def compose_job(job_id: str) -> None:
             ]
             charac_ids = [str(c.id) for c in model.characteristics if c.always_include]
             counts = {k: int(v) for k, v in (job.counts_per_category or {}).items()}
-            pools = _build_pools(db, list(counts))
+            pools = _build_pools(db, list(counts), job.tenant_id)
 
             result = variation.compose_batch(
                 counts_per_category=counts,
