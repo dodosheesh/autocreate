@@ -77,8 +77,10 @@ Redis**. Railway crée les variables `DATABASE_URL` et `REDIS_URL`.
 
 ### 2. Service web (API + UI)
 **New → GitHub Repo → dodosheesh/autocreate**. Railway détecte le `Dockerfile` et
-lit `railway.json` (start `uvicorn`, pré-déploiement `python -m app.db.init_db`).
-Réglages du service :
+lit `railway.json` (pré-déploiement `python -m app.db.init_db`) ; la commande de
+démarrage web vient du `Dockerfile` (`uvicorn` via `sh -c`, qui résout `$PORT`).
+Ne remets **pas** de start command custom sur le web (sinon `$PORT` n'est pas
+substitué → `Invalid value for '--port'`). Réglages du service :
 - **Variables** (onglet Variables) :
   ```
   SECRET_KEY            = (openssl rand -hex 32  ou  python -c "import secrets;print(secrets.token_hex(32))")
