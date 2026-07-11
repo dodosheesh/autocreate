@@ -34,9 +34,12 @@ class Settings(BaseSettings):
     # Seedance 2.0 Fast : 480p/720p, ~4 min/génération, moins cher. 720p suffit
     # pour des Reels. (Standard = bytedance/seedance-2, ajoute le 1080p.)
     kie_seedance_model: str = "bytedance/seedance-2-fast"
-    # Nano Banana Pro (Gemini 3 Pro Image) : meilleure consistance du personnage,
-    # 2K/4K. cf. docs.kie.ai/market/google/pro-image-to-image
-    kie_nano_banana_model: str = "google/nano-banana-pro"
+    # Nano Banana EDIT (Gemini 2.5 Flash Image, image-to-image) : c'est le modèle
+    # qui accepte des images de référence (visage + caractéristiques) → consistance
+    # du personnage. Input : {prompt, image_urls, image_size, output_format}.
+    # (« google/nano-banana-pro » est refusé : model name not supported. Le Pro
+    # 4K/Gemini 3 utilise un autre schéma d'input `image_input` — non branché ici.)
+    kie_nano_banana_model: str = "google/nano-banana-edit"
     # Modèle vision pour le reverse-engineering image → prompt (endpoint
     # OpenAI-compatible de kie.ai). Le modèle et l'URL sont configurables :
     # aucune valeur devinée, l'utilisateur pointe le modèle vision de son choix.
