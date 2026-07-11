@@ -266,6 +266,14 @@
     </div>
 
     <div class="card">
+      <h2>Diagnostic système</h2>
+      <div class="hint">Si une génération reste bloquée en <code>pending</code> ou échoue : vérifie l'état du
+        worker/Redis et repère les images enregistrées avec une URL cassée (placeholder R2).</div>
+      <button class="btn small" id="diag-btn">🩺 Lancer le diagnostic</button>
+      <div id="diag-out" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card">
       <h2>Tarifs (estimateur)</h2>
       <div class="hint">Les coûts estimés viennent de cette table. kie.ai bloque la lecture auto de ses prix,
         donc <b>corrige ici avec les valeurs exactes de ton compte</b> pour des estimations justes. Édite un tarif → Entrée.</div>
@@ -436,6 +444,24 @@ function errText(detail, fallback) {
   if (Array.isArray(detail)) return detail.map(e => e.msg || JSON.stringify(e)).join(" · ");
   return fallback;
 }
+async function runDiagnostics() {
+  const btn = $("#diag-btn"), out = $("#diag-out");
+  btn.disabled = true;
+  try {
+    const d = await api("/diagnostics");
+    const ok = (b) => b ? '<span style="color:var(--ok)">OK</span>' : '<span style="color:var(--err)">KO</span>';
+    const brokenRows = Object.entries(d.broken_reference_urls)
+      .map(([k, v]) => `<div class="est-line"><span>${k}</span><span class="${v ? '' : 'muted'}" style="${v ? 'color:var(--err)' : ''}">${v} cassée(s)</span></div>`).join("");
+    out.innerHTML = `
+      <div class="est-line"><span>Broker Redis joignable</span><span>${ok(d.broker_reachable)}</span></div>
+      <div class="est-line"><span>Workers en ligne</span><span class="${d.workers_online ? '' : 'muted'}" style="${d.workers_online ? '' : 'color:var(--err)'}">${d.workers_online}</span></div>
+      ${brokenRows}
+      ${d.broken_total ? `<div class="warn-box" style="display:block">⚠ ${d.broken_total} image(s) de référence ont une URL cassée (placeholder R2).
+        Elles ont été enregistrées avant la config R2 → <b>supprime et ré-uploade</b> ces éléments (model, caractéristiques, outfits, backgrounds).</div>`
+      : (d.broker_reachable && d.workers_online ? '<div class="hint" style="margin:8px 0 0;color:var(--ok)">Worker + broker OK, aucune URL cassée. ✔</div>' : '')}`;
+  } catch (e) { out.innerHTML = `<span style="color:var(--err)">${esc(e.message)}</span>`; }
+  btn.disabled = false;
+}
 async function api(path, opts) {
   const r = await fetch("/api" + path, Object.assign({headers: {"Content-Type": "application/json"}}, opts));
   if (r.status === 401) { location.href = "/login"; throw new Error("Non authentifié"); }
@@ -597,6 +623,7 @@ async function describePending() {
   btn.disabled = false; btn.textContent = "🔄 Décrire les éléments en attente";
 }
 $("#describe-pending-btn").addEventListener("click", describePending);
+$("#diag-btn").addEventListener("click", runDiagnostics);
 
 // --- listes de catégories ---
 $("#cats").innerHTML = CATEGORIES.map(c =>
