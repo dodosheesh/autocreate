@@ -196,6 +196,22 @@ def test_patch_model_face_et_caracteristique(client):
     assert r2.json()["reference_image_url"] == "https://pub-ok.r2.dev/newc.jpg"
 
 
+def test_caracteristique_recurring_create_et_toggle(client):
+    mid = client.post("/api/models", json={"name": "Rec", "face_reference_url": "https://r2.example/f.jpg"}).json()["id"]
+    # créée non-récurrente par défaut
+    c = client.post(f"/api/models/{mid}/characteristics", json={
+        "label": "piercing", "reference_image_url": "https://r2.example/p.jpg", "injection_hint": "a piercing"}).json()
+    assert c["recurring"] is False
+    # tattoo créé récurrent
+    t = client.post(f"/api/models/{mid}/characteristics", json={
+        "label": "tattoo", "reference_image_url": "https://r2.example/t.jpg", "injection_hint": "a tattoo",
+        "recurring": True}).json()
+    assert t["recurring"] is True
+    # bascule le piercing en récurrent puis inverse
+    r = client.patch(f"/api/models/{mid}/characteristics/{c['id']}", json={"recurring": True})
+    assert r.status_code == 200 and r.json()["recurring"] is True
+
+
 def test_patch_model_cross_tenant_refuse(client):
     with SessionLocal() as db:
         other = Model(tenant_id="autre", name="X", face_reference_url="u")

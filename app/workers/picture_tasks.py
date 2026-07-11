@@ -181,15 +181,15 @@ def compose_picture_job(job_id: str) -> None:
             model = db.get(Model, job.model_id)
             characteristics = [
                 CharacteristicInput(
+                    id=str(c.id),
                     label=c.label,
                     reference_image_url=c.reference_image_url,
                     injection_hint=c.injection_hint,
                     priority=c.priority,
-                    always_include=c.always_include,
+                    recurring=c.recurring,
                 )
                 for c in model.characteristics
             ]
-            charac_ids = [str(c.id) for c in model.characteristics if c.always_include]
             prompts, outfits = _picture_pools(db, job.tenant_id)
 
             result = picture_composer.compose_pictures(
@@ -206,7 +206,7 @@ def compose_picture_job(job_id: str) -> None:
                         job_id=job.id,
                         prompt_id=_pk(composed.prompt_id),
                         outfit_id=_pk(composed.outfit_id) if composed.outfit_id else None,
-                        characteristic_ids=charac_ids,
+                        characteristic_ids=composed.characteristic_ids,
                         combo_hash=composed.combo_hash,
                         filled_prompt=composed.filled_prompt,
                         reference_image_urls=composed.reference_image_urls,

@@ -97,12 +97,15 @@ def test_compose_sans_prompt_leve_erreur():
 
 
 def test_compose_refs_cap_nano_banana():
+    # 20 caractéristiques RÉCURRENTES (toutes injectées) → doit couper à max_refs.
     many = [
         CharacteristicInput(
+            id=f"t{i}",
             label=f"t{i}",
             reference_image_url=f"https://r2.example/t{i}.jpg",
             injection_hint=f"trait {i}",
             priority=i,
+            recurring=True,
         )
         for i in range(20)
     ]

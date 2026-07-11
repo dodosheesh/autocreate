@@ -114,7 +114,10 @@ class ModelCharacteristic(Base):
     label: Mapped[str] = mapped_column(String(255))
     reference_image_url: Mapped[str] = mapped_column(Text)  # photo de CE trait précis
     injection_hint: Mapped[str] = mapped_column(Text)  # description intégrable au prompt
-    always_include: Mapped[bool] = mapped_column(Boolean, default=True)
+    always_include: Mapped[bool] = mapped_column(Boolean, default=True)  # hérité (non utilisé)
+    # True = trait RÉCURRENT injecté sur chaque média (ex. tatouage signature).
+    # False (défaut) = fait partie du pool dont UN SEUL est tiré au hasard par média.
+    recurring: Mapped[bool] = mapped_column(Boolean, default=False)
     priority: Mapped[int] = mapped_column(Integer, default=0)
 
     model: Mapped[Model] = relationship(back_populates="characteristics")

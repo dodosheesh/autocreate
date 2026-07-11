@@ -1,18 +1,22 @@
+import random
+
 from app.services.composer import (
     CharacteristicInput,
     combo_hash,
     inject_characteristics,
+    select_active_characteristics,
     select_reference_images,
 )
 
 
-def charac(label: str, priority: int = 0, always: bool = True) -> CharacteristicInput:
+def charac(label: str, priority: int = 0, recurring: bool = False) -> CharacteristicInput:
     return CharacteristicInput(
+        id=label,
         label=label,
         reference_image_url=f"https://r2.example/{label}.jpg",
         injection_hint=f"a visible {label}",
         priority=priority,
-        always_include=always,
+        recurring=recurring,
     )
 
 
@@ -28,12 +32,41 @@ def test_injection_sans_slot_ajoute_en_fin():
     assert result == "A woman at the beach. A visible tattoo."
 
 
-def test_injection_respecte_always_include_et_priorite():
+def test_injection_respecte_priorite():
+    # inject_characteristics injecte TOUTES les caractéristiques fournies (déjà
+    # sélectionnées en amont), triées par priorité.
     result = inject_characteristics(
         "Scene {characteristics}",
-        [charac("z-trait", priority=2), charac("a-trait", priority=1), charac("off", always=False)],
+        [charac("z-trait", priority=2), charac("a-trait", priority=1)],
     )
     assert result == "Scene a visible a-trait, a visible z-trait"
+
+
+def test_select_active_une_seule_aleatoire_plus_recurrentes():
+    chars = [charac("tattoo", recurring=True), charac("a"), charac("b"), charac("c")]
+    for seed in range(8):
+        active = select_active_characteristics(chars, random.Random(seed))
+        labels = {c.label for c in active}
+        assert "tattoo" in labels  # la récurrente est toujours là
+        pool_picked = labels - {"tattoo"}
+        assert len(pool_picked) == 1  # exactement UNE non-récurrente
+        assert pool_picked <= {"a", "b", "c"}
+
+
+def test_select_active_varie_selon_le_tirage():
+    chars = [charac("a"), charac("b"), charac("c"), charac("d")]
+    picks = {select_active_characteristics(chars, random.Random(s))[0].label for s in range(20)}
+    assert len(picks) > 1  # le tirage change bien d'un média à l'autre
+
+
+def test_select_active_sans_non_recurrente():
+    chars = [charac("tattoo", recurring=True)]
+    active = select_active_characteristics(chars, random.Random(0))
+    assert [c.label for c in active] == ["tattoo"]  # rien à tirer, juste la récurrente
+
+
+def test_select_active_vide():
+    assert select_active_characteristics([], random.Random(0)) == []
 
 
 def test_selection_refs_face_toujours_premiere_et_cap_12():

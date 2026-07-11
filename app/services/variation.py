@@ -69,6 +69,7 @@ class ComposedItem:
     reference_image_urls: list[str]
     combo_hash: str
     speaking: bool
+    characteristic_ids: list[str]  # caractéristiques réellement appliquées à CET item
 
 
 @dataclass(frozen=True)
@@ -130,12 +131,16 @@ def _compose_one(
         DIALOGUE_SLOT: render_for_prompt(dialogue.text) if dialogue else "",
         CAPTION_SLOT: caption.text if caption else "",
     }
+    # 1 caractéristique aléatoire par item + les récurrentes (ex. tatouage)
+    active = composer.select_active_characteristics(characteristics, rng)
+    active_ids = sorted(c.id for c in active)
+
     prompt = fill_template(template.template_text, values)
-    prompt = composer.inject_characteristics(prompt, characteristics)
+    prompt = composer.inject_characteristics(prompt, active)
 
     extra_refs = [o.image_url for o in (outfit, background) if o and o.image_url]
     refs = composer.select_reference_images(
-        face_reference_url, characteristics, extra_refs=extra_refs, max_refs=max_refs
+        face_reference_url, active, extra_refs=extra_refs, max_refs=max_refs
     )
 
     return ComposedItem(
@@ -157,9 +162,12 @@ def _compose_one(
                 "background": background.id if background else None,
                 "dialogue": dialogue.id if dialogue else None,
                 "caption": caption.id if caption else None,
+                # la caractéristique aléatoire fait partie de la variante (dédup + variété)
+                "characteristics": active_ids,
             }
         ),
         speaking=template.speaking,
+        characteristic_ids=active_ids,
     )
 
 

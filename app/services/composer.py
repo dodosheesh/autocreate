@@ -13,6 +13,7 @@ Plus le combo_hash servant à la dédup des variantes.
 
 import hashlib
 import json
+import random
 from dataclasses import dataclass
 
 CHARACTERISTICS_SLOT = "{characteristics}"
@@ -24,21 +25,37 @@ class CharacteristicInput:
     reference_image_url: str
     injection_hint: str
     priority: int = 0
-    always_include: bool = True
+    # True = trait RÉCURRENT présent sur chaque média (ex. un tatouage signature).
+    # False = fait partie du pool dont UN SEUL est tiré au hasard par média.
+    recurring: bool = False
+    id: str = ""
+
+
+def select_active_characteristics(
+    characteristics: list[CharacteristicInput], rng: random.Random
+) -> list[CharacteristicInput]:
+    """Caractéristiques à appliquer à CET item : toutes les récurrentes (tatouage
+    sur toutes les vidéos) + UNE seule tirée au hasard parmi les non-récurrentes
+    (variété par média). S'il n'y a pas de non-récurrente, seules les récurrentes
+    sont appliquées."""
+    recurring = [c for c in characteristics if c.recurring]
+    pool = [c for c in characteristics if not c.recurring]
+    chosen = list(recurring)
+    if pool:
+        chosen.append(rng.choice(pool))
+    return chosen
 
 
 def inject_characteristics(prompt: str, characteristics: list[CharacteristicInput]) -> str:
-    """Insère les injection_hints dans le prompt.
+    """Insère les injection_hints des caractéristiques FOURNIES (déjà
+    sélectionnées par select_active_characteristics) dans le prompt.
 
     Si le template contient le slot {characteristics}, les hints y sont placés
     (c'est là que le template designer a jugé le placement naturel). Sinon les
     hints sont ajoutés en phrase après la description, jamais au milieu d'une
     instruction de dialogue.
     """
-    included = sorted(
-        (c for c in characteristics if c.always_include),
-        key=lambda c: c.priority,
-    )
+    included = sorted(characteristics, key=lambda c: c.priority)
     hints = ", ".join(c.injection_hint.strip().rstrip(".") for c in included)
     if CHARACTERISTICS_SLOT in prompt:
         return prompt.replace(CHARACTERISTICS_SLOT, hints)
@@ -60,9 +77,7 @@ def select_reference_images(
     ordered = [face_reference_url]
     ordered += [
         c.reference_image_url
-        for c in sorted(
-            (c for c in characteristics if c.always_include), key=lambda c: c.priority
-        )
+        for c in sorted(characteristics, key=lambda c: c.priority)
     ]
     ordered += extra_refs or []
     seen: set[str] = set()

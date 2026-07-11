@@ -22,6 +22,7 @@ class ComposedPicture:
     filled_prompt: str
     reference_image_urls: list[str]
     combo_hash: str
+    characteristic_ids: list[str]  # caractéristiques réellement appliquées à CETTE image
 
 
 @dataclass(frozen=True)
@@ -63,8 +64,15 @@ def compose_pictures(
     while len(items) < count:
         prompt = weighted_draw(prompts, rng)
         outfit = weighted_draw(outfits, rng) if outfits else None
+        # 1 caractéristique aléatoire par image + les récurrentes (ex. tatouage)
+        active = composer.select_active_characteristics(characteristics, rng)
+        active_ids = sorted(c.id for c in active)
         combo = composer.combo_hash(
-            {"prompt": prompt.id, "outfit": outfit.id if outfit else None}
+            {
+                "prompt": prompt.id,
+                "outfit": outfit.id if outfit else None,
+                "characteristics": active_ids,
+            }
         )
         if combo in seen:
             attempts_since_new += 1
@@ -75,10 +83,10 @@ def compose_pictures(
         attempts_since_new = 0
 
         text = _merge_outfit(prompt.text, outfit)
-        text = composer.inject_characteristics(text, characteristics)
+        text = composer.inject_characteristics(text, active)
         extra_refs = [outfit.image_url] if outfit and outfit.image_url else []
         refs = composer.select_reference_images(
-            face_reference_url, characteristics, extra_refs=extra_refs, max_refs=max_refs
+            face_reference_url, active, extra_refs=extra_refs, max_refs=max_refs
         )
         items.append(
             ComposedPicture(
@@ -87,6 +95,7 @@ def compose_pictures(
                 filled_prompt=text,
                 reference_image_urls=refs,
                 combo_hash=combo,
+                characteristic_ids=active_ids,
             )
         )
     return PictureComposeResult(items=items, shortfall=max(0, count - len(items)))

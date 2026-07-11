@@ -1,3 +1,4 @@
+import random
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -112,20 +113,24 @@ def create_job(
 
     characteristics = [
         composer.CharacteristicInput(
+            id=str(c.id),
             label=c.label,
             reference_image_url=c.reference_image_url,
             injection_hint=c.injection_hint,
             priority=c.priority,
-            always_include=c.always_include,
+            recurring=c.recurring,
         )
         for c in model.characteristics
     ]
-    filled_prompt = composer.inject_characteristics(payload.prompt, characteristics)
+    # Récurrentes (tatouage) + 1 caractéristique aléatoire (cohérent avec le moteur)
+    active = composer.select_active_characteristics(characteristics, random.Random())
+    active_ids = [c.id for c in active]
+    filled_prompt = composer.inject_characteristics(payload.prompt, active)
     if payload.dialogue_script:
         filled_prompt = f"{filled_prompt}\n\nDialogue: {payload.dialogue_script}"
     refs = composer.select_reference_images(
         model.face_reference_url,
-        characteristics,
+        active,
         extra_refs=payload.extra_reference_urls,
         max_refs=settings.seedance_max_refs,
     )
@@ -162,9 +167,7 @@ def create_job(
             JobItem(
                 job_id=job.id,
                 category=payload.category,
-                characteristic_ids=[
-                    str(c.id) for c in model.characteristics if c.always_include
-                ],
+                characteristic_ids=active_ids,
                 # Phase 1 : même prompt pour tout le batch → l'index désambiguïse.
                 # Le moteur de variation de la Phase 2 hashera les vrais combos.
                 combo_hash=composer.combo_hash(

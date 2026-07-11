@@ -33,7 +33,10 @@ class CharacteristicCreate(BaseModel):
     label: str
     reference_image_url: HttpUrlStr
     injection_hint: str
-    always_include: bool = True
+    always_include: bool = True  # hérité (non utilisé par la composition)
+    # True = trait récurrent (tatouage) présent sur chaque média ; False (défaut) =
+    # pool dont UNE SEULE caractéristique est tirée au hasard par média.
+    recurring: bool = False
     priority: int = 0
 
 
@@ -69,6 +72,7 @@ class CharacteristicUpdate(BaseModel):
     reference_image_url: HttpUrlStr | None = None
     injection_hint: str | None = None
     always_include: bool | None = None
+    recurring: bool | None = None
     priority: int | None = None
 
 
