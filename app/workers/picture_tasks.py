@@ -375,6 +375,33 @@ def _finalize_picture_job_if_done(db, job) -> None:
     job.actual_cost_usd = round(actual, 4)
 
 
+def _recheck_picture_items(job_pk) -> int:
+    """Interroge kie.ai (recordInfo) pour les items image DISPATCHED et applique
+    le résultat. job_pk=None → tous les tenants (beat) ; sinon un seul job."""
+    with db_session() as db:
+        q = select(PictureItem).where(PictureItem.status == ItemStatus.DISPATCHED)
+        if job_pk is not None:
+            q = q.where(PictureItem.job_id == job_pk)
+        stale = [(str(i.id), i.kie_task_id) for i in db.scalars(q).all() if i.kie_task_id]
+    for item_id, task_id in stale:
+        try:
+            apply_kie_picture_result(item_id, kie.get_task(task_id))
+        except Exception:
+            pass  # un item qui ne répond pas ne bloque pas les autres
+    return len(stale)
+
+
+def recheck_picture_job(job_id: str) -> int:
+    """Pull à la demande des résultats kie.ai pour un job image (sans webhook)."""
+    return _recheck_picture_items(_pk(job_id))
+
+
+@celery_app.task
+def poll_pending_picture_items() -> None:
+    """Filet de sécurité (beat) : rattrape un callback perdu sur les items image."""
+    _recheck_picture_items(None)
+
+
 def apply_kie_picture_result(item_id: str, result: kie.KieTaskResult) -> None:
     """Applique un résultat kie.ai (webhook/polling) à un item image."""
     if result.state == "success" and result.result_urls:

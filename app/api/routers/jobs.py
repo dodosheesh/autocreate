@@ -24,7 +24,7 @@ from app.services import composer
 from app.services.calibration import get_calibrated_qc_rate
 from app.services.estimator import ItemSpec, estimate_batch, max_videos_for_budget
 from app.services.pricing import load_rates
-from app.workers.tasks import compose_job, dispatch_seedance
+from app.workers.tasks import compose_job, dispatch_seedance, recheck_video_job
 
 router = APIRouter(prefix="/api", tags=["jobs"])
 
@@ -283,6 +283,18 @@ def get_job(
     job_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
     return owned(db, GenerationJob, job_id, user)
+
+
+@router.post("/jobs/{job_id}/recheck", response_model=schemas.JobOut)
+def recheck_job(
+    job_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    """Interroge kie.ai à la demande pour les items dispatchés (si un webhook
+    s'est perdu). Ne dépend ni du webhook ni de celery beat."""
+    job = owned(db, GenerationJob, job_id, user)
+    recheck_video_job(str(job_id))
+    db.refresh(job)
+    return job
 
 
 @router.post("/items/{item_id}/review", response_model=schemas.ItemOut)

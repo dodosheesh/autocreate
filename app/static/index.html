@@ -862,15 +862,18 @@ async function loadJobs() {
       <td class="mono">${j.actual_cost_usd != null ? "$" + j.actual_cost_usd.toFixed(2) : "—"}</td>
     </tr>`).join("") || '<tr><td colspan="5" class="muted">aucun job</td></tr>';
 }
+let lastJobStatus = null;
 async function openJob(id) {
   currentJob = id;
   const j = await api("/jobs/" + id);
+  lastJobStatus = j.status;
   const shortfall = Object.keys(j.compose_shortfall || {}).length
     ? `<div class="warn-box" style="display:block">Combos épuisés : ${esc(JSON.stringify(j.compose_shortfall))}</div>` : "";
   $("#job-detail").innerHTML = `
     <div style="margin-top:16px; display:flex; justify-content:space-between; align-items:center">
       <h2 style="margin:0">Job ${esc(id.slice(0, 8))} ${badge(j.status)}</h2>
-      <span><button class="btn small ghost" onclick="openJob('${id}')">↻</button>
+      <span><button class="btn small ghost" onclick="recheckJob('${id}')">🔄 Vérifier kie.ai</button>
+      <button class="btn small ghost" onclick="openJob('${id}')">↻</button>
       <button class="btn small" onclick="exportJob('${id}')">Exporter les approuvés</button></span>
     </div>${shortfall}
     <div class="items">${j.items.map(it => `
@@ -897,7 +900,11 @@ async function exportJob(id) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob); a.download = `export_${id.slice(0, 8)}.json`; a.click();
 }
-window.openJob = openJob; window.review = review; window.exportJob = exportJob;
+async function recheckJob(id) {
+  try { await api(`/jobs/${id}/recheck`, {method: "POST"}); toast("Vérifié auprès de kie.ai"); openJob(id); }
+  catch (err) { toast("Recheck : " + err.message); }
+}
+window.openJob = openJob; window.review = review; window.exportJob = exportJob; window.recheckJob = recheckJob;
 
 // ================= PHOTOS =================
 let currentPicJob = null;
@@ -963,13 +970,16 @@ async function loadPicJobs() {
       <td class="mono">${j.estimated_cost_usd!=null?"$"+j.estimated_cost_usd.toFixed(2):"—"}</td></tr>`).join("")
     }</tbody></table>` : '<span class="muted">aucun job photo</span>';
 }
+let lastPicJobStatus = null;
 async function openPicJob(id) {
   currentPicJob = id;
   const j = await api("/pictures/jobs/" + id);
+  lastPicJobStatus = j.status;
   $("#pic-detail").innerHTML = `
     <div style="margin-top:14px; display:flex; justify-content:space-between; align-items:center">
       <b>Photos ${esc(id.slice(0,8))} ${badge(j.status)}</b>
-      <button class="btn small" onclick="exportPicJob('${id}')">Exporter approuvées</button>
+      <span><button class="btn small ghost" onclick="recheckPicJob('${id}')">🔄 Vérifier kie.ai</button>
+      <button class="btn small" onclick="exportPicJob('${id}')">Exporter approuvées</button></span>
     </div>
     <div class="items">${j.items.map(it => `
       <div class="item">
@@ -982,6 +992,11 @@ async function openPicJob(id) {
           <button class="btn small bad" onclick="reviewPic('${it.id}','rejected')">✗</button></div>` : ""}
       </div>`).join("")}</div>`;
 }
+async function recheckPicJob(id) {
+  try { await api(`/pictures/jobs/${id}/recheck`, {method: "POST"}); toast("Vérifié auprès de kie.ai"); openPicJob(id); }
+  catch (err) { toast("Recheck : " + err.message); }
+}
+window.recheckPicJob = recheckPicJob;
 async function reviewPic(itemId, decision) {
   try { await api(`/pictures/items/${itemId}/review`, {method:"POST", body: JSON.stringify({decision})});
         if (currentPicJob) openPicJob(currentPicJob); }
@@ -1007,8 +1022,18 @@ requireAuth().then(() => {
   loadPricing().catch(() => {});
   loadTemplates().catch(() => {});
   setInterval(() => {
-    loadJobs().catch(() => {}); if (currentJob) openJob(currentJob).catch(() => {});
-    loadPicJobs().catch(() => {}); if (currentPicJob) openPicJob(currentPicJob).catch(() => {});
+    loadJobs().catch(() => {});
+    if (currentJob) {  // si dispatched, on pull kie.ai en silence avant de rafraîchir
+      (lastJobStatus === "dispatched"
+        ? api(`/jobs/${currentJob}/recheck`, {method: "POST"}).then(() => openJob(currentJob))
+        : openJob(currentJob)).catch(() => {});
+    }
+    loadPicJobs().catch(() => {});
+    if (currentPicJob) {
+      (lastPicJobStatus === "dispatched"
+        ? api(`/pictures/jobs/${currentPicJob}/recheck`, {method: "POST"}).then(() => openPicJob(currentPicJob))
+        : openPicJob(currentPicJob)).catch(() => {});
+    }
     loadPrompts().catch(() => {});  // prompts reverse-engineerés (photo)
     loadTemplates().catch(() => {});
     loadAllBanks();  // rafraîchit les statuts pending→ready des descriptions auto

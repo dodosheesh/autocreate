@@ -395,6 +395,23 @@ def poll_pending_items() -> None:
         apply_kie_result(item_id, result)
 
 
+def recheck_video_job(job_id: str) -> int:
+    """Pull à la demande des résultats kie.ai pour un job vidéo (sans webhook)."""
+    with db_session() as db:
+        items = db.scalars(
+            select(JobItem).where(
+                JobItem.status == ItemStatus.DISPATCHED, JobItem.job_id == _pk(job_id)
+            )
+        ).all()
+        stale = [(str(i.id), i.seedance_task_id) for i in items if i.seedance_task_id]
+    for item_id, task_id in stale:
+        try:
+            apply_kie_result(item_id, kie.get_task(task_id))
+        except Exception:
+            pass
+    return len(stale)
+
+
 def apply_kie_result(item_id: str, result: kie.KieTaskResult) -> None:
     """Applique un résultat kie.ai (webhook ou polling) et enchaîne."""
     if result.state == "success" and result.result_urls:

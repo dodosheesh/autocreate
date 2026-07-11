@@ -23,5 +23,9 @@ celery_app.conf.update(
             "task": "app.workers.tasks.poll_pending_items",
             "schedule": 120.0,
         },
+        "poll-pending-picture-items": {
+            "task": "app.workers.picture_tasks.poll_pending_picture_items",
+            "schedule": 120.0,
+        },
     },
 )

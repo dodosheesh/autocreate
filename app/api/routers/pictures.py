@@ -30,7 +30,7 @@ from app.integrations.vision import reverse_engineer_prompt as _vision_reverse
 from app.services.calibration import get_calibrated_qc_rate
 from app.services.estimator import estimate_pictures, max_pictures_for_budget
 from app.services.pricing import load_rates
-from app.workers.picture_tasks import compose_picture_job
+from app.workers.picture_tasks import compose_picture_job, recheck_picture_job
 
 router = APIRouter(prefix="/api/pictures", tags=["pictures"])
 
@@ -157,6 +157,18 @@ def get_job(
     job_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
     return owned(db, PictureJob, job_id, user)
+
+
+@router.post("/jobs/{job_id}/recheck", response_model=schemas.PictureJobOut)
+def recheck_job(
+    job_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    """Interroge kie.ai à la demande pour les items dispatchés (si un webhook
+    s'est perdu). Ne dépend ni du webhook ni de celery beat."""
+    job = owned(db, PictureJob, job_id, user)
+    recheck_picture_job(str(job_id))
+    db.refresh(job)
+    return job
 
 
 @router.post("/items/{item_id}/review", response_model=schemas.PictureItemOut)
