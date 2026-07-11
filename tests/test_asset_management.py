@@ -64,8 +64,11 @@ def test_bulk_describe_une_image_en_echec_ne_bloque_pas_les_autres(client):
             json={"image_urls": ["https://r2.example/b1.jpg", "https://r2.example/b2.jpg"]},
         )
     assert r.status_code == 200, r.text
-    statuses = sorted(o["status"] for o in r.json())
+    rows = r.json()
+    statuses = sorted(o["status"] for o in rows)
     assert statuses == ["failed", "ready"]  # l'échec est isolé
+    failed = next(o for o in rows if o["status"] == "failed")
+    assert "vision HTTP 500" in (failed["error"] or "")  # raison visible dans l'UI
 
 
 def test_describe_pending_relance_les_bloques(client):

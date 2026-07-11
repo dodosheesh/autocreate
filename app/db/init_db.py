@@ -45,7 +45,9 @@ _ADDITIVE_COLUMNS = [
     ("prompt_templates", "source_video_url", "TEXT"),
     ("prompt_templates", "error", "TEXT"),
     ("outfits", "status", "VARCHAR(16) DEFAULT 'ready'"),
+    ("outfits", "error", "TEXT"),
     ("backgrounds", "status", "VARCHAR(16) DEFAULT 'ready'"),
+    ("backgrounds", "error", "TEXT"),
     ("job_items", "review_status", "VARCHAR(16) DEFAULT 'pending'"),
     ("generation_jobs", "music_url", "TEXT"),
     ("generation_jobs", "compose_shortfall", "JSON DEFAULT '{}'"),
@@ -113,6 +115,18 @@ def init() -> None:
             else:
                 print("  Mot de passe : via BOOTSTRAP_ADMIN_PASSWORD — à changer au 1er login")
         db.commit()
+
+    # Garde-fou config R2 : si l'URL publique est vide ou reste un placeholder,
+    # AUCUNE image uploadée ne sera téléchargeable (vision + génération échouent).
+    pub = (settings.r2_public_base_url or "").lower()
+    placeholders = ("remplacer", "xxxx", "replace", "example", "ton-", "your-")
+    if not pub or any(tok in pub for tok in placeholders):
+        print(
+            "⚠️  R2_PUBLIC_BASE_URL semble non configuré "
+            f"({settings.r2_public_base_url!r}) : les images uploadées ne seront "
+            "pas téléchargeables → descriptions et générations échoueront. "
+            "Mets l'URL publique r2.dev réelle de ton bucket."
+        )
     print("Tables créées et pricing seedé.")
 
 

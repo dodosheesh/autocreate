@@ -253,8 +253,8 @@
         <div><label>Dialogue — catégorie</label><select id="d-cat"></select></div>
         <div><label>Caption — catégorie</label><select id="cap-cat"></select></div>
       </div>
-      <label>Dialogue taggé</label>
-      <textarea id="d-text" rows="3" placeholder="[H] première ligne&#10;[F] deuxième ligne"></textarea>
+      <label>Dialogue taggé — <b>chaque ligne DOIT commencer par [H], [F] ou [beat]</b> (sinon rejeté)</label>
+      <textarea id="d-text" rows="3" placeholder="[F] yoooo big dog&#10;[F] do you like what you see ?"></textarea>
       <button class="btn small" id="d-add" style="margin-top:10px">Ajouter le dialogue</button>
       <label style="margin-top:12px">Caption (barre de texte Snapchat)</label>
       <input type="text" id="cap-text" placeholder="légende…">
@@ -429,10 +429,17 @@ function toast(msg) {
   const t = $("#toast"); t.textContent = msg; t.style.display = "block";
   setTimeout(() => t.style.display = "none", 3500);
 }
+function errText(detail, fallback) {
+  if (!detail) return fallback;
+  if (typeof detail === "string") return detail;
+  // FastAPI 422 : detail est une liste {loc, msg, ...} → message lisible
+  if (Array.isArray(detail)) return detail.map(e => e.msg || JSON.stringify(e)).join(" · ");
+  return fallback;
+}
 async function api(path, opts) {
   const r = await fetch("/api" + path, Object.assign({headers: {"Content-Type": "application/json"}}, opts));
   if (r.status === 401) { location.href = "/login"; throw new Error("Non authentifié"); }
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  if (!r.ok) throw new Error(errText((await r.json().catch(() => ({}))).detail, r.statusText));
   return r.json();
 }
 async function uploadFile(inputEl) {
@@ -500,8 +507,11 @@ function delRow(inner, id, fn) {
 }
 function imgRow(o, fn) {
   const desc = (o.tags || []).join(", ");
+  const label = o.status === "failed" && o.error
+    ? `<span style="color:var(--err)">échec : ${esc(o.error.slice(0, 90))}</span>`
+    : esc(desc || "(sans description)");
   return `<div class="list-row"><span class="grow"><img src="${esc(safeUrl(o.image_url))}">`
-    + `<span class="lbl">${badge(o.status || "ready")} ${esc(desc || "(sans description)")}</span></span>`
+    + `<span class="lbl">${badge(o.status || "ready")} ${label}</span></span>`
     + `<button class="x" onclick="${fn}('${o.id}')" title="supprimer">✕</button></div>`;
 }
 async function loadModelsList() {
@@ -837,8 +847,11 @@ $("#pic-reverse").addEventListener("click", async () => {
 async function loadPrompts() {
   const prompts = await api("/pictures/prompts");
   $("#pic-prompts").innerHTML = prompts.length
-    ? prompts.map(p => `<div class="est-line"><span class="muted">${badge(p.status)} ${esc((p.prompt_text || p.source_image_url).slice(0, 70))}</span>
-        <span><button class="btn small ghost" onclick="delPrompt('${p.id}')">✕</button></span></div>`).join("")
+    ? prompts.map(p => { const txt = p.status === "failed" && p.error
+        ? `<span style="color:var(--err)">échec : ${esc(p.error.slice(0, 70))}</span>`
+        : esc((p.prompt_text || p.source_image_url).slice(0, 70));
+      return `<div class="est-line"><span class="muted">${badge(p.status)} ${txt}</span>
+        <span><button class="btn small ghost" onclick="delPrompt('${p.id}')">✕</button></span></div>`; }).join("")
     : '<span class="muted">aucun prompt — reverse-engineer une image</span>';
 }
 async function delPrompt(id) {
@@ -928,7 +941,8 @@ requireAuth().then(() => {
   loadTemplates().catch(() => {});
   setInterval(() => {
     loadJobs().catch(() => {}); if (currentJob) openJob(currentJob).catch(() => {});
-    if (currentPicJob) openPicJob(currentPicJob).catch(() => {});
+    loadPicJobs().catch(() => {}); if (currentPicJob) openPicJob(currentPicJob).catch(() => {});
+    loadPrompts().catch(() => {});  // prompts reverse-engineerés (photo)
     loadTemplates().catch(() => {});
     loadAllBanks();  // rafraîchit les statuts pending→ready des descriptions auto
   }, 8000);

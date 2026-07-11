@@ -68,6 +68,7 @@ class OutfitCreate(BaseModel):
 class OutfitOut(OutfitCreate):
     id: uuid.UUID
     status: str = "ready"
+    error: str | None = None
 
     model_config = {"from_attributes": True}
 

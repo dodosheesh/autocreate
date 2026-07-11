@@ -130,6 +130,7 @@ class Outfit(Base):
     weight: Mapped[float] = mapped_column(Float, default=1.0)
     # ready | pending | failed — auto-description vision en cours = pending
     status: Mapped[str] = mapped_column(String(16), default="ready")
+    error: Mapped[str | None] = mapped_column(Text)  # raison si status=failed
 
 
 class Background(Base):
@@ -141,6 +142,7 @@ class Background(Base):
     tags: Mapped[list] = mapped_column(JSON, default=list)
     weight: Mapped[float] = mapped_column(Float, default=1.0)
     status: Mapped[str] = mapped_column(String(16), default="ready")
+    error: Mapped[str | None] = mapped_column(Text)
 
 
 class PromptTemplate(Base):

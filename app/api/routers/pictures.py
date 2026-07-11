@@ -21,14 +21,16 @@ from app.db.models import (
     PictureItem,
     PictureJob,
     PicturePrompt,
+    PromptStatus,
     ItemStatus,
     ReviewStatus,
     User,
 )
+from app.integrations.vision import reverse_engineer_prompt as _vision_reverse
 from app.services.calibration import get_calibrated_qc_rate
 from app.services.estimator import estimate_pictures, max_pictures_for_budget
 from app.services.pricing import load_rates
-from app.workers.picture_tasks import compose_picture_job, reverse_engineer_prompt
+from app.workers.picture_tasks import compose_picture_job
 
 router = APIRouter(prefix="/api/pictures", tags=["pictures"])
 
@@ -42,13 +44,21 @@ def create_prompt(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    """Enregistre une image de référence et lance le reverse-engineering
-    (async). Le prompt obtenu est réutilisable à vie."""
+    """Enregistre une image de référence et la reverse-engineere en prompt
+    réutilisable (SYNCHRONE : aucun worker requis, résultat immédiat)."""
     prompt = PicturePrompt(tenant_id=user.tenant_id, **payload.model_dump())
     db.add(prompt)
     db.commit()
     db.refresh(prompt)
-    reverse_engineer_prompt.delay(str(prompt.id))
+    try:
+        prompt.prompt_text = _vision_reverse(prompt.source_image_url, None)
+        prompt.status = PromptStatus.READY
+        prompt.error = None
+    except Exception as exc:  # vision/HTTP → prompt en échec, raison visible
+        prompt.status = PromptStatus.FAILED
+        prompt.error = str(exc)[:2000]
+    db.commit()
+    db.refresh(prompt)
     return prompt
 
 

@@ -98,8 +98,10 @@ def _describe_rows(kind: str, db_model, rows, suffix: str, db: Session) -> None:
         if desc:
             row.tags = [desc]
             row.status = "ready"
+            row.error = None
         else:
             row.status = "failed"
+            row.error = err  # raison visible dans l'UI (ex. image non téléchargeable)
     db.commit()  # expire_on_commit=False → les objets `rows` gardent leurs valeurs
 
 
