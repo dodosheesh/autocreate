@@ -56,6 +56,22 @@ class ModelOut(ModelCreate):
     model_config = {"from_attributes": True}
 
 
+class ModelUpdate(BaseModel):
+    """Édition partielle (ex. remplacer la photo visage après re-config R2)."""
+
+    name: str | None = None
+    face_reference_url: HttpUrlStr | None = None
+    notes: str | None = None
+
+
+class CharacteristicUpdate(BaseModel):
+    label: str | None = None
+    reference_image_url: HttpUrlStr | None = None
+    injection_hint: str | None = None
+    always_include: bool | None = None
+    priority: int | None = None
+
+
 # --- Banques d'assets ---
 
 

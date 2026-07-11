@@ -180,6 +180,29 @@ def test_delete_model_utilise_par_un_job_refuse(client):
     assert client.get(f"/api/models/{mid}").status_code == 200  # toujours là
 
 
+def test_patch_model_face_et_caracteristique(client):
+    mid = client.post("/api/models", json={"name": "Editable", "face_reference_url": "https://REMPLACER.r2.dev/old.jpg"}).json()["id"]
+    cid = client.post(f"/api/models/{mid}/characteristics", json={
+        "label": "trait", "reference_image_url": "https://REMPLACER.r2.dev/oldc.jpg", "injection_hint": "a trait"}).json()["id"]
+    # remplacer la photo visage (URL cassée → nouvelle URL)
+    r = client.patch(f"/api/models/{mid}", json={"face_reference_url": "https://pub-ok.r2.dev/new.jpg"})
+    assert r.status_code == 200, r.text
+    assert r.json()["face_reference_url"] == "https://pub-ok.r2.dev/new.jpg"
+    assert r.json()["name"] == "Editable"  # non touché (exclude_unset)
+    # remplacer l'image d'une caractéristique
+    r2 = client.patch(f"/api/models/{mid}/characteristics/{cid}",
+                      json={"reference_image_url": "https://pub-ok.r2.dev/newc.jpg"})
+    assert r2.status_code == 200, r2.text
+    assert r2.json()["reference_image_url"] == "https://pub-ok.r2.dev/newc.jpg"
+
+
+def test_patch_model_cross_tenant_refuse(client):
+    with SessionLocal() as db:
+        other = Model(tenant_id="autre", name="X", face_reference_url="u")
+        db.add(other); db.commit(); oid = str(other.id)
+    assert client.patch(f"/api/models/{oid}", json={"name": "hack"}).status_code == 404
+
+
 def test_delete_model_cross_tenant_refuse(client):
     with SessionLocal() as db:
         other = Model(tenant_id="autre", name="X", face_reference_url="u")

@@ -38,6 +38,22 @@ def get_model(
     return owned(db, Model, model_id, user)
 
 
+@router.patch("/{model_id}", response_model=schemas.ModelOut)
+def update_model(
+    model_id: uuid.UUID,
+    payload: schemas.ModelUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """Édition partielle (ex. remplacer la photo visage cassée par un nouvel upload)."""
+    model = owned(db, Model, model_id, user)
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(model, field, value)
+    db.commit()
+    db.refresh(model)
+    return model
+
+
 @router.delete("/{model_id}")
 def delete_model(
     model_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
@@ -74,6 +90,25 @@ def add_characteristic(
     owned(db, Model, model_id, user)  # 404 si le model n'est pas au tenant
     charac = ModelCharacteristic(model_id=model_id, **payload.model_dump())
     db.add(charac)
+    db.commit()
+    db.refresh(charac)
+    return charac
+
+
+@router.patch("/{model_id}/characteristics/{char_id}", response_model=schemas.CharacteristicOut)
+def update_characteristic(
+    model_id: uuid.UUID,
+    char_id: uuid.UUID,
+    payload: schemas.CharacteristicUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    owned(db, Model, model_id, user)  # 404 si le model n'est pas au tenant
+    charac = db.get(ModelCharacteristic, char_id)
+    if charac is None or charac.model_id != model_id:
+        raise HTTPException(404, "Caractéristique introuvable")
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(charac, field, value)
     db.commit()
     db.refresh(charac)
     return charac

@@ -542,7 +542,11 @@ function imgRow(o, fn) {
 }
 async function loadModelsList() {
   const models = await api("/models");
-  renderList("#list-models", models, m => delRow(esc(m.name), m.id, "delModel"));
+  renderList("#list-models", models, m =>
+    `<div class="list-row"><span class="grow"><img src="${esc(safeUrl(m.face_reference_url))}">`
+    + `<span class="lbl">${esc(m.name)}</span></span>`
+    + `<button class="btn small ghost" style="flex:none" onclick="editModelFace('${m.id}')">remplacer visage</button>`
+    + `<button class="x" onclick="delModel('${m.id}')" title="supprimer">✕</button></div>`);
 }
 async function loadCharacteristics() {
   if (!getModel()) { $("#list-characteristics").innerHTML = ""; return; }
@@ -550,8 +554,31 @@ async function loadCharacteristics() {
   renderList("#list-characteristics", m.characteristics || [], c =>
     `<div class="list-row"><span class="grow"><img src="${esc(safeUrl(c.reference_image_url))}">`
     + `<span class="lbl">${esc(c.label)} — ${esc(c.injection_hint)}</span></span>`
-    + `<button class="x" onclick="delChar('${c.id}')">✕</button></div>`);
+    + `<button class="btn small ghost" style="flex:none" onclick="editCharImg('${m.id}','${c.id}')">remplacer</button>`
+    + `<button class="x" onclick="delChar('${c.id}')" title="supprimer">✕</button></div>`);
 }
+// Ouvre un sélecteur de fichier, uploade (R2) puis passe l'URL au callback.
+function pickAndUpload(cb) {
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = "image/*";
+  inp.onchange = async () => {
+    if (!inp.files[0]) return;
+    try { cb(await uploadFile(inp)); } catch (e) { toast(e.message); }
+  };
+  inp.click();
+}
+window.editModelFace = (id) => pickAndUpload(async (url) => {
+  try {
+    await api("/models/" + id, {method: "PATCH", body: JSON.stringify({face_reference_url: url})});
+    toast("Photo visage remplacée"); await loadModels(); loadModelsList(); loadCharacteristics();
+  } catch (e) { toast(e.message); }
+});
+window.editCharImg = (mid, cid) => pickAndUpload(async (url) => {
+  try {
+    await api(`/models/${mid}/characteristics/${cid}`, {method: "PATCH", body: JSON.stringify({reference_image_url: url})});
+    toast("Image remplacée"); loadCharacteristics();
+  } catch (e) { toast(e.message); }
+});
 async function loadBankList(kind, sel, rowFn) {
   renderList(sel, await api("/banks/" + kind), rowFn);
 }
