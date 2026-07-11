@@ -16,6 +16,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    false,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -117,7 +118,11 @@ class ModelCharacteristic(Base):
     always_include: Mapped[bool] = mapped_column(Boolean, default=True)  # hérité (non utilisé)
     # True = trait RÉCURRENT injecté sur chaque média (ex. tatouage signature).
     # False (défaut) = fait partie du pool dont UN SEUL est tiré au hasard par média.
-    recurring: Mapped[bool] = mapped_column(Boolean, default=False)
+    # server_default aligné sur la migration additive (NOT NULL DEFAULT FALSE) pour
+    # que base fraîche (create_all) et base migrée aient le même DDL.
+    recurring: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=false(), default=False
+    )
     priority: Mapped[int] = mapped_column(Integer, default=0)
 
     model: Mapped[Model] = relationship(back_populates="characteristics")

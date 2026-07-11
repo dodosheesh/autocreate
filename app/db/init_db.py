@@ -53,7 +53,7 @@ _ADDITIVE_COLUMNS = [
     ("generation_jobs", "compose_shortfall", "JSON DEFAULT '{}'"),
     ("generation_jobs", "error", "TEXT"),
     ("users", "token_version", "INTEGER DEFAULT 0"),
-    ("model_characteristics", "recurring", "BOOLEAN DEFAULT FALSE"),
+    ("model_characteristics", "recurring", "BOOLEAN NOT NULL DEFAULT FALSE"),
 ]
 
 
