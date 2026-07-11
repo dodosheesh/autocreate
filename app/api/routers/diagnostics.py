@@ -32,6 +32,19 @@ def _is_placeholder(url: str | None) -> bool:
     return (not u) or any(tok in u for tok in _PLACEHOLDER_TOKENS)
 
 
+def _probe_url(url: str) -> int | str:
+    """Vérifie qu'une image est RÉELLEMENT téléchargeable publiquement (comme le
+    ferait kie.ai). Renvoie le code HTTP, ou 'unreachable' si l'appel échoue."""
+    import httpx
+
+    try:
+        r = httpx.get(url, timeout=6, follow_redirects=True,
+                      headers={"Range": "bytes=0-0"})
+        return r.status_code
+    except Exception:
+        return "unreachable"
+
+
 def _broker_ok() -> bool:
     try:
         conn = celery_app.connection()
@@ -75,6 +88,21 @@ def diagnostics(db: Session = Depends(get_db), user: User = Depends(current_user
         urls = db.scalars(select(col).where(model.tenant_id == tid)).all()
         broken[label] = sum(_is_placeholder(u) for u in urls)
 
+    # --- reachability RÉELLE d'un échantillon d'images (comme kie.ai le ferait) ---
+    # « internal error » de kie.ai vient souvent d'images non téléchargeables
+    # (bucket R2 pas réellement public). On teste 1 URL par type.
+    samples: dict[str, str] = {}
+    if faces:
+        samples["model_face"] = faces[0]
+    if char_urls:
+        samples["characteristic"] = char_urls[0]
+    for label, model, col in (("outfit", Outfit, Outfit.image_url), ("background", Background, Background.image_url)):
+        u = db.scalar(select(col).where(model.tenant_id == tid).limit(1))
+        if u:
+            samples[label] = u
+    reachable = {label: _probe_url(url) for label, url in samples.items()}
+    all_ok = all(isinstance(v, int) and 200 <= v < 400 for v in reachable.values())
+
     workers = _workers()
     return {
         "broker_reachable": _broker_ok(),
@@ -82,4 +110,6 @@ def diagnostics(db: Session = Depends(get_db), user: User = Depends(current_user
         "worker_names": workers,
         "broken_reference_urls": broken,
         "broken_total": sum(broken.values()),
+        "image_reachability": reachable,  # code HTTP par type (200 = ok)
+        "images_public_ok": all_ok,
     }
