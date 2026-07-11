@@ -37,6 +37,18 @@
   @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
   .card { background: var(--panel); border: 1px solid var(--border);
           border-radius: 12px; padding: 18px; margin-bottom: 20px; }
+  .subpanel { border: 1px solid var(--border); border-radius: 10px;
+              padding: 14px; margin: 6px 0 14px; background: var(--panel2); }
+  .subpanel.bulk { border-color: var(--accent);
+                   background: linear-gradient(180deg, rgba(124,92,255,.10), rgba(124,92,255,.02)); }
+  .subpanel .ph { display: flex; align-items: center; gap: 8px; font-weight: 700;
+                  font-size: 13px; color: var(--text); margin-bottom: 4px; }
+  .subpanel .ph .tag { background: var(--accent); color: #fff; font-size: 10px;
+                       font-weight: 700; padding: 2px 7px; border-radius: 20px;
+                       text-transform: uppercase; letter-spacing: .05em; }
+  .subpanel .ph.plain .tag { background: var(--panel); color: var(--muted);
+                             border: 1px solid var(--border); }
+  .subpanel .sub-hint { color: var(--muted); font-size: 12px; margin: 0 0 4px; }
   label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
   select, input[type=text], input[type=number], input[type=url], input[type=password], input[type=file], textarea {
     width: 100%; background: var(--panel2); color: var(--text);
@@ -175,30 +187,36 @@
 
     <div class="card">
       <h2><span class="step">4</span>Banques visuelles</h2>
-      <div class="hint"><b>Import en masse avec auto-description</b> — sélectionne plusieurs images, une
-        phrase les décrit automatiquement (vision). Le suffixe est ajouté à la fin de chaque description.</div>
-      <div class="row" style="margin-top:0">
-        <div><label>Outfits — images (multiple)</label><input type="file" id="o-bulk" accept="image/*" multiple></div>
-        <div><label>Suffixe ajouté à chaque outfit (optionnel)</label><input type="text" id="o-suffix" placeholder="ex : with …"></div>
-      </div>
-      <button class="btn small" id="o-bulk-btn" style="margin-top:8px">Importer + décrire les outfits</button>
-      <div class="row">
-        <div><label>Backgrounds — images (multiple)</label><input type="file" id="b-bulk" accept="image/*" multiple></div>
-        <div><label>Suffixe (optionnel)</label><input type="text" id="b-suffix" placeholder="—"></div>
-      </div>
-      <button class="btn small" id="b-bulk-btn" style="margin-top:8px">Importer + décrire les backgrounds</button>
 
-      <div class="hint" style="margin-top:16px">Ou ajout manuel unitaire :</div>
-      <div class="row" style="margin-top:0">
-        <div><label>Outfit — image</label><input type="file" id="o-photo" accept="image/*"></div>
-        <div><label>Tags/description (virgules)</label><input type="text" id="o-tags" placeholder="red dress, heels"></div>
+      <div class="subpanel bulk">
+        <div class="ph"><span class="tag">Recommandé</span>📦 Import en masse (plusieurs images d'un coup)</div>
+        <div class="sub-hint">Sélectionne <b>plusieurs</b> images à la fois : chacune est décrite automatiquement
+          par la vision. Le suffixe est ajouté à la fin de chaque description.</div>
+        <div class="row" style="margin-top:8px">
+          <div><label>Outfits — glisse/sélectionne plusieurs images</label><input type="file" id="o-bulk" accept="image/*" multiple></div>
+          <div><label>Suffixe ajouté à chaque outfit (optionnel)</label><input type="text" id="o-suffix" placeholder="ex : with …"></div>
+        </div>
+        <button class="btn small" id="o-bulk-btn" style="margin-top:8px">Importer + décrire les outfits</button>
+        <div class="row">
+          <div><label>Backgrounds — glisse/sélectionne plusieurs images</label><input type="file" id="b-bulk" accept="image/*" multiple></div>
+          <div><label>Suffixe (optionnel)</label><input type="text" id="b-suffix" placeholder="—"></div>
+        </div>
+        <button class="btn small" id="b-bulk-btn" style="margin-top:8px">Importer + décrire les backgrounds</button>
       </div>
-      <button class="btn small" id="o-add" style="margin-top:8px">Ajouter l'outfit</button>
-      <div class="row">
-        <div><label>Background — image</label><input type="file" id="b-photo" accept="image/*"></div>
-        <div><label>Tags/description (virgules)</label><input type="text" id="b-tags" placeholder="beach at sunset"></div>
+
+      <div class="subpanel">
+        <div class="ph plain"><span class="tag">Manuel</span>Ajout unitaire (1 image + description à la main)</div>
+        <div class="row" style="margin-top:8px">
+          <div><label>Outfit — image</label><input type="file" id="o-photo" accept="image/*"></div>
+          <div><label>Tags/description (virgules)</label><input type="text" id="o-tags" placeholder="red dress, heels"></div>
+        </div>
+        <button class="btn small" id="o-add" style="margin-top:8px">Ajouter l'outfit</button>
+        <div class="row">
+          <div><label>Background — image</label><input type="file" id="b-photo" accept="image/*"></div>
+          <div><label>Tags/description (virgules)</label><input type="text" id="b-tags" placeholder="beach at sunset"></div>
+        </div>
+        <button class="btn small" id="b-add" style="margin-top:8px">Ajouter le background</button>
       </div>
-      <button class="btn small" id="b-add" style="margin-top:8px">Ajouter le background</button>
 
       <div class="hint" style="margin-top:16px">Outfits enregistrés</div>
       <div class="list-wrap" id="list-outfits"></div>
