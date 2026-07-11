@@ -47,8 +47,61 @@ class VisionError(RuntimeError):
     pass
 
 
+def _anthropic_content(content_parts: list[dict]) -> list[dict]:
+    """Traduit les content-parts façon OpenAI (text / image_url) vers le format
+    Messages d'Anthropic (text / image avec source url ou base64)."""
+    out: list[dict] = []
+    for part in content_parts:
+        if part.get("type") == "text":
+            out.append({"type": "text", "text": part.get("text", "")})
+        elif part.get("type") == "image_url":
+            url = part["image_url"]["url"]
+            if url.startswith("data:"):
+                header, _, b64 = url.partition(",")
+                media_type = header[5:].split(";")[0] or "image/jpeg"
+                out.append({
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": media_type, "data": b64},
+                })
+            else:
+                out.append({"type": "image", "source": {"type": "url", "url": url}})
+    return out
+
+
+def _call_anthropic(system: str, content_parts: list[dict], settings) -> str:
+    resp = httpx.post(
+        f"{settings.anthropic_base_url.rstrip('/')}/v1/messages",
+        headers={
+            "x-api-key": settings.anthropic_api_key,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": settings.anthropic_vision_model,
+            "max_tokens": 1024,
+            "system": system,
+            "messages": [{"role": "user", "content": _anthropic_content(content_parts)}],
+        },
+        timeout=180,
+    )
+    if resp.status_code != 200:
+        raise VisionError(f"Claude vision HTTP {resp.status_code} : {resp.text[:500]}")
+    data = resp.json()
+    try:
+        blocks = data["content"]
+    except (KeyError, TypeError) as exc:
+        raise VisionError(f"Réponse Claude inattendue : {str(data)[:500]}") from exc
+    text = " ".join(b.get("text", "") for b in blocks if b.get("type") == "text").strip()
+    if not text:
+        raise VisionError("Claude a renvoyé un texte vide")
+    return text
+
+
 def _call_vision(system: str, content_parts: list[dict]) -> str:
     settings = get_settings()
+    # Claude prioritaire si une clé Anthropic est fournie ; sinon kie.ai/Gemini.
+    if settings.anthropic_api_key:
+        return _call_anthropic(system, content_parts, settings)
     if not settings.kie_api_key:
         raise VisionError("KIE_API_KEY manquant")
     body = {

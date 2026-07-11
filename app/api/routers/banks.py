@@ -5,10 +5,12 @@ le moteur ne fait que le stocker et le tirer au sort à la composition.
 """
 
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from typing import Type
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api import schemas
@@ -24,10 +26,13 @@ from app.db.models import (
     User,
     VoiceProfile,
 )
+from app.integrations.vision import describe_image as _vision_describe
 from app.services.template_library import load_default_templates
-from app.workers.picture_tasks import describe_asset, reverse_engineer_video
+from app.workers.picture_tasks import reverse_engineer_video
 
 router = APIRouter(prefix="/api/banks", tags=["banks"])
+
+_ASSET_MODELS = {"outfit": Outfit, "background": Background}
 
 
 @router.post("/templates/load-defaults")
@@ -64,9 +69,42 @@ def reverse_video(
     return tmpl
 
 
+def _describe_rows(kind: str, db_model, rows, suffix: str, db: Session) -> None:
+    """Décrit chaque asset via la vision (appels concurrents hors session DB),
+    puis écrit tags+status. Synchrone : aucun worker Celery requis. Un échec
+    par image passe cette ligne en `failed` sans bloquer les autres."""
+    suffix = (suffix or "").strip()
+    targets = [(str(r.id), r.image_url) for r in rows]
+    if not targets:
+        return
+
+    def work(target):
+        rid, url = target
+        try:
+            desc = _vision_describe(url, kind)
+            if suffix:
+                desc = f"{desc} {suffix}"
+            return rid, desc, None
+        except Exception as exc:  # réseau/HTTP vision → cette image échoue seule
+            return rid, None, str(exc)[:500]
+
+    with ThreadPoolExecutor(max_workers=min(6, len(targets))) as pool:
+        results = list(pool.map(work, targets))
+
+    for rid, desc, err in results:
+        row = db.get(db_model, uuid.UUID(rid))
+        if row is None:  # supprimé entre-temps
+            continue
+        if desc:
+            row.tags = [desc]
+            row.status = "ready"
+        else:
+            row.status = "failed"
+    db.commit()  # expire_on_commit=False → les objets `rows` gardent leurs valeurs
+
+
 def _bulk_describe(kind: str, db_model, payload, db, user):
-    """Crée N assets en statut pending et lance l'auto-description vision de
-    chacun (+ suffixe fourni par l'utilisateur)."""
+    """Crée N assets puis les décrit immédiatement (vision synchrone + suffixe)."""
     created = []
     for url in payload.image_urls:
         row = db_model(tenant_id=user.tenant_id, image_url=url, tags=[], weight=payload.weight, status="pending")
@@ -75,7 +113,7 @@ def _bulk_describe(kind: str, db_model, payload, db, user):
     db.commit()
     for row in created:
         db.refresh(row)
-        describe_asset.delay(kind, str(row.id), payload.suffix)
+    _describe_rows(kind, db_model, created, payload.suffix, db)
     return created
 
 
@@ -95,6 +133,29 @@ def bulk_describe_backgrounds(
     user: User = Depends(current_user),
 ):
     return _bulk_describe("background", Background, payload, db, user)
+
+
+@router.post("/assets/describe-pending")
+def describe_pending_assets(
+    payload: schemas.DescribePendingRequest | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """Relance la description des outfits/backgrounds restés en `pending`
+    (ex. importés avant que la description soit synchrone). Synchrone."""
+    out: dict[str, int] = {}
+    for kind, db_model in _ASSET_MODELS.items():
+        rows = db.scalars(
+            select(db_model).where(
+                db_model.tenant_id == user.tenant_id, db_model.status == "pending"
+            )
+        ).all()
+        suffix = ""
+        if payload is not None:
+            suffix = payload.outfit_suffix if kind == "outfit" else payload.background_suffix
+        _describe_rows(kind, db_model, rows, suffix, db)
+        out[kind] = len(rows)
+    return {"described": out}
 
 
 def _register(

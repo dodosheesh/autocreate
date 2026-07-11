@@ -87,6 +87,8 @@ substitué → `Invalid value for '--port'`). Réglages du service :
   KIE_WEBHOOK_SECRET    = (python -c "import secrets;print(secrets.token_hex(24))")
   PUBLIC_BASE_URL       = https://<ton-service-web>.up.railway.app
   KIE_API_KEY           = sk-...
+  ANTHROPIC_API_KEY     = sk-ant-...    # optionnel : décrit/analyse les images avec Claude
+                                        # (sinon Gemini via kie.ai). cf. « Analyse d'images ».
   ELEVENLABS_API_KEY    = ...           # si voice-swap
   R2_ACCOUNT_ID         = ...
   R2_ACCESS_KEY_ID      = ...
@@ -105,7 +107,7 @@ substitué → `Invalid value for '--port'`). Réglages du service :
 > `DATABASE_URL` fourni par Railway commence par `postgresql://` ; le code le
 > normalise automatiquement en `postgresql+psycopg://` — rien à faire.
 
-### 3. Service worker (Celery + beat)
+### 3. Service worker (Celery + beat) — requis pour la GÉNÉRATION
 **New → GitHub Repo → même repo** (deuxième service, même image).
 - **Settings → Custom Start Command** :
   ```
@@ -114,6 +116,12 @@ substitué → `Invalid value for '--port'`). Réglages du service :
 - **Settings → Healthcheck** : aucun (le worker ne sert pas de HTTP).
 - **Variables** : les mêmes que le web (le plus simple : *Shared Variables* au
   niveau projet pour tout ce qui est commun, chaque service les hérite).
+
+> ⚠️ **Sans ce service worker, la génération vidéo/photo reste bloquée** (les
+> tâches Celery s'empilent dans Redis sans être consommées). L'auto-description
+> des outfits/backgrounds, elle, tourne **en synchrone dans la requête web** :
+> elle fonctionne même sans worker (bouton « Décrire les éléments en attente »
+> pour rattraper d'anciens imports restés en `pending`).
 
 ### 4. Premier login
 Au premier déploiement, le pré-déploiement `init_db` crée les tables, seed la
@@ -126,6 +134,21 @@ les **logs de déploiement du service web**, connecte-toi sur
 Les appels `createTask` envoient automatiquement `PUBLIC_BASE_URL/api/webhooks/kie?secret=KIE_WEBHOOK_SECRET`
 comme `callBackUrl`. Aucune config côté kie.ai : vérifie juste que `PUBLIC_BASE_URL`
 est bien l'URL publique https et que `KIE_WEBHOOK_SECRET` est identique sur les deux services.
+
+## Analyse d'images (auto-description & reverse-engineering)
+
+Deux fournisseurs, sélectionnés automatiquement par la clé présente :
+
+- **Claude (Anthropic)** — dès que `ANTHROPIC_API_KEY` est fourni, l'analyse
+  d'images passe par Claude (Messages API, modèle `ANTHROPIC_VISION_MODEL`,
+  défaut `claude-haiku-4-5-20251001`). C'est le chemin recommandé (qualité,
+  fiabilité).
+- **Gemini via kie.ai** — sinon, chemin par défaut (`KIE_VISION_MODEL` /
+  `KIE_VISION_BASE_URL`), réutilise la clé kie.ai existante.
+
+L'auto-description des outfits/backgrounds importés en masse est **synchrone**
+(elle tourne dans la requête web, appels vision concurrents) : aucune dépendance
+au worker Celery, résultat immédiat (`ready`/`failed` par image).
 
 ## Utilisation Phase 1
 

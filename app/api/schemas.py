@@ -117,6 +117,14 @@ class BulkDescribeRequest(BaseModel):
     weight: float = Field(default=1.0, ge=0)
 
 
+class DescribePendingRequest(BaseModel):
+    """Relance la description des assets restés en `pending`. Suffixes optionnels
+    (le suffixe d'origine n'est pas mémorisé sur la ligne)."""
+
+    outfit_suffix: str = ""
+    background_suffix: str = ""
+
+
 class DialogueLineCreate(BaseModel):
     category: str
     raw_text: str = Field(description="Lignes taggées [H]/[F]/[beat], ordre chronologique")

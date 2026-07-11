@@ -1,13 +1,14 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api import schemas
 from app.api.deps import current_user
 from app.api.scope import owned, tenant_query
 from app.db.base import get_db
-from app.db.models import Model, ModelCharacteristic, User
+from app.db.models import GenerationJob, Model, ModelCharacteristic, PictureJob, User
 
 router = APIRouter(prefix="/api/models", tags=["models"])
 
@@ -42,6 +43,20 @@ def delete_model(
     model_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
     model = owned(db, Model, model_id, user)
+    # Les jobs vidéo/photo référencent le model via une FK non-nullable sans
+    # cascade : on refuse la suppression (409) plutôt que de laisser Postgres
+    # lever une IntegrityError (500) ou d'effacer silencieusement l'historique.
+    n_jobs = (db.scalar(
+        select(func.count()).select_from(GenerationJob).where(GenerationJob.model_id == model_id)
+    ) or 0) + (db.scalar(
+        select(func.count()).select_from(PictureJob).where(PictureJob.model_id == model_id)
+    ) or 0)
+    if n_jobs:
+        raise HTTPException(
+            409,
+            f"Ce model est utilisé par {n_jobs} job(s) de génération : "
+            "supprime ces jobs d'abord, ou conserve le model.",
+        )
     for charac in list(model.characteristics):
         db.delete(charac)
     db.delete(model)

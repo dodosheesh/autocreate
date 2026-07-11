@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     # aucune valeur devinée, l'utilisateur pointe le modèle vision de son choix.
     kie_vision_model: str = "google/gemini-3-pro"
     kie_vision_base_url: str = "https://api.kie.ai/gemini-3-pro/v1"
+    # Vision par Claude (Anthropic) : si ANTHROPIC_API_KEY est fourni, l'analyse
+    # d'images (auto-description, reverse-engineering) passe par Claude au lieu de
+    # kie.ai/Gemini. Sinon on garde le chemin kie.ai. Rien n'est deviné en dur.
+    anthropic_api_key: str = ""
+    anthropic_base_url: str = "https://api.anthropic.com"
+    anthropic_vision_model: str = "claude-haiku-4-5-20251001"
     # Nombre max d'images de référence acceptées par nano-banana-edit
     nano_banana_max_refs: int = 10
 

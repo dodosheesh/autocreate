@@ -62,16 +62,21 @@ def reverse_engineer_prompt(self, prompt_id: str) -> None:
         text = _vision_reverse(source_url, model_desc)
         with db_session() as db:
             row = db.get(PicturePrompt, _pk(prompt_id))
+            if row is None or row.status != PromptStatus.PENDING:
+                return  # supprimé ou déjà traité pendant l'appel vision
             row.prompt_text = text
             row.status = PromptStatus.READY
     except Exception as exc:
-        with db_session() as db:
-            row = db.get(PicturePrompt, _pk(prompt_id))
-            if row:
-                row.status = PromptStatus.FAILED
-                row.error = str(exc)[:2000]
+        # Re-tenter tant qu'il reste des essais (statut laissé à "pending"),
+        # ne marquer "failed" qu'une fois épuisé — sinon le garde d'entrée
+        # rendrait chaque ré-essai no-op.
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)
+        with db_session() as db:
+            row = db.get(PicturePrompt, _pk(prompt_id))
+            if row is not None and row.status == PromptStatus.PENDING:
+                row.status = PromptStatus.FAILED
+                row.error = str(exc)[:2000]
 
 
 _ASSET_MODELS = {"outfit": Outfit, "background": Background}
@@ -95,15 +100,20 @@ def describe_asset(self, kind: str, asset_id: str, suffix: str = "") -> None:
             desc = f"{desc} {suffix.strip()}"
         with db_session() as db:
             row = db.get(db_model, _pk(asset_id))
+            if row is None or row.status != "pending":
+                return  # supprimé ou déjà traité pendant l'appel vision
             row.tags = [desc]
             row.status = "ready"
     except Exception as exc:
-        with db_session() as db:
-            row = db.get(db_model, _pk(asset_id))
-            if row:
-                row.status = "failed"
+        # On re-tente TANT QU'il reste des essais, en laissant le statut à
+        # "pending" : sinon le garde d'entrée (status != pending) transformerait
+        # chaque ré-essai en no-op. On ne marque "failed" qu'une fois épuisé.
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)
+        with db_session() as db:
+            row = db.get(db_model, _pk(asset_id))
+            if row is not None and row.status == "pending":
+                row.status = "failed"
 
 
 @celery_app.task(bind=True, max_retries=2)
@@ -127,16 +137,18 @@ def reverse_engineer_video(self, template_id: str) -> None:
 
         with db_session() as db:
             tmpl = db.get(PromptTemplate, _pk(template_id))
+            if tmpl is None or tmpl.status != "pending":
+                return  # supprimé ou déjà traité pendant le traitement
             tmpl.template_text = template_text
             tmpl.status = "ready"
     except Exception as exc:
-        with db_session() as db:
-            tmpl = db.get(PromptTemplate, _pk(template_id))
-            if tmpl:
-                tmpl.status = "failed"
-                tmpl.error = str(exc)[:2000]
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)
+        with db_session() as db:
+            tmpl = db.get(PromptTemplate, _pk(template_id))
+            if tmpl is not None and tmpl.status == "pending":
+                tmpl.status = "failed"
+                tmpl.error = str(exc)[:2000]
 
 
 def _picture_pools(db, tenant_id: str) -> tuple[list[Option], list[Option]]:

@@ -218,7 +218,11 @@
         <button class="btn small" id="b-add" style="margin-top:8px">Ajouter le background</button>
       </div>
 
-      <div class="hint" style="margin-top:16px">Outfits enregistrés</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:16px;flex-wrap:wrap">
+        <div class="hint" style="margin:0">Éléments enregistrés</div>
+        <button class="btn small ghost" id="describe-pending-btn" style="margin-left:auto">🔄 Décrire les éléments en attente</button>
+      </div>
+      <div class="hint" style="margin-top:10px">Outfits enregistrés</div>
       <div class="list-wrap" id="list-outfits"></div>
       <div class="hint" style="margin-top:12px">Backgrounds enregistrés</div>
       <div class="list-wrap" id="list-backgrounds"></div>
@@ -558,16 +562,31 @@ async function bulkDescribe(kind, filesSel, suffixSel, btnSel) {
       urls.push((await r.json()).url);
     }
     const endpoint = kind === "outfit" ? "outfits" : "backgrounds";
-    await api(`/banks/${endpoint}/bulk-describe`, {method: "POST",
+    const rows = await api(`/banks/${endpoint}/bulk-describe`, {method: "POST",
       body: JSON.stringify({image_urls: urls, suffix: $(suffixSel).value})});
     $(filesSel).value = "";
-    toast(urls.length + " image(s) importée(s) — description auto en cours");
+    const ok = rows.filter(r => r.status === "ready").length;
+    const ko = rows.length - ok;
+    toast(`${ok} décrit(s)${ko ? ` · ${ko} en échec (voir la clé vision)` : ""}`);
     loadAllBanks();
   } catch (e) { toast("Import : " + e.message); }
   $(btnSel).disabled = false;
 }
 $("#o-bulk-btn").addEventListener("click", () => bulkDescribe("outfit", "#o-bulk", "#o-suffix", "#o-bulk-btn"));
 $("#b-bulk-btn").addEventListener("click", () => bulkDescribe("background", "#b-bulk", "#b-suffix", "#b-bulk-btn"));
+
+async function describePending() {
+  const btn = $("#describe-pending-btn");
+  btn.disabled = true; btn.textContent = "Description en cours…";
+  try {
+    const r = await api("/banks/assets/describe-pending", {method: "POST", body: "{}"});
+    const n = (r.described.outfit || 0) + (r.described.background || 0);
+    toast(n ? `${n} élément(s) traité(s)` : "Aucun élément en attente");
+    loadAllBanks();
+  } catch (e) { toast("Description : " + e.message); }
+  btn.disabled = false; btn.textContent = "🔄 Décrire les éléments en attente";
+}
+$("#describe-pending-btn").addEventListener("click", describePending);
 
 // --- listes de catégories ---
 $("#cats").innerHTML = CATEGORIES.map(c =>
