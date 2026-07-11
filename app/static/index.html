@@ -93,6 +93,17 @@
                   overflow: hidden; margin: 6px 0; }
   .item .actions { display: flex; gap: 6px; margin-top: 6px; }
   .muted { color: var(--muted); } .mono { font-variant-numeric: tabular-nums; }
+  .list-wrap { margin-top: 12px; max-height: 240px; overflow: auto;
+               border: 1px solid var(--border); border-radius: 8px; }
+  .list-wrap:empty { display: none; }
+  .list-row { display: flex; justify-content: space-between; align-items: center; gap: 8px;
+              padding: 7px 10px; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .list-row:last-child { border-bottom: 0; }
+  .list-row .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .list-row .x { color: var(--err); cursor: pointer; background: none; border: 0;
+                 font-size: 15px; padding: 0 4px; flex: none; }
+  .list-row img { width: 34px; height: 34px; object-fit: cover; border-radius: 6px; flex: none; }
+  .list-row .grow { display: flex; align-items: center; gap: 8px; min-width: 0; }
   #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
            background: var(--panel2); border: 1px solid var(--accent); border-radius: 10px;
            padding: 10px 18px; display: none; z-index: 30; max-width: 90vw; }
@@ -127,6 +138,7 @@
         <div><label>Photo visage (référence de consistance)</label><input type="file" id="m-face" accept="image/*"></div>
       </div>
       <button class="btn small" id="m-create" style="margin-top:10px">Créer la model</button>
+      <div class="list-wrap" id="list-models"></div>
     </div>
 
     <div class="card">
@@ -140,6 +152,7 @@
       <label>Comment le décrire dans le prompt (injection hint, en anglais)</label>
       <input type="text" id="c-hint" placeholder="a delicate floral tattoo on her left forearm">
       <button class="btn small" id="c-add" style="margin-top:10px">Ajouter la caractéristique</button>
+      <div class="list-wrap" id="list-characteristics"></div>
     </div>
 
     <div class="card">
@@ -157,21 +170,40 @@
         <div><label>ElevenLabs voice_id</label><input type="text" id="v-id" placeholder="21m00…"></div>
       </div>
       <button class="btn small" id="v-add" style="margin-top:10px">Ajouter la voix</button>
+      <div class="list-wrap" id="list-voices"></div>
     </div>
 
     <div class="card">
       <h2><span class="step">4</span>Banques visuelles</h2>
-      <div class="hint">Outfits et décors sont mélangés aléatoirement dans les générations. Uploade directement (→ R2).</div>
+      <div class="hint"><b>Import en masse avec auto-description</b> — sélectionne plusieurs images, une
+        phrase les décrit automatiquement (vision). Le suffixe est ajouté à la fin de chaque description.</div>
+      <div class="row" style="margin-top:0">
+        <div><label>Outfits — images (multiple)</label><input type="file" id="o-bulk" accept="image/*" multiple></div>
+        <div><label>Suffixe ajouté à chaque outfit (optionnel)</label><input type="text" id="o-suffix" placeholder="ex : with …"></div>
+      </div>
+      <button class="btn small" id="o-bulk-btn" style="margin-top:8px">Importer + décrire les outfits</button>
+      <div class="row">
+        <div><label>Backgrounds — images (multiple)</label><input type="file" id="b-bulk" accept="image/*" multiple></div>
+        <div><label>Suffixe (optionnel)</label><input type="text" id="b-suffix" placeholder="—"></div>
+      </div>
+      <button class="btn small" id="b-bulk-btn" style="margin-top:8px">Importer + décrire les backgrounds</button>
+
+      <div class="hint" style="margin-top:16px">Ou ajout manuel unitaire :</div>
       <div class="row" style="margin-top:0">
         <div><label>Outfit — image</label><input type="file" id="o-photo" accept="image/*"></div>
-        <div><label>Tags (virgules)</label><input type="text" id="o-tags" placeholder="red dress, heels"></div>
+        <div><label>Tags/description (virgules)</label><input type="text" id="o-tags" placeholder="red dress, heels"></div>
       </div>
-      <button class="btn small" id="o-add" style="margin-top:10px">Ajouter l'outfit</button>
+      <button class="btn small" id="o-add" style="margin-top:8px">Ajouter l'outfit</button>
       <div class="row">
         <div><label>Background — image</label><input type="file" id="b-photo" accept="image/*"></div>
-        <div><label>Tags (virgules)</label><input type="text" id="b-tags" placeholder="beach at sunset"></div>
+        <div><label>Tags/description (virgules)</label><input type="text" id="b-tags" placeholder="beach at sunset"></div>
       </div>
-      <button class="btn small" id="b-add" style="margin-top:10px">Ajouter le background</button>
+      <button class="btn small" id="b-add" style="margin-top:8px">Ajouter le background</button>
+
+      <div class="hint" style="margin-top:16px">Outfits enregistrés</div>
+      <div class="list-wrap" id="list-outfits"></div>
+      <div class="hint" style="margin-top:12px">Backgrounds enregistrés</div>
+      <div class="list-wrap" id="list-backgrounds"></div>
     </div>
 
     <div class="card">
@@ -188,6 +220,7 @@
       <label>Texte du template</label>
       <input type="text" id="t-text" placeholder="A woman {outfit}, {background}, {characteristics}. {dialogue}">
       <button class="btn small" id="t-add" style="margin-top:10px">Ajouter le template</button>
+      <div class="list-wrap" id="list-templates"></div>
     </div>
 
     <div class="card">
@@ -204,6 +237,10 @@
       <label style="margin-top:12px">Caption (barre de texte Snapchat)</label>
       <input type="text" id="cap-text" placeholder="légende…">
       <button class="btn small" id="cap-add" style="margin-top:10px">Ajouter la caption</button>
+      <div class="hint" style="margin-top:16px">Dialogues enregistrés</div>
+      <div class="list-wrap" id="list-dialogues"></div>
+      <div class="hint" style="margin-top:12px">Captions enregistrées</div>
+      <div class="list-wrap" id="list-captions"></div>
     </div>
 
     <div class="card">
@@ -426,8 +463,93 @@ document.addEventListener("change", (e) => {
     activeModelId = e.target.value;
     document.querySelectorAll(".js-model").forEach(s => { if (s !== e.target) s.value = activeModelId; });
     refreshEstimate();
+    loadCharacteristics().catch(() => {});
   }
 });
+
+// --- listes & suppression (Réglages) ---
+function renderList(sel, items, rowFn) {
+  const el = $(sel); if (!el) return;
+  el.innerHTML = items.map(rowFn).join("");
+}
+function delRow(inner, id, fn) {
+  return `<div class="list-row"><span class="grow"><span class="lbl">${inner}</span></span>`
+    + `<button class="x" onclick="${fn}('${id}')" title="supprimer">✕</button></div>`;
+}
+function imgRow(o, fn) {
+  const desc = (o.tags || []).join(", ");
+  return `<div class="list-row"><span class="grow"><img src="${esc(safeUrl(o.image_url))}">`
+    + `<span class="lbl">${badge(o.status || "ready")} ${esc(desc || "(sans description)")}</span></span>`
+    + `<button class="x" onclick="${fn}('${o.id}')" title="supprimer">✕</button></div>`;
+}
+async function loadModelsList() {
+  const models = await api("/models");
+  renderList("#list-models", models, m => delRow(esc(m.name), m.id, "delModel"));
+}
+async function loadCharacteristics() {
+  if (!getModel()) { $("#list-characteristics").innerHTML = ""; return; }
+  const m = await api("/models/" + getModel());
+  renderList("#list-characteristics", m.characteristics || [], c =>
+    `<div class="list-row"><span class="grow"><img src="${esc(safeUrl(c.reference_image_url))}">`
+    + `<span class="lbl">${esc(c.label)} — ${esc(c.injection_hint)}</span></span>`
+    + `<button class="x" onclick="delChar('${c.id}')">✕</button></div>`);
+}
+async function loadBankList(kind, sel, rowFn) {
+  renderList(sel, await api("/banks/" + kind), rowFn);
+}
+function loadAllBanks() {
+  loadBankList("voices", "#list-voices", v => delRow(`[${esc(v.tag)}] ${esc(v.label)} · ${esc(v.elevenlabs_voice_id)}`, v.id, "delVoice")).catch(() => {});
+  loadBankList("outfits", "#list-outfits", o => imgRow(o, "delOutfit")).catch(() => {});
+  loadBankList("backgrounds", "#list-backgrounds", b => imgRow(b, "delBackground")).catch(() => {});
+  loadBankList("templates", "#list-templates", t => delRow(`${badge(t.status || "ready")} [${esc(t.category)}] ${esc((t.template_text || "").slice(0, 60))}`, t.id, "delTemplate")).catch(() => {});
+  loadBankList("dialogues", "#list-dialogues", d => delRow(`[${esc(d.category)}] ${esc((d.raw_text || "").replace(/\n/g, " / ").slice(0, 60))}`, d.id, "delDialogue")).catch(() => {});
+  loadBankList("captions", "#list-captions", c => delRow(`[${esc(c.category)}] ${esc((c.text || "").slice(0, 60))}`, c.id, "delCaption")).catch(() => {});
+}
+async function delBank(kind, id, after) {
+  try { await api(`/banks/${kind}/${id}`, {method: "DELETE"}); after(); }
+  catch (e) { toast(e.message); }
+}
+window.delModel = async (id) => {
+  try { await api("/models/" + id, {method: "DELETE"}); activeModelId = "";
+    await loadModels(); loadModelsList(); loadCharacteristics(); }
+  catch (e) { toast(e.message); }
+};
+window.delChar = async (id) => {
+  try { await api(`/models/${getModel()}/characteristics/${id}`, {method: "DELETE"}); loadCharacteristics(); }
+  catch (e) { toast(e.message); }
+};
+window.delVoice = (id) => delBank("voices", id, loadAllBanks);
+window.delOutfit = (id) => delBank("outfits", id, loadAllBanks);
+window.delBackground = (id) => delBank("backgrounds", id, loadAllBanks);
+window.delTemplate = (id) => delBank("templates", id, () => { loadAllBanks(); loadTemplates(); });
+window.delDialogue = (id) => delBank("dialogues", id, loadAllBanks);
+window.delCaption = (id) => delBank("captions", id, loadAllBanks);
+
+// --- import en masse avec auto-description ---
+async function bulkDescribe(kind, filesSel, suffixSel, btnSel) {
+  const files = $(filesSel).files;
+  if (!files.length) return toast("Sélectionne des images");
+  $(btnSel).disabled = true;
+  try {
+    const urls = [];
+    for (const f of files) {
+      const fd = new FormData(); fd.append("file", f);
+      const r = await fetch("/api/uploads", {method: "POST", body: fd});
+      if (r.status === 401) { location.href = "/login"; return; }
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || "upload échoué");
+      urls.push((await r.json()).url);
+    }
+    const endpoint = kind === "outfit" ? "outfits" : "backgrounds";
+    await api(`/banks/${endpoint}/bulk-describe`, {method: "POST",
+      body: JSON.stringify({image_urls: urls, suffix: $(suffixSel).value})});
+    $(filesSel).value = "";
+    toast(urls.length + " image(s) importée(s) — description auto en cours");
+    loadAllBanks();
+  } catch (e) { toast("Import : " + e.message); }
+  $(btnSel).disabled = false;
+}
+$("#o-bulk-btn").addEventListener("click", () => bulkDescribe("outfit", "#o-bulk", "#o-suffix", "#o-bulk-btn"));
+$("#b-bulk-btn").addEventListener("click", () => bulkDescribe("background", "#b-bulk", "#b-suffix", "#b-bulk-btn"));
 
 // --- listes de catégories ---
 $("#cats").innerHTML = CATEGORIES.map(c =>
@@ -443,7 +565,7 @@ $("#m-create").addEventListener("click", async () => {
     const url = await uploadFile($("#m-face"));
     await api("/models", {method: "POST", body: JSON.stringify({name: $("#m-name").value, face_reference_url: url})});
     toast("Model créée"); $("#m-name").value = ""; $("#m-face").value = "";
-    await loadModels();
+    await loadModels(); loadModelsList();
   } catch (e) { toast("Model : " + e.message); }
 });
 $("#c-add").addEventListener("click", async () => {
@@ -453,7 +575,7 @@ $("#c-add").addEventListener("click", async () => {
     const url = await uploadFile($("#c-photo"));
     await api(`/models/${getModel()}/characteristics`, {method: "POST", body: JSON.stringify({
       label: $("#c-label").value, reference_image_url: url, injection_hint: $("#c-hint").value, always_include: true})});
-    toast("Caractéristique ajoutée"); $("#c-label").value = ""; $("#c-hint").value = ""; $("#c-photo").value = "";
+    toast("Caractéristique ajoutée"); $("#c-label").value = ""; $("#c-hint").value = ""; $("#c-photo").value = ""; loadCharacteristics();
   } catch (e) { toast("Caractéristique : " + e.message); }
 });
 async function addImageBank(endpoint, fileSel, tagsSel, label) {
@@ -461,41 +583,41 @@ async function addImageBank(endpoint, fileSel, tagsSel, label) {
     if (!$(fileSel).files[0]) return toast("Image manquante");
     const url = await uploadFile($(fileSel));
     await api(`/banks/${endpoint}`, {method: "POST", body: JSON.stringify({image_url: url, tags: tags($(tagsSel).value)})});
-    toast(label + " ajouté"); $(fileSel).value = ""; $(tagsSel).value = "";
+    toast(label + " ajouté"); $(fileSel).value = ""; $(tagsSel).value = ""; loadAllBanks();
   } catch (e) { toast(label + " : " + e.message); }
 }
 $("#o-add").addEventListener("click", () => addImageBank("outfits", "#o-photo", "#o-tags", "Outfit"));
 $("#b-add").addEventListener("click", () => addImageBank("backgrounds", "#b-photo", "#b-tags", "Background"));
 $("#load-templates").addEventListener("click", async () => {
   try { const r = await api("/banks/templates/load-defaults", {method: "POST"});
-    toast(r.added + " template(s) chargé(s)"); }
+    toast(r.added + " template(s) chargé(s)"); loadAllBanks(); }
   catch (e) { toast("Templates : " + e.message); }
 });
 $("#t-add").addEventListener("click", async () => {
   try {
     await api("/banks/templates", {method: "POST", body: JSON.stringify({
       category: $("#t-cat").value, template_text: $("#t-text").value, speaking: $("#t-speaking").checked})});
-    toast("Template ajouté"); $("#t-text").value = "";
+    toast("Template ajouté"); $("#t-text").value = ""; loadAllBanks();
   } catch (e) { toast("Template : " + e.message); }
 });
 $("#d-add").addEventListener("click", async () => {
   try {
     await api("/banks/dialogues", {method: "POST", body: JSON.stringify({
       category: $("#d-cat").value, raw_text: $("#d-text").value})});
-    toast("Dialogue ajouté"); $("#d-text").value = "";
+    toast("Dialogue ajouté"); $("#d-text").value = ""; loadAllBanks();
   } catch (e) { toast("Dialogue : " + e.message); }
 });
 $("#cap-add").addEventListener("click", async () => {
   try {
     await api("/banks/captions", {method: "POST", body: JSON.stringify({category: $("#cap-cat").value, text: $("#cap-text").value})});
-    toast("Caption ajoutée"); $("#cap-text").value = "";
+    toast("Caption ajoutée"); $("#cap-text").value = ""; loadAllBanks();
   } catch (e) { toast("Caption : " + e.message); }
 });
 $("#v-add").addEventListener("click", async () => {
   try {
     await api("/banks/voices", {method: "POST", body: JSON.stringify({
       label: $("#v-label").value, elevenlabs_voice_id: $("#v-id").value, gender: $("#v-gender").value, tag: $("#v-tag").value})});
-    toast("Voix ajoutée"); $("#v-label").value = ""; $("#v-id").value = "";
+    toast("Voix ajoutée"); $("#v-label").value = ""; $("#v-id").value = ""; loadAllBanks();
   } catch (e) { toast("Voix : " + e.message); }
 });
 
@@ -760,7 +882,8 @@ window.reviewPic = reviewPic; window.exportPicJob = exportPicJob;
 
 // --- bootstrap ---
 requireAuth().then(() => {
-  loadModels().catch(e => toast(e.message));
+  loadModels().then(() => { loadModelsList().catch(() => {}); loadCharacteristics().catch(() => {}); }).catch(e => toast(e.message));
+  loadAllBanks();
   loadJobs().catch(() => {});
   loadPrompts().catch(() => {});
   loadPicJobs().catch(() => {});
@@ -770,6 +893,7 @@ requireAuth().then(() => {
     loadJobs().catch(() => {}); if (currentJob) openJob(currentJob).catch(() => {});
     if (currentPicJob) openPicJob(currentPicJob).catch(() => {});
     loadTemplates().catch(() => {});
+    loadAllBanks();  // rafraîchit les statuts pending→ready des descriptions auto
   }, 8000);
   refreshEstimate();
 }).catch(() => {});

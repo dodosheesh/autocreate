@@ -67,6 +67,7 @@ class OutfitCreate(BaseModel):
 
 class OutfitOut(OutfitCreate):
     id: uuid.UUID
+    status: str = "ready"
 
     model_config = {"from_attributes": True}
 
@@ -104,6 +105,16 @@ class ReverseVideoRequest(BaseModel):
     source_video_url: HttpUrlStr = Field(description="Vidéo de référence uploadée (R2)")
     category: str = Field(description="Catégorie du template généré")
     speaking: bool = False
+
+
+class BulkDescribeRequest(BaseModel):
+    """Import en masse d'outfits/backgrounds avec auto-description (vision)."""
+
+    image_urls: list[HttpUrlStr] = Field(min_length=1)
+    # Suffixe FOURNI PAR L'UTILISATEUR, ajouté à la fin de chaque description
+    # générée (ex. un détail à toujours inclure). Optionnel, jamais en dur.
+    suffix: str = ""
+    weight: float = Field(default=1.0, ge=0)
 
 
 class DialogueLineCreate(BaseModel):

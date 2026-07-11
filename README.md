@@ -235,6 +235,22 @@ pour bypasser en test.
 le voice-swap. Le taux de réussite observé alimente `calibration_log` et recalibre
 automatiquement le coût effectif affiché par `/api/estimate`.
 
+## Import d'assets & gestion (Réglages)
+
+- **Auto-description en masse** : `POST /api/banks/{outfits,backgrounds}/bulk-describe`
+  `{image_urls[], suffix}` — chaque image est décrite automatiquement par le LLM
+  vision (outfit → phrase après « wearing », background → phrase de lieu), avec un
+  **suffixe fourni par l'utilisateur** ajouté en fin de chaque description (jamais
+  hardcodé). Les assets restent en `pending` (non tirés à la composition) jusqu'à
+  ce que la description soit prête.
+- **Gestion** : toutes les banques (outfits, backgrounds, templates, dialogues,
+  captions, voix) et les models/caractéristiques sont listées dans Réglages avec
+  suppression. `DELETE /api/models/{id}`, `DELETE /api/models/{id}/characteristics/{cid}`,
+  et les `DELETE /api/banks/{kind}/{id}` existants.
+- **Migrations** : `init_db` applique des migrations additives idempotentes
+  (`ALTER TABLE … ADD COLUMN IF NOT EXISTS`) au pré-déploiement → pas besoin d'Alembic
+  ni de reset pour les colonnes récemment ajoutées.
+
 ## Répliquer une vidéo (reverse-engineering vidéo)
 
 Upload d'une vidéo à répliquer → `POST /api/banks/templates/reverse-video`

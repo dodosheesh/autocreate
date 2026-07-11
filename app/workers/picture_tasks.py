@@ -21,6 +21,7 @@ from sqlalchemy import select
 from app.config import get_settings
 from app.db.base import db_session
 from app.db.models import (
+    Background,
     ItemStatus,
     JobStatus,
     Model,
@@ -33,6 +34,7 @@ from app.db.models import (
     QcStatus,
 )
 from app.integrations import kie, r2
+from app.integrations.vision import describe_image as _vision_describe
 from app.integrations.vision import reverse_engineer_prompt as _vision_reverse
 from app.integrations.vision import reverse_engineer_video_prompt as _vision_reverse_video
 from app.media.frames import extract_keyframes
@@ -68,6 +70,38 @@ def reverse_engineer_prompt(self, prompt_id: str) -> None:
             if row:
                 row.status = PromptStatus.FAILED
                 row.error = str(exc)[:2000]
+        if self.request.retries < self.max_retries:
+            raise self.retry(exc=exc)
+
+
+_ASSET_MODELS = {"outfit": Outfit, "background": Background}
+
+
+@celery_app.task(bind=True, max_retries=2)
+def describe_asset(self, kind: str, asset_id: str, suffix: str = "") -> None:
+    """Auto-description vision d'un outfit/background importé, + suffixe fourni
+    par l'utilisateur. Stocke la phrase dans `tags` et passe le statut à ready."""
+    db_model = _ASSET_MODELS.get(kind)
+    if db_model is None:
+        return
+    try:
+        with db_session() as db:
+            row = db.get(db_model, _pk(asset_id))
+            if row is None or row.status != "pending":
+                return
+            image_url = row.image_url
+        desc = _vision_describe(image_url, kind)
+        if suffix:
+            desc = f"{desc} {suffix.strip()}"
+        with db_session() as db:
+            row = db.get(db_model, _pk(asset_id))
+            row.tags = [desc]
+            row.status = "ready"
+    except Exception as exc:
+        with db_session() as db:
+            row = db.get(db_model, _pk(asset_id))
+            if row:
+                row.status = "failed"
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)
 
@@ -117,7 +151,9 @@ def _picture_pools(db, tenant_id: str) -> tuple[list[Option], list[Option]]:
     ]
     outfits = [
         outfit_option(str(o.id), o.tags, o.image_url, o.weight)
-        for o in db.scalars(select(Outfit).where(Outfit.tenant_id == tenant_id)).all()
+        for o in db.scalars(
+            select(Outfit).where(Outfit.tenant_id == tenant_id, Outfit.status == "ready")
+        ).all()
     ]
     return prompts, outfits
 

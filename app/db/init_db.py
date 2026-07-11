@@ -36,9 +36,42 @@ SEED_PRICING = [
 ]
 
 
+# Migrations additives idempotentes (pas d'Alembic pour l'instant) : colonnes
+# ajoutées APRÈS le schéma initial. create_all() crée les tables manquantes mais
+# jamais les colonnes manquantes d'une table existante → on les ajoute ici.
+# (table, colonne, définition SQL Postgres)
+_ADDITIVE_COLUMNS = [
+    ("prompt_templates", "status", "VARCHAR(16) DEFAULT 'ready'"),
+    ("prompt_templates", "source_video_url", "TEXT"),
+    ("prompt_templates", "error", "TEXT"),
+    ("outfits", "status", "VARCHAR(16) DEFAULT 'ready'"),
+    ("backgrounds", "status", "VARCHAR(16) DEFAULT 'ready'"),
+    ("job_items", "review_status", "VARCHAR(16) DEFAULT 'pending'"),
+    ("generation_jobs", "music_url", "TEXT"),
+    ("generation_jobs", "compose_shortfall", "JSON DEFAULT '{}'"),
+    ("generation_jobs", "error", "TEXT"),
+    ("users", "token_version", "INTEGER DEFAULT 0"),
+]
+
+
+def ensure_columns() -> None:
+    """Ajoute les colonnes récentes si absentes (Postgres ADD COLUMN IF NOT
+    EXISTS). No-op sur SQLite (les tests partent d'un create_all frais)."""
+    if engine.dialect.name != "postgresql":
+        return
+    from sqlalchemy import text
+
+    with engine.begin() as conn:
+        for table, column, ddl in _ADDITIVE_COLUMNS:
+            conn.execute(
+                text(f'ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {ddl}')
+            )
+
+
 def init() -> None:
     settings = get_settings()
     Base.metadata.create_all(engine)
+    ensure_columns()
     with SessionLocal() as db:
         for model, resolution, with_ref, unit, rate in SEED_PRICING:
             exists = db.scalar(

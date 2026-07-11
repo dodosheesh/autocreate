@@ -25,7 +25,7 @@ from app.db.models import (
     VoiceProfile,
 )
 from app.services.template_library import load_default_templates
-from app.workers.picture_tasks import reverse_engineer_video
+from app.workers.picture_tasks import describe_asset, reverse_engineer_video
 
 router = APIRouter(prefix="/api/banks", tags=["banks"])
 
@@ -62,6 +62,39 @@ def reverse_video(
     db.refresh(tmpl)
     reverse_engineer_video.delay(str(tmpl.id))
     return tmpl
+
+
+def _bulk_describe(kind: str, db_model, payload, db, user):
+    """Crée N assets en statut pending et lance l'auto-description vision de
+    chacun (+ suffixe fourni par l'utilisateur)."""
+    created = []
+    for url in payload.image_urls:
+        row = db_model(tenant_id=user.tenant_id, image_url=url, tags=[], weight=payload.weight, status="pending")
+        db.add(row)
+        created.append(row)
+    db.commit()
+    for row in created:
+        db.refresh(row)
+        describe_asset.delay(kind, str(row.id), payload.suffix)
+    return created
+
+
+@router.post("/outfits/bulk-describe", response_model=list[schemas.OutfitOut])
+def bulk_describe_outfits(
+    payload: schemas.BulkDescribeRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    return _bulk_describe("outfit", Outfit, payload, db, user)
+
+
+@router.post("/backgrounds/bulk-describe", response_model=list[schemas.OutfitOut])
+def bulk_describe_backgrounds(
+    payload: schemas.BulkDescribeRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    return _bulk_describe("background", Background, payload, db, user)
 
 
 def _register(

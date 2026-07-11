@@ -37,6 +37,18 @@ def get_model(
     return owned(db, Model, model_id, user)
 
 
+@router.delete("/{model_id}")
+def delete_model(
+    model_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    model = owned(db, Model, model_id, user)
+    for charac in list(model.characteristics):
+        db.delete(charac)
+    db.delete(model)
+    db.commit()
+    return {"deleted": str(model_id)}
+
+
 @router.post("/{model_id}/characteristics", response_model=schemas.CharacteristicOut)
 def add_characteristic(
     model_id: uuid.UUID,
@@ -50,3 +62,19 @@ def add_characteristic(
     db.commit()
     db.refresh(charac)
     return charac
+
+
+@router.delete("/{model_id}/characteristics/{char_id}")
+def delete_characteristic(
+    model_id: uuid.UUID,
+    char_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    owned(db, Model, model_id, user)  # 404 si le model n'est pas au tenant
+    charac = db.get(ModelCharacteristic, char_id)
+    if charac is None or charac.model_id != model_id:
+        raise HTTPException(404, "Caractéristique introuvable")
+    db.delete(charac)
+    db.commit()
+    return {"deleted": str(char_id)}

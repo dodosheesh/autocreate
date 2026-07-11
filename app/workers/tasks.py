@@ -79,11 +79,17 @@ def _build_pools(db, categories: list[str], tenant_id: str) -> dict[str, variati
     templates, dialogues et captions sont filtrés par catégorie."""
     outfits = [
         variation.outfit_option(str(o.id), o.tags, o.image_url, o.weight)
-        for o in db.scalars(select(Outfit).where(Outfit.tenant_id == tenant_id)).all()
+        for o in db.scalars(
+            select(Outfit).where(Outfit.tenant_id == tenant_id, Outfit.status == "ready")
+        ).all()
     ]
     backgrounds = [
         variation.background_option(str(b.id), b.tags, b.image_url, b.weight)
-        for b in db.scalars(select(Background).where(Background.tenant_id == tenant_id)).all()
+        for b in db.scalars(
+            select(Background).where(
+                Background.tenant_id == tenant_id, Background.status == "ready"
+            )
+        ).all()
     ]
     pools: dict[str, variation.CategoryPools] = {}
     for category in categories:

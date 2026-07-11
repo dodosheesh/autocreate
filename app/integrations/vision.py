@@ -107,6 +107,38 @@ def reverse_engineer_prompt(image_url: str, model_description: str | None = None
     )
 
 
+# Auto-description d'assets (import bulk) : phrase courte, prête à insérer dans
+# un prompt via le slot {outfit} / {background}.
+_DESCRIBE_SYSTEM = {
+    "outfit": (
+        "Describe ONLY the clothing/outfit worn in this photo, as one short English "
+        "phrase usable after 'wearing' (e.g. 'a red silk mini dress and black heels'). "
+        "Do NOT describe the person's face, body or the background. Output only the phrase."
+    ),
+    "background": (
+        "Describe ONLY the location/setting/background of this photo, as one short "
+        "English phrase (e.g. 'a neon-lit city street at night'). Do NOT describe any "
+        "person. Output only the phrase."
+    ),
+}
+
+
+def describe_image(image_url: str, mode: str) -> str:
+    """Renvoie une phrase courte décrivant l'outfit ou le background de l'image."""
+    system = _DESCRIBE_SYSTEM.get(mode)
+    if system is None:
+        raise VisionError(f"mode de description inconnu : {mode!r}")
+    text = _call_vision(
+        system,
+        [
+            {"type": "text", "text": "Describe this image as instructed."},
+            {"type": "image_url", "image_url": {"url": image_url}},
+        ],
+    )
+    # garde une phrase propre, sans guillemets ni ponctuation finale parasite
+    return text.strip().strip('"').strip().rstrip(".")
+
+
 def reverse_engineer_video_prompt(
     frame_paths: list[str], model_description: str | None = None, speaking: bool = False
 ) -> str:
