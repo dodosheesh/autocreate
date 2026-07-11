@@ -157,6 +157,74 @@ DEFAULT_TEMPLATES: list[tuple[str, str, bool]] = [
         "overlay up top. Caption: {caption}. {characteristics}.",
         False,
     ),
+    # ================= scènes à BEAT DE REVEAL / TWIST =================
+    # Structure de mise en scène pensée pour un format « build-up → révélation ».
+    # Le beat existe (montée, silence, push-in, turn-to-camera, double-take,
+    # drop de caption) ; CE QUI est révélé reste dans {dialogue}/{caption} — c'est
+    # toi qui le déposes, jamais écrit en dur ici.
+    (
+        "skit",
+        "GRWM get-ready montage building to a reveal beat, vertical 9:16. A woman {outfit} in "
+        "{background} does a snappy get-ready sequence with quick jump-cuts, then a confident "
+        "turn straight to camera on the final look for the punchline. {characteristics}. {dialogue}",
+        True,
+    ),
+    (
+        "skit",
+        "Build-up then twist, 9:16. She {outfit} sets up an ordinary moment in {background}, the "
+        "camera holds, a beat of anticipation, then a sudden push-in as she turns to lens and "
+        "delivers the line. {characteristics}. {dialogue}",
+        True,
+    ),
+    (
+        "storytelling",
+        "Storytime that lands on a reveal. A woman {outfit} in {background} speaks to camera with "
+        "a calm build, then a deliberate beat of silence and a direct-to-lens delivery of the key "
+        "line, subtle slow push-in, cinematic grade. {characteristics}. {dialogue}",
+        True,
+    ),
+    (
+        "micro_trottoir",
+        "Street interview with a reveal punchline, 9:16 handheld. A woman {outfit} answers an "
+        "off-screen interviewer in {background}, candid documentary framing, building to a beat "
+        "where she turns to camera and drops the twist line. {characteristics}. {dialogue}",
+        True,
+    ),
+    (
+        "podcast",
+        "Podcast clip that builds to a reveal. She {outfit} at the mic in {background}, relaxed "
+        "conversational build, then a direct-to-camera beat for the key line with a subtle "
+        "push-in and a knowing look. {characteristics}. {dialogue}",
+        True,
+    ),
+    (
+        "showing_body",
+        "Mirror reveal, vertical. A woman {outfit} checks her look in a mirror in {background}, "
+        "slow confident poses, then turns from the mirror straight to camera on the reveal beat, "
+        "flattering soft key light, subtle slow motion. {characteristics}.",
+        False,
+    ),
+    (
+        "snapchat",
+        "Thirst-trap to twist, 9:16. She {outfit} poses with runway confidence in {background}, "
+        "slow camera orbit, then a hard cut and a Snapchat caption bar drops the twist. "
+        "Caption: {caption}. {characteristics}.",
+        False,
+    ),
+    (
+        "snapchat",
+        "Candid 'wait for it' clip. A woman {outfit} in {background} in a mundane moment, natural "
+        "handheld, holds on the anticipation, then the Snapchat caption bar reveals the twist. "
+        "Caption: {caption}. {characteristics}.",
+        False,
+    ),
+    (
+        "snapchat",
+        "Double-take reveal, vertical, filmed candidly. A woman {outfit} in {background}; the "
+        "camera does a quick double-take and zoom on the reveal beat, raw phone-camera feel, "
+        "Snapchat caption up top. Caption: {caption}. {characteristics}.",
+        False,
+    ),
 ]
 
 
