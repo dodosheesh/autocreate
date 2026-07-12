@@ -31,8 +31,11 @@ SEED_PRICING = [
     ("seedance_2.0", "1080p", True, "per_sec", 0.31),
     # ElevenLabs Voice Changer — 1000 crédits/min ; ~0,12 $/min pay-as-you-go.
     ("elevenlabs_s2s", None, None, "per_min", 0.12),
-    # Nano Banana Pro (Gemini 3 Pro Image) — ~0,09 $/image en 1K/2K (0,12 en 4K).
+    # Nano Banana (Gemini image) — ~0,09 $/image (ancien modèle photo).
     ("nano_banana", None, None, "per_image", 0.09),
+    # Seedream Edit (ByteDance) — tarif indicatif ; resynchronise la valeur EXACTE
+    # de ton compte kie.ai dans l'éditeur de tarifs (varie selon 1K/2K/4K et Lite/Pro).
+    ("seedream", None, None, "per_image", 0.03),
 ]
 
 

@@ -317,7 +317,7 @@ class PictureJobCreate(BaseModel):
     count: int = Field(ge=1, le=200)
     image_size: ImageSize = "1:1"
     output_format: Literal["png", "jpeg"] = "png"
-    model_variant: str = "nano_banana"
+    model_variant: str = "seedream"
     budget_cap_usd: float | None = None
 
 
@@ -357,7 +357,7 @@ class PictureJobOut(BaseModel):
 
 class PictureEstimateRequest(BaseModel):
     count: int = Field(ge=1)
-    model_variant: str = "nano_banana"
+    model_variant: str = "seedream"
     qc_success_rate: float | None = Field(default=None, gt=0, le=1)
     budget_usd: float | None = None
 

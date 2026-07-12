@@ -259,13 +259,13 @@ def dispatch_nano_banana(self, item_id: str) -> None:
             if item is None or item.status != ItemStatus.COMPOSED:
                 return
             job = item.job
-            payload = kie.build_nano_banana_input(
+            payload = kie.build_seedream_input(
                 prompt=item.filled_prompt,
                 reference_image_urls=item.reference_image_urls,
                 image_size=job.image_size,
-                output_format=job.output_format,
+                resolution=get_settings().kie_seedream_resolution,
             )
-            task_id = kie.create_nano_banana_task(payload)
+            task_id = kie.create_seedream_task(payload)
             item.kie_task_id = task_id
             item.status = ItemStatus.DISPATCHED
     except Exception as exc:

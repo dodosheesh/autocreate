@@ -155,9 +155,10 @@
 
     <div class="card">
       <h2><span class="step">2</span>Caractéristiques spéciales</h2>
-      <div class="hint">Chaque média applique <b>UNE seule caractéristique tirée au hasard</b> (variété).
-        Coche <b>« tattoo / récurrent »</b> pour celles qui doivent apparaître sur <b>tous</b> les médias
-        (ex. un tatouage signature) — celles-là s'ajoutent en plus de la caractéristique aléatoire.</div>
+      <div class="hint">Photos générées avec <b>Seedream</b> : jusqu'à 10 images de référence (visage + caractéristiques).
+        Coche <b>« réf. permanente »</b> sur les caractéristiques dont l'<b>image + le prompt</b> doivent être
+        utilisés sur <b>chaque</b> génération (précision). Les caractéristiques non cochées forment un pool
+        dont <b>une seule</b> est tirée au hasard par média (variété).</div>
       <div class="row" style="margin-top:0">
         <div><label>Label</label><input type="text" id="c-label" placeholder="tatouage avant-bras gauche"></div>
         <div><label>Photo du trait</label><input type="file" id="c-photo" accept="image/*"></div>
@@ -165,7 +166,7 @@
       <label>Comment le décrire dans le prompt (injection hint, en anglais)</label>
       <input type="text" id="c-hint" placeholder="a delicate floral tattoo on her left forearm">
       <label style="margin-top:10px;display:flex;align-items:center;gap:8px;cursor:pointer">
-        <input type="checkbox" id="c-tattoo" style="width:auto"> tattoo / récurrent (présent sur <b>chaque</b> média)</label>
+        <input type="checkbox" id="c-tattoo" style="width:auto"> réf. permanente — image + prompt utilisés comme référence sur <b>chaque</b> génération</label>
       <button class="btn small" id="c-add" style="margin-top:10px">Ajouter la caractéristique</button>
       <div class="list-wrap" id="list-characteristics"></div>
     </div>
@@ -561,8 +562,8 @@ async function loadCharacteristics() {
   const m = await api("/models/" + getModel());
   renderList("#list-characteristics", m.characteristics || [], c =>
     `<div class="list-row"><span class="grow"><img src="${esc(safeUrl(c.reference_image_url))}">`
-    + `<span class="lbl">${c.recurring ? '<span class="badge b-ready">récurrent</span> ' : ''}${esc(c.label)} — ${esc(c.injection_hint)}</span></span>`
-    + `<button class="btn small ghost" style="flex:none" onclick="toggleTattoo('${m.id}','${c.id}',${c.recurring ? 'false' : 'true'})">${c.recurring ? 'rendre aléatoire' : 'marquer tattoo'}</button>`
+    + `<span class="lbl">${c.recurring ? '<span class="badge b-ready">réf. perm.</span> ' : ''}${esc(c.label)} — ${esc(c.injection_hint)}</span></span>`
+    + `<button class="btn small ghost" style="flex:none" onclick="toggleTattoo('${m.id}','${c.id}',${c.recurring ? 'false' : 'true'})">${c.recurring ? 'pool aléatoire' : 'réf. permanente'}</button>`
     + `<button class="btn small ghost" style="flex:none" onclick="editCharImg('${m.id}','${c.id}')">remplacer</button>`
     + `<button class="x" onclick="delChar('${c.id}')" title="supprimer">✕</button></div>`);
 }

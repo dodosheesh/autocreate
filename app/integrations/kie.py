@@ -105,6 +105,28 @@ def create_nano_banana_task(input_payload: dict[str, Any], callback_path: str = 
     return create_task(get_settings().kie_nano_banana_model, input_payload, callback_path)
 
 
+def build_seedream_input(
+    prompt: str,
+    reference_image_urls: list[str],
+    image_size: str = "1:1",
+    resolution: str = "2K",
+    max_images: int = 1,
+) -> dict[str, Any]:
+    """Input Seedream EDIT : édition multi-références (visage + caractéristiques
+    sélectionnées) → consistance/précision du personnage. image_urls ≤ 10."""
+    return {
+        "prompt": prompt,
+        "image_urls": reference_image_urls,
+        "image_size": image_size,
+        "image_resolution": resolution,
+        "max_images": max_images,
+    }
+
+
+def create_seedream_task(input_payload: dict[str, Any], callback_path: str = "/api/webhooks/kie") -> str:
+    return create_task(get_settings().kie_seedream_model, input_payload, callback_path)
+
+
 # Erreurs kie.ai/Google TRANSITOIRES (surcharge côté serveur) : un re-essai a de
 # bonnes chances de passer. À distinguer des refus DÉFINITIFS (contenu sensible,
 # input invalide) où re-tenter ne sert à rien.

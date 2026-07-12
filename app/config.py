@@ -34,11 +34,16 @@ class Settings(BaseSettings):
     # Seedance 2.0 Fast : 480p/720p, ~4 min/génération, moins cher. 720p suffit
     # pour des Reels. (Standard = bytedance/seedance-2, ajoute le 1080p.)
     kie_seedance_model: str = "bytedance/seedance-2-fast"
-    # Nano Banana EDIT (Gemini 2.5 Flash Image, image-to-image) : c'est le modèle
-    # qui accepte des images de référence (visage + caractéristiques) → consistance
-    # du personnage. Input : {prompt, image_urls, image_size, output_format}.
-    # (« google/nano-banana-pro » est refusé : model name not supported. Le Pro
-    # 4K/Gemini 3 utilise un autre schéma d'input `image_input` — non branché ici.)
+    # --- Modèle image (génération photo) ---
+    # Seedream (ByteDance) EDIT : image-to-image multi-références (jusqu'à 10
+    # images : visage + caractéristiques), meilleure qualité/consistance.
+    # Input : {prompt, image_urls, image_size, image_resolution, max_images}.
+    # Pour la 5.0 Pro/Lite, mets le slug EXACT de ton dashboard kie.ai dans
+    # KIE_SEEDREAM_MODEL (ex. seedream/5-pro-edit). v4-edit est confirmé et sert
+    # de défaut robuste.
+    kie_seedream_model: str = "bytedance/seedream-v4-edit"
+    kie_seedream_resolution: str = "2K"  # 1K | 2K | 4K
+    # (Ancien modèle Nano Banana, conservé pour référence — plus utilisé par défaut.)
     kie_nano_banana_model: str = "google/nano-banana-edit"
     # Modèle vision pour le reverse-engineering image → prompt (endpoint
     # OpenAI-compatible de kie.ai). Le modèle et l'URL sont configurables :
