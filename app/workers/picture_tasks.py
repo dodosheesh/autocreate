@@ -415,12 +415,23 @@ def apply_kie_picture_result(item_id: str, result: kie.KieTaskResult) -> None:
             item.status = ItemStatus.GENERATED
         process_picture_generated.delay(item_id)
     elif result.state == "fail":
+        retry = False
         with db_session() as db:
             item = db.get(PictureItem, _pk(item_id))
-            if item is None:
-                return
-            item.status = ItemStatus.FAILED
-            item.error = f"kie.ai: {result.fail_msg or 'génération échouée'}"
+            if item is None or item.status != ItemStatus.DISPATCHED:
+                return  # idempotent : webhook + poll ne doivent pas se cumuler
+            msg = result.fail_msg or "génération échouée"
             if result.cost_usd is not None:
                 item.item_actual_cost = result.cost_usd
-            _finalize_picture_job_if_done(db, item.job)
+            # Erreur transitoire kie.ai (surcharge) → on re-tente automatiquement.
+            if kie.is_transient_failure(msg) and item.generation_attempts < get_settings().generation_max_retries:
+                item.generation_attempts += 1
+                item.status = ItemStatus.COMPOSED  # ré-éligible au dispatch
+                item.error = f"kie.ai (re-essai {item.generation_attempts}): {msg}"
+                retry = True
+            else:
+                item.status = ItemStatus.FAILED
+                item.error = f"kie.ai: {msg}"
+                _finalize_picture_job_if_done(db, item.job)
+        if retry:  # léger délai pour laisser kie.ai récupérer
+            dispatch_nano_banana.apply_async((item_id,), countdown=15)

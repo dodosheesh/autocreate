@@ -105,6 +105,41 @@ def create_nano_banana_task(input_payload: dict[str, Any], callback_path: str = 
     return create_task(get_settings().kie_nano_banana_model, input_payload, callback_path)
 
 
+# Erreurs kie.ai/Google TRANSITOIRES (surcharge côté serveur) : un re-essai a de
+# bonnes chances de passer. À distinguer des refus DÉFINITIFS (contenu sensible,
+# input invalide) où re-tenter ne sert à rien.
+_TRANSIENT_MARKERS = (
+    "internal error",
+    "try again later",
+    "timeout",
+    "timed out",
+    "rate limit",
+    "too many requests",
+    "overload",
+    "temporarily",
+    "service unavailable",
+    "503",
+    "500",
+)
+_PERMANENT_MARKERS = (
+    "sensitive",
+    "flagged",
+    "not supported",
+    "invalid",
+    "unsupported",
+    "policy",
+    "prohibited",
+)
+
+
+def is_transient_failure(fail_msg: str | None) -> bool:
+    """True si l'échec kie.ai est probablement transitoire (re-essai utile)."""
+    msg = (fail_msg or "").lower()
+    if any(m in msg for m in _PERMANENT_MARKERS):
+        return False
+    return any(m in msg for m in _TRANSIENT_MARKERS)
+
+
 def parse_task_payload(data: dict) -> KieTaskResult:
     """Parse le bloc `data` d'un recordInfo ou d'un callback (même structure)."""
     result_urls: list[str] = []

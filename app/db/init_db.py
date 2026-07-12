@@ -54,6 +54,8 @@ _ADDITIVE_COLUMNS = [
     ("generation_jobs", "error", "TEXT"),
     ("users", "token_version", "INTEGER DEFAULT 0"),
     ("model_characteristics", "recurring", "BOOLEAN NOT NULL DEFAULT FALSE"),
+    ("job_items", "generation_attempts", "INTEGER NOT NULL DEFAULT 0"),
+    ("picture_items", "generation_attempts", "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 

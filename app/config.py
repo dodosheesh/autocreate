@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     anthropic_vision_model: str = "claude-haiku-4-5-20251001"
     # Nombre max d'images de référence acceptées par nano-banana-edit
     nano_banana_max_refs: int = 10
+    # Re-essais auto sur échec TRANSITOIRE de génération kie.ai (« internal error,
+    # try again later »). N'affecte pas les refus définitifs (contenu sensible…).
+    generation_max_retries: int = 2
 
     public_base_url: str = "http://localhost:8000"
 

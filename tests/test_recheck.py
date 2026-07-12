@@ -62,12 +62,41 @@ def test_recheck_pull_le_resultat_et_avance_litem(client):
         assert it.item_actual_cost == 0.09
 
 
-def test_recheck_echec_marque_failed(client):
+def test_recheck_echec_definitif_marque_failed(client):
+    # « sensitive » = refus définitif → pas de retry, direct FAILED
     job_id, item_id = _make_dispatched_job()
-    with patch("app.workers.picture_tasks.kie.get_task", return_value=_result("fail")):
+    res = KieTaskResult(task_id="t", state="fail", result_urls=[],
+                        fail_msg="The input or output was flagged as sensitive.",
+                        cost_time=None, cost_usd=None, raw={})
+    with patch("app.workers.picture_tasks.kie.get_task", return_value=res):
         assert client.post(f"/api/pictures/jobs/{job_id}/recheck").status_code == 200
     with SessionLocal() as db:
         assert db.get(PictureItem, uuid.UUID(item_id)).status == ItemStatus.FAILED
+
+
+def test_recheck_echec_transitoire_re_essaie(client):
+    # « internal error, try again later » = transitoire → re-dispatch auto, PAS failed
+    job_id, item_id = _make_dispatched_job()
+    res = KieTaskResult(task_id="t", state="fail", result_urls=[],
+                        fail_msg="internal error, please try again later.",
+                        cost_time=None, cost_usd=None, raw={})
+    with patch("app.workers.picture_tasks.kie.get_task", return_value=res), \
+         patch("app.workers.picture_tasks.dispatch_nano_banana.apply_async") as redispatch:
+        client.post(f"/api/pictures/jobs/{job_id}/recheck")
+    redispatch.assert_called_once()  # ré-essai programmé
+    with SessionLocal() as db:
+        it = db.get(PictureItem, uuid.UUID(item_id))
+        assert it.status == ItemStatus.COMPOSED  # remis en file, pas failed
+        assert it.generation_attempts == 1
+
+
+def test_is_transient_failure():
+    from app.integrations.kie import is_transient_failure
+    assert is_transient_failure("internal error, please try again later.") is True
+    assert is_transient_failure("Rate limit exceeded") is True
+    assert is_transient_failure("The input was flagged as sensitive") is False
+    assert is_transient_failure("model name not supported") is False
+    assert is_transient_failure(None) is False
 
 
 def test_recheck_cross_tenant_refuse(client):

@@ -265,6 +265,10 @@ class JobItem(Base):
     item_actual_cost: Mapped[float | None] = mapped_column(Float)
     status: Mapped[str] = mapped_column(String(32), default=ItemStatus.COMPOSED)
     error: Mapped[str | None] = mapped_column(Text)
+    # Nb de tentatives de génération (retry auto sur erreur transitoire kie.ai)
+    generation_attempts: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0", default=0
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     job: Mapped[GenerationJob] = relationship(back_populates="items")
@@ -337,6 +341,10 @@ class PictureItem(Base):
     item_actual_cost: Mapped[float | None] = mapped_column(Float)
     status: Mapped[str] = mapped_column(String(32), default=ItemStatus.COMPOSED)
     error: Mapped[str | None] = mapped_column(Text)
+    # Nb de tentatives de génération (retry auto sur erreur transitoire kie.ai)
+    generation_attempts: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0", default=0
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     job: Mapped[PictureJob] = relationship(back_populates="items")
