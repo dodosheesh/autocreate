@@ -9,7 +9,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.api import schemas
@@ -123,6 +123,10 @@ def delete_prompt(
     prompt_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
     row = owned(db, PicturePrompt, prompt_id, user)
+    # Détacher les références historiques (FK) AVANT de supprimer, sinon Postgres
+    # lève une IntegrityError si une photo déjà générée pointe ce prompt. La photo
+    # garde son URL finale : aucune perte.
+    db.execute(update(PictureItem).where(PictureItem.prompt_id == prompt_id).values(prompt_id=None))
     db.delete(row)
     db.commit()
     return {"deleted": str(prompt_id)}

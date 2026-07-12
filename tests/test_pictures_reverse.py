@@ -77,3 +77,27 @@ def test_reverse_prompt_bulk_traite_toutes_les_images(client):
 def test_reverse_prompt_bulk_exige_au_moins_une_url(client):
     r = client.post("/api/pictures/prompts/bulk", json={"source_image_urls": []})
     assert r.status_code == 422
+
+
+def test_delete_prompt_utilise_par_une_photo(client):
+    # Un prompt référencé par une photo déjà générée doit quand même se supprimer
+    # (la FK est détachée d'abord ; pas de 500 IntegrityError).
+    from app.db.models import Model, PictureItem, PictureJob, PicturePrompt
+
+    with SessionLocal() as db:
+        p = PicturePrompt(tenant_id="tnt-pic", source_image_url="https://r2.example/used.jpg",
+                          prompt_text="a woman", status="ready")
+        m = Model(tenant_id="tnt-pic", name="M", face_reference_url="https://r2.example/f.jpg")
+        db.add_all([p, m]); db.flush()
+        job = PictureJob(tenant_id="tnt-pic", model_id=m.id, count=1)
+        db.add(job); db.flush()
+        it = PictureItem(job_id=job.id, prompt_id=p.id, combo_hash="z", filled_prompt="a woman")
+        db.add(it); db.commit()
+        pid, iid = p.id, it.id
+
+    r = client.delete(f"/api/pictures/prompts/{pid}")
+    assert r.status_code == 200, r.text
+    with SessionLocal() as db:
+        from app.db.models import PictureItem as PI, PicturePrompt as PP
+        assert db.get(PP, pid) is None            # prompt supprimé
+        assert db.get(PI, iid).prompt_id is None    # référence photo détachée
