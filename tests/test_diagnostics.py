@@ -70,6 +70,30 @@ def test_diagnostics_detecte_image_trop_petite_pour_seedance(client):
     assert any("180×180" in v for v in d["seedance_dimension_issues"].values())
 
 
+def test_reference_dimensions_pointe_l_image_fautive(client):
+    # une image trop petite (face) + le reste OK → on veut la nommer précisément
+    def fake_probe(url):
+        if "f.jpg" in url:  # le visage
+            return {"status": 200, "width": 200, "height": 200, "seedance_ok": False}
+        return {"status": 200, "width": 1024, "height": 1024, "seedance_ok": True}
+
+    with patch("app.api.routers.diagnostics._probe_url", side_effect=fake_probe):
+        d = client.get("/api/diagnostics/reference-dimensions").json()
+    assert d["total_checked"] == 4  # 1 face + 1 caractéristique + 2 outfits
+    assert d["problems_count"] == 1
+    p = d["problems"][0]
+    assert p["type"] == "Visage model" and p["label"] == "M"
+    assert p["width"] == 200 and p["seedance_ok"] is False
+
+
+def test_reference_dimensions_signale_non_telechargeable(client):
+    with patch("app.api.routers.diagnostics._probe_url",
+               return_value={"status": "unreachable", "error": "403"}):
+        d = client.get("/api/diagnostics/reference-dimensions").json()
+    assert d["problems_count"] == d["total_checked"]  # toutes en échec de download
+
+
 def test_diagnostics_exige_auth():
     anon = TestClient(app)
     assert anon.get("/api/diagnostics").status_code == 401
+    assert anon.get("/api/diagnostics/reference-dimensions").status_code == 401

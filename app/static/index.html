@@ -277,7 +277,9 @@
       <div class="hint">Si une génération reste bloquée en <code>pending</code> ou échoue : vérifie l'état du
         worker/Redis et repère les images enregistrées avec une URL cassée (placeholder R2).</div>
       <button class="btn small" id="diag-btn">🩺 Lancer le diagnostic</button>
+      <button class="btn small" id="dim-btn">📐 Trouver les images hors dimension (vidéo)</button>
       <div id="diag-out" style="margin-top:12px"></div>
+      <div id="dim-out" style="margin-top:12px"></div>
     </div>
 
     <div class="card">
@@ -487,6 +489,29 @@ async function runDiagnostics() {
   } catch (e) { out.innerHTML = `<span style="color:var(--err)">${esc(e.message)}</span>`; }
   btn.disabled = false;
 }
+async function scanDimensions() {
+  const btn = $("#dim-btn"), out = $("#dim-out");
+  btn.disabled = true; out.innerHTML = '<span class="muted">Scan de toutes les images…</span>';
+  try {
+    const d = await api("/diagnostics/reference-dimensions");
+    if (!d.total_checked) { out.innerHTML = '<span class="muted">Aucune image de référence enregistrée.</span>'; btn.disabled = false; return; }
+    if (!d.problems_count) {
+      out.innerHTML = `<div class="hint" style="color:var(--ok)">✔ ${d.total_checked} image(s) vérifiée(s) — toutes dans les bornes ${d.min_px}–${d.max_px} px et téléchargeables.</div>`;
+      btn.disabled = false; return;
+    }
+    const rows = d.problems.map(p => {
+      const isDim = p.status === 200;
+      const detail = isDim
+        ? `${p.width}×${p.height} — hors ${d.min_px}–${d.max_px} px`
+        : `non téléchargeable (${esc(p.error || p.status)})`;
+      return `<div class="est-line"><span><b>${esc(p.type)}</b> — ${esc(p.label || "")}</span>
+        <span style="color:var(--err)">${esc(detail)}</span></div>
+        <div class="hint" style="margin:0 0 6px"><a href="${safeUrl(p.url)}" target="_blank" rel="noopener" style="color:var(--accent)">ouvrir l'image ↗</a></div>`;
+    }).join("");
+    out.innerHTML = `<div class="warn-box" style="display:block">⚠ ${d.problems_count} image(s) à corriger — ré-uploade une version <b>≥ ${d.min_px} px de côté</b> (et ≤ ${d.max_px} px) :</div>${rows}`;
+  } catch (e) { out.innerHTML = `<span style="color:var(--err)">${esc(e.message)}</span>`; }
+  btn.disabled = false;
+}
 async function api(path, opts) {
   const r = await fetch("/api" + path, Object.assign({headers: {"Content-Type": "application/json"}}, opts));
   if (r.status === 401) { location.href = "/login"; throw new Error("Non authentifié"); }
@@ -687,6 +712,7 @@ async function describePending() {
 }
 $("#describe-pending-btn").addEventListener("click", describePending);
 $("#diag-btn").addEventListener("click", runDiagnostics);
+$("#dim-btn").addEventListener("click", scanDimensions);
 
 // --- listes de catégories ---
 $("#cats").innerHTML = CATEGORIES.map(c =>

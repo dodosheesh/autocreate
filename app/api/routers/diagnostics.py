@@ -77,6 +77,54 @@ def _workers() -> list[str]:
         return []
 
 
+@router.get("/reference-dimensions")
+def reference_dimensions(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """Scanne TOUTES les images de référence (visage, caractéristiques, outfits,
+    backgrounds) et renvoie précisément lesquelles sont hors des bornes Seedance
+    (300–6000 px) ou non téléchargeables — pour savoir exactement quoi ré-uploader.
+
+    (L'échantillon du diagnostic principal ne teste qu'une image par type ; ici on
+    les teste toutes, avec leur nom/label.)"""
+    from concurrent.futures import ThreadPoolExecutor
+
+    tid = user.tenant_id
+    assets: list[dict] = []
+    for m in db.scalars(select(Model).where(Model.tenant_id == tid)).all():
+        if m.face_reference_url:
+            assets.append({"type": "Visage model", "label": m.name, "url": m.face_reference_url})
+    for c in db.scalars(
+        select(ModelCharacteristic)
+        .join(Model, ModelCharacteristic.model_id == Model.id)
+        .where(Model.tenant_id == tid)
+    ).all():
+        assets.append({"type": "Caractéristique", "label": c.label, "url": c.reference_image_url})
+    for o in db.scalars(select(Outfit).where(Outfit.tenant_id == tid)).all():
+        assets.append({"type": "Outfit", "label": ", ".join(o.tags) or str(o.id)[:8], "url": o.image_url})
+    for b in db.scalars(select(Background).where(Background.tenant_id == tid)).all():
+        assets.append({"type": "Background", "label": ", ".join(b.tags) or str(b.id)[:8], "url": b.image_url})
+
+    def _check(a: dict) -> dict:
+        return {**a, **_probe_url(a["url"])}
+
+    if assets:
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            results = list(ex.map(_check, assets))
+    else:
+        results = []
+
+    problems = [
+        r for r in results
+        if r.get("status") != 200 or r.get("seedance_ok") is False
+    ]
+    return {
+        "total_checked": len(results),
+        "problems_count": len(problems),
+        "min_px": SEEDANCE_MIN_PX,
+        "max_px": SEEDANCE_MAX_PX,
+        "problems": problems,  # {type, label, url, status, width, height, seedance_ok/error}
+    }
+
+
 @router.get("")
 def diagnostics(db: Session = Depends(get_db), user: User = Depends(current_user)):
     tid = user.tenant_id
