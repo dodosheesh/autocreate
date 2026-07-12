@@ -21,13 +21,9 @@ from app.config import get_settings
 REVERSE_ENGINEER_SYSTEM = (
     "You are a prompt engineer. Given a reference photo, write a single reusable "
     "image-generation prompt that captures its scene, composition, lighting, camera, "
-    "framing, mood and style. Describe the SUBJECT generically as 'the woman' — "
+    "pose, framing, mood and style. Describe the SUBJECT generically as 'the woman' — "
     "never identify or describe a specific real person's facial identity, since the "
-    "character's face is supplied separately. "
-    "Keep the description TASTEFUL, non-explicit and safe-for-work: focus on the "
-    "setting, wardrobe, lighting and overall vibe rather than the body; avoid "
-    "sexualized, suggestive, revealing or otherwise sensitive wording that image "
-    "safety filters would reject. Output only the prompt text, no preamble, no markdown."
+    "character's face is supplied separately. Output only the prompt text, no preamble, no markdown."
 )
 
 
