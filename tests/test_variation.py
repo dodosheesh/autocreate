@@ -160,15 +160,16 @@ def test_categorie_parlante_rend_le_dialogue_et_garde_le_script():
     assert "deep masculine voice" in item.filled_prompt  # rendu naturel dans le prompt
 
 
-def test_speaking_sans_banque_dialogues_reporte_en_shortfall():
-    # Template parlant mais aucune banque de dialogues : la catégorie est
-    # reportée en shortfall, sans faire échouer le reste du batch.
+def test_speaking_sans_banque_dialogues_compose_quand_meme():
+    # Template parlant mais aucune banque de dialogues : la vidéo se compose
+    # quand même (slot {dialogue} vide), sans blocage ni shortfall.
     empty = pools(speaking=True, n_dialogues=0)
     result = compose_batch(
         {"podcast": 1}, {"podcast": empty}, CHARACS, FACE, rng=random.Random(5)
     )
-    assert result.items == []
-    assert result.shortfall_per_category == {"podcast": 1}
+    assert len(result.items) == 1
+    assert result.shortfall_per_category == {}
+    assert result.items[0].dialogue_script is None
 
 
 def test_slot_caption_rempli_depuis_la_banque():
