@@ -33,10 +33,11 @@ SEED_PRICING = [
     ("elevenlabs_s2s", None, None, "per_min", 0.12),
     # Nano Banana (Gemini image) — ~0,09 $/image (ancien modèle photo).
     ("nano_banana", None, None, "per_image", 0.09),
-    # Seedream 5.0 Pro (ByteDance) sur kie.ai — 1K = 7 crédits (0,035 $), 2K = 14
-    # crédits (0,07 $). Images d'entrée : 0,5 crédit (0,0025 $) chacune, 1re gratuite.
-    # On est en 2K par défaut → 0,07 $/image (hors réf. suppl.).
-    ("seedream", None, None, "per_image", 0.07),
+    # Seedream 5.0 Pro (ByteDance) sur kie.ai — un tarif PAR résolution (l'estimateur
+    # s'adapte selon le choix 1K/2K du job) : 1K = 7 crédits (0,035 $), 2K = 14
+    # crédits (0,07 $). Images d'entrée : 0,5 crédit (0,0025 $), 1re gratuite.
+    ("seedream", "1K", None, "per_image", 0.035),
+    ("seedream", "2K", None, "per_image", 0.07),
 ]
 
 
@@ -61,6 +62,7 @@ _ADDITIVE_COLUMNS = [
     ("model_characteristics", "seedream", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ("job_items", "generation_attempts", "INTEGER NOT NULL DEFAULT 0"),
     ("picture_items", "generation_attempts", "INTEGER NOT NULL DEFAULT 0"),
+    ("picture_jobs", "image_resolution", "VARCHAR(8) NOT NULL DEFAULT '2K'"),
 ]
 
 

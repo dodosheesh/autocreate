@@ -95,10 +95,12 @@ def estimate(
     qc_rate = payload.qc_success_rate or get_calibrated_qc_rate(
         db, settings.default_qc_success_rate
     )
-    est = estimate_pictures(payload.count, rates, model=payload.model_variant, qc_success_rate=qc_rate)
+    est = estimate_pictures(payload.count, rates, model=payload.model_variant,
+                            qc_success_rate=qc_rate, resolution=payload.image_resolution)
     max_pics = over = None
     if payload.budget_usd is not None:
-        max_pics = max_pictures_for_budget(payload.budget_usd, rates, payload.model_variant, qc_rate)
+        max_pics = max_pictures_for_budget(payload.budget_usd, rates, payload.model_variant,
+                                           qc_rate, resolution=payload.image_resolution)
         over = est.effective_usd > payload.budget_usd
     return schemas.EstimateResponse(
         gross_usd=est.gross_usd,
@@ -134,6 +136,7 @@ def create_job(
         model_id=payload.model_id,
         count=payload.count,
         image_size=payload.image_size,
+        image_resolution=payload.image_resolution,
         output_format=payload.output_format,
         model_variant=payload.model_variant,
         budget_cap_usd=payload.budget_cap_usd,

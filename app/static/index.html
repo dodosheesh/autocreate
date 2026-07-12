@@ -412,10 +412,14 @@
           </select></div>
       </div>
       <div class="row">
+        <div><label>Qualité (Seedream)</label>
+          <select id="pic-resolution">
+            <option value="2K" selected>2K (0,07 $/img)</option>
+            <option value="1K">1K (0,035 $/img)</option>
+          </select></div>
         <div><label>Budget max (USD)</label><input type="number" id="pic-budget" min="0" step="1" placeholder="—"></div>
-        <div style="display:flex; align-items:flex-end">
-          <span class="muted mono" id="pic-est" style="font-size:13px">—</span></div>
       </div>
+      <div class="hint" style="margin:10px 0 0">Estimation : <span class="mono" id="pic-est">—</span></div>
       <button class="btn" id="pic-generate">🖼️ Générer les photos</button>
     </div>
 
@@ -966,7 +970,7 @@ function refreshPicEstimate() { clearTimeout(picEstTimer); picEstTimer = setTime
   const count = parseInt($("#pic-count").value || "0", 10);
   if (count <= 0) { $("#pic-est").textContent = "—"; return; }
   try {
-    const body = {count};
+    const body = {count, image_resolution: $("#pic-resolution").value};
     const b = parseFloat($("#pic-budget").value);
     if (!isNaN(b)) body.budget_usd = b;
     const e = await api("/pictures/estimate", {method: "POST", body: JSON.stringify(body)});
@@ -975,10 +979,12 @@ function refreshPicEstimate() { clearTimeout(picEstTimer); picEstTimer = setTime
   } catch (err) { $("#pic-est").textContent = err.message; }
 }, 250); }
 ["#pic-count", "#pic-budget"].forEach(s => $(s).addEventListener("input", refreshPicEstimate));
+$("#pic-resolution").addEventListener("change", refreshPicEstimate);
 
 $("#pic-generate").addEventListener("click", async () => {
   if (!getModel()) return toast("Aucune model — configure-la dans Réglages");
-  const body = {model_id: getModel(), count: +$("#pic-count").value, image_size: $("#pic-size").value};
+  const body = {model_id: getModel(), count: +$("#pic-count").value, image_size: $("#pic-size").value,
+                image_resolution: $("#pic-resolution").value};
   const b = parseFloat($("#pic-budget").value);
   if (!isNaN(b)) body.budget_cap_usd = b;
   $("#pic-generate").disabled = true;

@@ -49,6 +49,18 @@ def test_max_pictures_for_budget():
     assert max_pictures_for_budget(5.0, RATES, qc_success_rate=0.80) == 200
 
 
+def test_estimate_pictures_par_resolution():
+    # L'estimation s'adapte selon 1K/2K (seedream)
+    rates = [
+        Rate("seedream", "1K", None, "per_image", 0.035),
+        Rate("seedream", "2K", None, "per_image", 0.07),
+    ]
+    est_1k = estimate_pictures(10, rates, model="seedream", resolution="1K", qc_success_rate=1.0)
+    est_2k = estimate_pictures(10, rates, model="seedream", resolution="2K", qc_success_rate=1.0)
+    assert est_1k.gross_usd == pytest.approx(0.35)
+    assert est_2k.gross_usd == pytest.approx(0.70)  # 2× plus cher, sans rien changer d'autre
+
+
 # ---------- composition ----------
 
 

@@ -318,6 +318,7 @@ class PictureJobCreate(BaseModel):
     model_id: uuid.UUID
     count: int = Field(ge=1, le=200)
     image_size: ImageSize = "1:1"
+    image_resolution: Literal["1K", "2K"] = "2K"
     output_format: Literal["png", "jpeg"] = "png"
     model_variant: str = "seedream"
     budget_cap_usd: float | None = None
@@ -345,6 +346,7 @@ class PictureJobOut(BaseModel):
     status: str
     count: int
     image_size: str
+    image_resolution: str = "2K"
     output_format: str
     model_variant: str
     budget_cap_usd: float | None
@@ -360,6 +362,7 @@ class PictureJobOut(BaseModel):
 class PictureEstimateRequest(BaseModel):
     count: int = Field(ge=1)
     model_variant: str = "seedream"
+    image_resolution: Literal["1K", "2K"] = "2K"
     qc_success_rate: float | None = Field(default=None, gt=0, le=1)
     budget_usd: float | None = None
 

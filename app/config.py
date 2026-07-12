@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     # KIE_SEEDREAM_MODEL (ex. seedream/5-pro-edit). v4-edit est confirmé et sert
     # de défaut robuste.
     kie_seedream_model: str = "seedream/5-pro-image-to-image"
-    kie_seedream_resolution: str = "2K"  # 5.0 Pro : 1K | 2K
+    # (La résolution 1K/2K est choisie PAR JOB dans l'UI, pas ici.)
     # (Ancien modèle Nano Banana, conservé pour référence — plus utilisé par défaut.)
     kie_nano_banana_model: str = "google/nano-banana-edit"
     # Modèle vision pour le reverse-engineering image → prompt (endpoint

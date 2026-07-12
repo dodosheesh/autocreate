@@ -313,6 +313,10 @@ class PictureJob(Base):
     status: Mapped[str] = mapped_column(String(32), default=JobStatus.PENDING)
     count: Mapped[int] = mapped_column(Integer, default=1)
     image_size: Mapped[str] = mapped_column(String(16), default="1:1")  # aspect ratio
+    # Résolution Seedream (1K/2K) — choisie par job, pilote la qualité ET le tarif.
+    image_resolution: Mapped[str] = mapped_column(
+        String(8), nullable=False, server_default="2K", default="2K"
+    )
     output_format: Mapped[str] = mapped_column(String(8), default="png")
     model_variant: Mapped[str] = mapped_column(String(64), default="nano_banana")
     budget_cap_usd: Mapped[float | None] = mapped_column(Float)

@@ -235,7 +235,8 @@ def estimate_and_gate_pictures(job_id: str) -> None:
                     PictureItem.job_id == job.id, PictureItem.status == ItemStatus.COMPOSED
                 )
             ).all()
-            est = estimate_pictures(len(items), rates, model=job.model_variant)
+            est = estimate_pictures(len(items), rates, model=job.model_variant,
+                                    resolution=job.image_resolution)
             unit = est.gross_usd / len(items) if items else 0
             for item in items:
                 item.item_estimated_cost = round(unit, 4)
@@ -264,7 +265,7 @@ def dispatch_nano_banana(self, item_id: str) -> None:
                 prompt=item.filled_prompt,
                 reference_image_urls=item.reference_image_urls,
                 image_size=job.image_size,
-                resolution=get_settings().kie_seedream_resolution,
+                resolution=job.image_resolution,  # 1K/2K choisi par job
             )
             task_id = kie.create_seedream_task(payload)
             item.kie_task_id = task_id

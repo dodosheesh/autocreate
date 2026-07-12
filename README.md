@@ -90,8 +90,8 @@ substitué → `Invalid value for '--port'`). Réglages du service :
   ANTHROPIC_API_KEY     = sk-ant-...    # optionnel : décrit/analyse les images avec Claude
                                         # (sinon Gemini via kie.ai). cf. « Analyse d'images ».
   KIE_SEEDREAM_MODEL    = seedream/5-pro-image-to-image   # modèle photo (image-to-image
-                                        # multi-références, jusqu'à 10 refs).
-  KIE_SEEDREAM_RESOLUTION = 2K          # 5.0 Pro : 1K | 2K
+                                        # multi-références). Résolution 1K/2K = choisie
+                                        # par job dans l'UI (le tarif s'adapte tout seul).
   ELEVENLABS_API_KEY    = ...           # si voice-swap
   R2_ACCOUNT_ID         = ...
   R2_ACCESS_KEY_ID      = ...
