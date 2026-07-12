@@ -84,6 +84,28 @@ def test_reverse_video_flow(client):
     assert "handheld tracking shot" in ready["template_text"]
 
 
+def test_reverse_video_bulk_cree_n_templates(client):
+    urls = [f"https://r2.example/v{i}.mp4" for i in range(4)]
+    with patch("app.api.routers.banks.reverse_engineer_video") as mock_task:
+        r = client.post(
+            "/api/banks/templates/reverse-video/bulk",
+            json={"source_video_urls": urls, "category": "skit", "speaking": False},
+        )
+    assert r.status_code == 200, r.text
+    tmpls = r.json()
+    assert len(tmpls) == 4
+    assert all(t["status"] == "pending" and t["category"] == "skit" for t in tmpls)
+    assert mock_task.delay.call_count == 4  # une analyse async par vidéo
+
+
+def test_reverse_video_bulk_exige_au_moins_une_url(client):
+    r = client.post(
+        "/api/banks/templates/reverse-video/bulk",
+        json={"source_video_urls": [], "category": "skit"},
+    )
+    assert r.status_code == 422
+
+
 def test_pending_template_non_tire_a_la_composition(client):
     # un template pending ne doit pas être utilisable en génération
     from app.workers.tasks import _build_pools

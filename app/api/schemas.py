@@ -130,6 +130,14 @@ class ReverseVideoRequest(BaseModel):
     speaking: bool = False
 
 
+class BulkReverseVideoRequest(BaseModel):
+    """Réplique en masse : N vidéos → N templates (même catégorie + flag parlant)."""
+
+    source_video_urls: list[HttpUrlStr] = Field(min_length=1)
+    category: str = Field(description="Catégorie appliquée à tous les templates")
+    speaking: bool = False
+
+
 class BulkDescribeRequest(BaseModel):
     """Import en masse d'outfits/backgrounds avec auto-description (vision)."""
 
@@ -299,6 +307,14 @@ ImageSize = Literal["1:1", "4:3", "3:4", "16:9", "9:16", "2:3", "3:2"]
 
 class PicturePromptCreate(BaseModel):
     source_image_url: HttpUrlStr = Field(description="Image de référence uploadée (R2)")
+    tags: list[str] = []
+    weight: float = Field(default=1.0, ge=0)
+
+
+class BulkPicturePromptRequest(BaseModel):
+    """Reverse-engineering en masse : N images → N prompts réutilisables."""
+
+    source_image_urls: list[HttpUrlStr] = Field(min_length=1)
     tags: list[str] = []
     weight: float = Field(default=1.0, ge=0)
 

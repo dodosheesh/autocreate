@@ -64,6 +64,53 @@ def create_prompt(
     return prompt
 
 
+@router.post("/prompts/bulk", response_model=list[schemas.PicturePromptOut])
+def create_prompts_bulk(
+    payload: schemas.BulkPicturePromptRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """Reverse-engineering en MASSE : enregistre N images et les analyse en
+    parallèle (vision synchrone, aucun worker requis). Une image qui échoue
+    passe en `failed` sans bloquer les autres."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    created = [
+        PicturePrompt(tenant_id=user.tenant_id, source_image_url=url,
+                      tags=payload.tags, weight=payload.weight, status=PromptStatus.PENDING)
+        for url in payload.source_image_urls
+    ]
+    db.add_all(created)
+    db.commit()
+    for row in created:
+        db.refresh(row)
+
+    def work(row):
+        try:
+            return str(row.id), _vision_reverse(row.source_image_url, None), None
+        except Exception as exc:  # vision/HTTP → cette image échoue seule
+            return str(row.id), None, str(exc)[:2000]
+
+    with ThreadPoolExecutor(max_workers=min(6, len(created))) as pool:
+        results = list(pool.map(work, created))
+
+    for rid, text, err in results:
+        row = db.get(PicturePrompt, uuid.UUID(rid))
+        if row is None:
+            continue
+        if text:
+            row.prompt_text = text
+            row.status = PromptStatus.READY
+            row.error = None
+        else:
+            row.status = PromptStatus.FAILED
+            row.error = err
+    db.commit()
+    for row in created:
+        db.refresh(row)
+    return created
+
+
 @router.get("/prompts", response_model=list[schemas.PicturePromptOut])
 def list_prompts(db: Session = Depends(get_db), user: User = Depends(current_user)):
     return db.scalars(

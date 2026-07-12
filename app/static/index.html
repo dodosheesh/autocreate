@@ -351,7 +351,7 @@
           <div class="hint">Uploade une vidéo à répliquer : elle devient un <b>template</b> réutilisable
             (action, caméra, rythme, ambiance) — ta model et tes assets remplacent l'original.</div>
           <div class="row" style="margin-top:0">
-            <div><label>Vidéo de référence</label><input type="file" id="rv-file" accept="video/*"></div>
+            <div><label>Vidéo(s) de référence <span class="muted">— sélection multiple OK</span></label><input type="file" id="rv-file" accept="video/*" multiple></div>
             <div><label>Catégorie du template</label><select id="rv-cat"></select></div>
           </div>
           <label style="margin-top:8px"><input type="checkbox" id="rv-speaking" style="width:auto"> la model parle (ajoute le slot dialogue)</label>
@@ -391,10 +391,10 @@
 
     <div class="card">
       <h2>Banque de prompts (reverse-engineering)</h2>
-      <div class="hint">Uploade une image de référence : elle est transformée en prompt réutilisable, adapté à ta model.
+      <div class="hint">Uploade une ou plusieurs images de référence : chacune est transformée en prompt réutilisable, adapté à ta model.
         Le prompt est sauvegardé à vie.</div>
       <div class="row" style="margin-top:0">
-        <div><label>Image de référence</label><input type="file" id="pic-ref-file" accept="image/*"></div>
+        <div><label>Image(s) de référence <span class="muted">— sélection multiple OK</span></label><input type="file" id="pic-ref-file" accept="image/*" multiple></div>
         <div style="display:flex; align-items:flex-end">
           <button class="btn small" id="pic-reverse" style="width:100%">Uploader &amp; reverse-engineer</button></div>
       </div>
@@ -526,6 +526,20 @@ async function uploadFile(inputEl) {
   if (r.status === 401) { location.href = "/login"; throw new Error("Non authentifié"); }
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || "upload échoué");
   return (await r.json()).url;
+}
+async function uploadAll(inputEl, onProgress) {
+  const files = Array.from(inputEl.files || []);
+  if (!files.length) throw new Error("Aucun fichier sélectionné");
+  const urls = [];
+  for (let i = 0; i < files.length; i++) {
+    if (onProgress) onProgress(i, files.length);
+    const fd = new FormData(); fd.append("file", files[i]);
+    const r = await fetch("/api/uploads", {method: "POST", body: fd});
+    if (r.status === 401) { location.href = "/login"; throw new Error("Non authentifié"); }
+    if (!r.ok) throw new Error(`${files[i].name} : ${(await r.json().catch(() => ({}))).detail || "upload échoué"}`);
+    urls.push((await r.json()).url);
+  }
+  return urls;
 }
 
 // --- navigation ---
@@ -888,17 +902,19 @@ $("#generate").addEventListener("click", async () => {
 
 // --- répliquer une vidéo ---
 $("#rv-go").addEventListener("click", async () => {
-  if (!$("#rv-file").files[0]) return toast("Sélectionne une vidéo");
-  $("#rv-go").disabled = true;
+  const btn = $("#rv-go"), n = ($("#rv-file").files || []).length;
+  if (!n) return toast("Sélectionne au moins une vidéo");
+  btn.disabled = true;
   try {
-    const url = await uploadFile($("#rv-file"));
-    await api("/banks/templates/reverse-video", {method: "POST", body: JSON.stringify({
-      source_video_url: url, category: $("#rv-cat").value, speaking: $("#rv-speaking").checked})});
+    const urls = await uploadAll($("#rv-file"),
+      (i, t) => { btn.textContent = `Upload ${i + 1}/${t}…`; });
+    await api("/banks/templates/reverse-video/bulk", {method: "POST", body: JSON.stringify({
+      source_video_urls: urls, category: $("#rv-cat").value, speaking: $("#rv-speaking").checked})});
     $("#rv-file").value = "";
-    toast("Vidéo uploadée — analyse en cours");
+    toast(`${urls.length} vidéo(s) uploadée(s) — analyse en cours`);
     loadTemplates();
   } catch (err) { toast("Répliquer : " + err.message); }
-  $("#rv-go").disabled = false;
+  btn.disabled = false; btn.textContent = "Uploader & analyser";
 });
 async function loadTemplates() {
   const tmpls = await api("/banks/templates");
@@ -982,14 +998,19 @@ window.approveAllJob = approveAllJob;
 // ================= PHOTOS =================
 let currentPicJob = null;
 $("#pic-reverse").addEventListener("click", async () => {
-  if (!$("#pic-ref-file").files[0]) return toast("Sélectionne une image de référence");
+  const btn = $("#pic-reverse"), n = ($("#pic-ref-file").files || []).length;
+  if (!n) return toast("Sélectionne au moins une image de référence");
+  btn.disabled = true;
   try {
-    const url = await uploadFile($("#pic-ref-file"));
-    await api("/pictures/prompts", {method: "POST", body: JSON.stringify({source_image_url: url})});
+    const urls = await uploadAll($("#pic-ref-file"),
+      (i, t) => { btn.textContent = `Upload ${i + 1}/${t}…`; });
+    btn.textContent = `Analyse de ${urls.length} image(s)…`;
+    await api("/pictures/prompts/bulk", {method: "POST", body: JSON.stringify({source_image_urls: urls})});
     $("#pic-ref-file").value = "";
-    toast("Upload OK — reverse-engineering lancé");
+    toast(`${urls.length} image(s) reverse-engineerée(s)`);
     loadPrompts();
   } catch (err) { toast("Reverse : " + err.message); }
+  btn.disabled = false; btn.textContent = "Uploader & reverse-engineer";
 });
 async function loadPrompts() {
   const prompts = await api("/pictures/prompts");

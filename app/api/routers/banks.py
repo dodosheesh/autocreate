@@ -69,6 +69,33 @@ def reverse_video(
     return tmpl
 
 
+@router.post("/templates/reverse-video/bulk", response_model=list[schemas.TemplateOut])
+def reverse_video_bulk(
+    payload: schemas.BulkReverseVideoRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """Réplique en MASSE : N vidéos → N templates (même catégorie + flag parlant).
+    Chaque template est créé en `pending` puis analysé en async (Celery)."""
+    created = [
+        PromptTemplate(
+            tenant_id=user.tenant_id,
+            category=payload.category,
+            template_text="(analyse en cours…)",
+            speaking=payload.speaking,
+            status="pending",
+            source_video_url=url,
+        )
+        for url in payload.source_video_urls
+    ]
+    db.add_all(created)
+    db.commit()
+    for tmpl in created:
+        db.refresh(tmpl)
+        reverse_engineer_video.delay(str(tmpl.id))
+    return created
+
+
 def _describe_rows(kind: str, db_model, rows, suffix: str, db: Session) -> None:
     """Décrit chaque asset via la vision (appels concurrents hors session DB),
     puis écrit tags+status. Synchrone : aucun worker Celery requis. Un échec
