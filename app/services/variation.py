@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 
 from app.services import composer
 from app.services.dialogue import render_for_prompt
+from app.services.scene_style import apply_scene_style
 
 SLOT_PATTERN = re.compile(r"\{(\w+)\}")
 CAPTION_SLOT = "caption"
@@ -105,10 +106,13 @@ def _compose_one(
     face_reference_url: str,
     max_refs: int,
     rng: random.Random,
+    custom_prompt: str = "",
+    omit_background: bool = False,
 ) -> ComposedItem:
     template = weighted_draw(pools.templates, rng)
     outfit = weighted_draw(pools.outfits, rng)
-    background = weighted_draw(pools.backgrounds, rng)
+    # Case « pas de background » : on ne tire aucun décor et le slot reste vide.
+    background = None if omit_background else weighted_draw(pools.backgrounds, rng)
 
     wants_caption = f"{{{CAPTION_SLOT}}}" in template.template_text
     caption = weighted_draw(pools.captions, rng) if wants_caption else None
@@ -137,6 +141,8 @@ def _compose_one(
 
     prompt = fill_template(template.template_text, values)
     prompt = composer.inject_characteristics(prompt, active)
+    # Demande custom (one-shot) + directive caméra (fixe hors snapchat) / voix / pas de musique.
+    prompt = apply_scene_style(prompt, category, template.speaking, custom_prompt)
 
     extra_refs = [o.image_url for o in (outfit, background) if o and o.image_url]
     refs = composer.select_reference_images(
@@ -179,6 +185,8 @@ def compose_batch(
     max_refs: int = 12,
     rng: random.Random | None = None,
     seen_hashes: set[str] | None = None,
+    custom_prompt: str = "",
+    omit_background: bool = False,
 ) -> ComposeResult:
     """Compose tous les items d'un job, dédupliqués par combo_hash.
 
@@ -206,7 +214,8 @@ def compose_batch(
         while produced < count:
             try:
                 item = _compose_one(
-                    category, pools, characteristics, face_reference_url, max_refs, rng
+                    category, pools, characteristics, face_reference_url, max_refs, rng,
+                    custom_prompt=custom_prompt, omit_background=omit_background,
                 )
             except ComposeError:
                 # Template inutilisable (parlant sans dialogues, slot caption sans

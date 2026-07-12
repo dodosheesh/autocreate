@@ -55,6 +55,8 @@ def create_batch_job(
         bitrate=payload.bitrate,
         model_variant=payload.model_variant,
         music_url=payload.music_url,
+        custom_prompt=payload.custom_prompt,
+        omit_background=payload.omit_background,
         budget_cap_usd=payload.budget_cap_usd,
     )
     db.add(job)

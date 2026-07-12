@@ -166,6 +166,8 @@ def compose_job(job_id: str) -> None:
                 characteristics=characteristics,
                 face_reference_url=model.face_reference_url,
                 max_refs=get_settings().seedance_max_refs,
+                custom_prompt=job.custom_prompt or "",
+                omit_background=job.omit_background,
             )
             for composed in result.items:
                 db.add(

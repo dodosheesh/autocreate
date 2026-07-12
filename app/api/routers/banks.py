@@ -10,7 +10,8 @@ from typing import Type
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import delete as sql_delete
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.api import schemas
@@ -21,11 +22,33 @@ from app.db.models import (
     Background,
     Caption,
     DialogueLine,
+    JobItem,
     Outfit,
+    PictureItem,
     PromptTemplate,
     User,
     VoiceProfile,
 )
+
+# Références (FK) des items historiques vers chaque banque : à DÉTACHER (NULL)
+# avant de supprimer une ligne, sinon Postgres lève une IntegrityError (500).
+# Les médias déjà générés gardent leur URL finale : aucune perte.
+_BANK_REFS: dict[str, list] = {
+    "outfits": [(JobItem, JobItem.outfit_id), (PictureItem, PictureItem.outfit_id)],
+    "backgrounds": [(JobItem, JobItem.background_id)],
+    "templates": [(JobItem, JobItem.template_id)],
+    "dialogues": [(JobItem, JobItem.dialogue_line_id)],
+    "captions": [(JobItem, JobItem.caption_id)],
+    "voices": [],
+}
+
+
+def _detach_bank_refs(db: Session, name: str, row_ids: list) -> None:
+    """NULL les colonnes FK des items qui pointent ces lignes de banque."""
+    if not row_ids:
+        return
+    for model, col in _BANK_REFS.get(name, []):
+        db.execute(update(model).where(col.in_(row_ids)).values({col.key: None}))
 from app.integrations.vision import describe_image as _vision_describe
 from app.services.template_library import load_default_templates
 from app.workers.picture_tasks import reverse_engineer_video
@@ -94,6 +117,21 @@ def reverse_video_bulk(
         db.refresh(tmpl)
         reverse_engineer_video.delay(str(tmpl.id))
     return created
+
+
+@router.delete("/templates")
+def delete_all_templates(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """Supprime TOUS les templates de scène du tenant (pour repartir de zéro,
+    ex. avant de recharger la bibliothèque par défaut)."""
+    ids = db.scalars(
+        select(PromptTemplate.id).where(PromptTemplate.tenant_id == user.tenant_id)
+    ).all()
+    if not ids:
+        return {"deleted": 0}
+    _detach_bank_refs(db, "templates", list(ids))
+    db.execute(sql_delete(PromptTemplate).where(PromptTemplate.id.in_(ids)))
+    db.commit()
+    return {"deleted": len(ids)}
 
 
 def _describe_rows(kind: str, db_model, rows, suffix: str, db: Session) -> None:
@@ -225,6 +263,8 @@ def _register(
         row = db.get(db_model, row_id)
         if row is None or row.tenant_id != user.tenant_id:
             raise HTTPException(404, f"{name} : entrée introuvable")
+        # Détacher les références historiques (items) AVANT delete → pas de 500 FK.
+        _detach_bank_refs(db, name, [row_id])
         db.delete(row)
         db.commit()
         return {"deleted": str(row_id)}

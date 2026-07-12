@@ -235,6 +235,10 @@ class BatchJobCreate(BaseModel):
     bitrate: Bitrate = "standard"
     model_variant: str = "seedance_2.0"
     music_url: HttpUrlStr | None = Field(default=None, description="Piste mixée à l'assemblage")
+    # Demande custom one-shot fusionnée au prompt final de chaque vidéo du batch.
+    custom_prompt: str = ""
+    # Case « pas de background » : aucun décor tiré, on ne mentionne aucun lieu.
+    omit_background: bool = False
     budget_cap_usd: float | None = None
 
 

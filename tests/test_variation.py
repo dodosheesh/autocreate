@@ -55,6 +55,35 @@ def pools(
     )
 
 
+def test_camera_fixe_hors_snapchat():
+    result = compose_batch({"skit": 1}, {"skit": pools()}, CHARACS, FACE, rng=random.Random(7))
+    prompt = result.items[0].filled_prompt
+    assert "STATIC locked camera" in prompt and "no zoom" in prompt
+    assert "No music" in prompt
+
+
+def test_snapchat_autorise_mouvement_camera():
+    result = compose_batch({"snapchat": 1}, {"snapchat": pools()}, CHARACS, FACE, rng=random.Random(7))
+    prompt = result.items[0].filled_prompt
+    assert "camera can move and zoom" in prompt
+    assert "STATIC locked camera" not in prompt
+
+
+def test_custom_prompt_injecte_dans_chaque_item():
+    result = compose_batch({"skit": 2}, {"skit": pools()}, CHARACS, FACE,
+                           rng=random.Random(3), custom_prompt="ELLE COMPTE JUSQU'A 3")
+    assert all("ELLE COMPTE JUSQU'A 3" in it.filled_prompt for it in result.items)
+
+
+def test_omit_background_vide_le_slot():
+    result = compose_batch({"skit": 1}, {"skit": pools()}, CHARACS, FACE,
+                           rng=random.Random(3), omit_background=True)
+    item = result.items[0]
+    assert "beach at sunset" not in item.filled_prompt  # aucun décor mentionné
+    assert item.background_id is None
+    assert not any("/b" in u for u in item.reference_image_urls)  # pas de ref background
+
+
 def test_compose_batch_dedup_et_count():
     result = compose_batch(
         {"skit": 10}, {"skit": pools()}, CHARACS, FACE, rng=random.Random(42)

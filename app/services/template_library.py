@@ -21,208 +21,110 @@ from sqlalchemy.orm import Session
 from app.db.models import PromptTemplate
 
 # (category, template_text, speaking)
+# Règle de mise en scène : contenu réseaux sociaux réaliste, PAS de rendu « IA ».
+# Elle se filme elle-même au téléphone (posé/à bout de bras). La contrainte caméra
+# (fixe, aucun zoom, aucun mouvement — sauf snapchat filmé par un tiers), la
+# « vraie voix » et « pas de musique » sont ajoutées AUTOMATIQUEMENT à la
+# composition (app/services/scene_style.py) — inutile de les répéter ici.
 DEFAULT_TEMPLATES: list[tuple[str, str, bool]] = [
-    # ---------------- skit (sketch, comédie de situation) ----------------
+    # ---------------- skit (elle parle face caméra, comme à un pote) ----------------
     (
         "skit",
-        "Vertical 9:16 comedic skit. A young woman {outfit} in {background}. "
-        "Handheld camera, natural daylight, energetic mid-shot that snaps to a "
-        "close-up on the punchline. Expressive face, quick comedic timing, {characteristics}. "
-        "{dialogue}",
-        True,
-    ),
-    (
-        "skit",
-        "Vertical skit, single continuous take. She {outfit} reacts to something "
-        "off-screen in {background}, exaggerated facial expressions and hand gestures, "
-        "phone-style handheld framing, bright even lighting. {characteristics}. {dialogue}",
-        True,
-    ),
-    (
-        "skit",
-        "POV comedic bit, 9:16. A woman {outfit} talks straight to camera as if to a "
-        "friend, {background} behind her slightly out of focus, playful head tilts and "
-        "eyebrow raises, warm indoor light. {characteristics}. {dialogue}",
-        True,
-    ),
-    # ---------------- storytelling (récit face caméra, vlog) ----------------
-    (
-        "storytelling",
-        "Cinematic vertical vlog. A young woman {outfit} sits in {background}, speaking "
-        "intimately to camera. Soft window light, shallow depth of field, subtle handheld "
-        "drift, occasional slow push-in for emphasis. Expressive, sincere delivery, "
+        "Vertical 9:16 phone video. A young woman {outfit} stands in {background}, filming "
+        "herself on her propped-up phone. She talks straight to the camera like she is "
+        "talking to a friend, relaxed and playful, natural face and hand gestures. "
         "{characteristics}. {dialogue}",
         True,
     ),
     (
+        "skit",
+        "9:16 selfie video. She {outfit} in {background} sets her phone down and steps back "
+        "into frame, then talks to the camera with casual, expressive everyday energy. "
+        "{characteristics}. {dialogue}",
+        True,
+    ),
+    # Reveal tenu par un outfit LONG (hoodie oversize / haut qui descend aux cuisses).
+    # L'action de lever brièvement le bas du haut est décrite ; CE qui est montré et
+    # la réplique restent portés par {outfit} et {dialogue} (tes propres textes).
+    (
+        "skit",
+        "Vertical 9:16 phone video. A woman {outfit} — a long oversized hoodie that falls to "
+        "her thighs — stands in {background} filming herself on her propped-up phone. She "
+        "talks to the camera, and on the beat she briefly lifts the hem of the oversized "
+        "hoodie for a split second and lets it drop right back down, playful and quick. "
+        "{characteristics}. {dialogue}",
+        True,
+    ),
+    # ---------------- storytelling (storytime face caméra) ----------------
+    (
         "storytelling",
-        "Storytime to camera, 9:16, golden-hour mood. She {outfit} in {background}, gentle "
-        "hair movement, cozy cinematic grade, catchlights in the eyes. She recounts a "
-        "personal story with natural gestures. {characteristics}. {dialogue}",
+        "Vertical 9:16 phone video, storytime to camera. A young woman {outfit} sits in "
+        "{background}, close intimate framing, talking sincerely to her phone about something "
+        "personal, small natural micro-expressions. {characteristics}. {dialogue}",
         True,
     ),
     (
         "storytelling",
-        "Confessional-style vertical clip. Close, intimate framing of a woman {outfit} in "
-        "{background}, dim moody key light with a soft rim, calm and reflective tone, small "
-        "authentic micro-expressions. {characteristics}. {dialogue}",
+        "9:16 selfie video. She {outfit} in {background} tells a personal story straight to "
+        "the camera, calm and genuine, soft natural indoor light. {characteristics}. {dialogue}",
         True,
     ),
-    # ---------------- showing_body (mode / présentation, peu ou pas parlé) ----------------
+    # ---------------- showing_body (outfit check, peu ou pas parlé) ----------------
     (
         "showing_body",
-        "Vertical fashion clip. A woman {outfit} poses and turns slowly in {background}, "
-        "full-body to mid framing, smooth slow camera orbit, flattering soft key light, "
-        "confident runway energy, subtle slow motion. {characteristics}.",
+        "Vertical 9:16 phone video, outfit check. A woman {outfit} stands in {background} and "
+        "poses for her propped-up phone, turning and shifting her weight to show the fit, "
+        "confident and casual. {characteristics}.",
         False,
     ),
     (
         "showing_body",
-        "9:16 outfit showcase. She {outfit} walks toward camera in {background}, then a "
-        "detail pan over the outfit, crisp editorial lighting, glossy fashion-film look, "
-        "poised expression. {characteristics}.",
+        "9:16 mirror selfie video, phone in hand. A woman {outfit} in {background} films "
+        "herself in the mirror doing a few relaxed poses to show the outfit. {characteristics}.",
+        False,
+    ),
+    # ---------------- micro_trottoir (micro-trottoir / interview de rue) ----------------
+    (
+        "micro_trottoir",
+        "Vertical 9:16 phone video, street-interview style. A woman {outfit} in {background} "
+        "answers an off-screen interviewer, candid and natural, reacting and gesturing as she "
+        "replies. {characteristics}. {dialogue}",
+        True,
+    ),
+    (
+        "micro_trottoir",
+        "9:16 vox-pop clip. She {outfit} stopped in {background}, a mic just out of frame, "
+        "spontaneous and real as she answers. {characteristics}. {dialogue}",
+        True,
+    ),
+    # ---------------- podcast (au micro, face caméra) ----------------
+    (
+        "podcast",
+        "Vertical 9:16 phone video, podcast clip. A woman {outfit} sits at a microphone in "
+        "{background}, relaxed conversational body language, talking to the camera and "
+        "gesturing naturally. {characteristics}. {dialogue}",
+        True,
+    ),
+    (
+        "podcast",
+        "9:16 podcast moment. She {outfit} at the mic in {background} delivers a take with "
+        "natural hand gestures and eye contact with the camera. {characteristics}. {dialogue}",
+        True,
+    ),
+    # ---------------- snapchat (candide, filmé par un tiers, barre de légende) ----------------
+    # SEULE catégorie où la caméra peut bouger/zoomer (vidéo filmée par quelqu'un d'autre).
+    (
+        "snapchat",
+        "Vertical 9:16 clip filmed candidly by someone else on a phone. A woman {outfit} in "
+        "{background} in an everyday social moment, realistic phone-camera look, a Snapchat-style "
+        "caption bar across the top. Caption: {caption}. {characteristics}.",
         False,
     ),
     (
-        "showing_body",
-        "Mirror-selfie style vertical clip, phone in hand. A woman {outfit} in {background} "
-        "checks her look with playful poses, bright soft light, casual confident vibe. "
+        "snapchat",
+        "9:16 candid clip filmed from across the room. She {outfit} in {background} in a mundane "
+        "moment, natural available light, Snapchat caption bar up top. Caption: {caption}. "
         "{characteristics}.",
-        False,
-    ),
-    # ---------------- micro_trottoir (interview de rue) ----------------
-    (
-        "micro_trottoir",
-        "Street interview, vertical 9:16 handheld. A woman {outfit} answers an off-screen "
-        "interviewer in {background} (busy street), natural ambient light, candid documentary "
-        "framing, quick reactive expressions as she replies. {characteristics}. {dialogue}",
-        True,
-    ),
-    (
-        "micro_trottoir",
-        "Vox-pop on the go, 9:16. She {outfit} is stopped in {background}, mic just out of "
-        "frame, real-world lighting, spontaneous laughter and gestures between answers. "
-        "{characteristics}. {dialogue}",
-        True,
-    ),
-    (
-        "micro_trottoir",
-        "Man-on-the-street clip. A woman {outfit} reacts to a surprising question in "
-        "{background}, handheld follow, candid crowd behind her, natural daylight, genuine "
-        "spontaneous delivery. {characteristics}. {dialogue}",
-        True,
-    ),
-    # ---------------- podcast (plateau, elle parle au micro) ----------------
-    (
-        "podcast",
-        "Podcast set, vertical 9:16. A woman {outfit} sits at a mic in {background} (studio "
-        "with warm accent lighting), relaxed conversational body language, cinematic bokeh, "
-        "she leans in on key points. {characteristics}. {dialogue}",
-        True,
-    ),
-    (
-        "podcast",
-        "Vertical podcast clip, single-cam framing. She {outfit} talks into a studio mic in "
-        "{background}, moody colored key light, natural gestures, expressive eye contact with "
-        "the camera. {characteristics}. {dialogue}",
-        True,
-    ),
-    (
-        "podcast",
-        "Hot-take podcast moment, 9:16. A woman {outfit} in {background} delivers an opinion "
-        "with animated hands, punchy studio lighting, subtle push-in on the strong line. "
-        "{characteristics}. {dialogue}",
-        True,
-    ),
-    # ---------------- snapchat (situation sociale candide + barre de légende) ----------------
-    (
-        "snapchat",
-        "Candid vertical clip, phone-filmed look. A woman {outfit} in {background} (public "
-        "social setting) unaware she's being filmed, natural available light, slightly raw "
-        "handheld framing, a Snapchat-style caption bar overlays the top. Caption: {caption}. "
-        "{characteristics}.",
-        False,
-    ),
-    (
-        "snapchat",
-        "Sneaky candid 9:16 in {background}. She {outfit} goes about a mundane moment with a "
-        "quirky offbeat behavior, realistic phone-camera grain, Snapchat text bar at the top. "
-        "Caption: {caption}. {characteristics}.",
-        False,
-    ),
-    (
-        "snapchat",
-        "Filmed-from-across-the-room vibe, vertical. A woman {outfit} in {background} caught in "
-        "a funny everyday situation, natural light, authentic candid energy, Snapchat caption "
-        "overlay up top. Caption: {caption}. {characteristics}.",
-        False,
-    ),
-    # ================= scènes à BEAT DE REVEAL / TWIST =================
-    # Structure de mise en scène pensée pour un format « build-up → révélation ».
-    # Le beat existe (montée, silence, push-in, turn-to-camera, double-take,
-    # drop de caption) ; CE QUI est révélé reste dans {dialogue}/{caption} — c'est
-    # toi qui le déposes, jamais écrit en dur ici.
-    (
-        "skit",
-        "GRWM get-ready montage building to a reveal beat, vertical 9:16. A woman {outfit} in "
-        "{background} does a snappy get-ready sequence with quick jump-cuts, then a confident "
-        "turn straight to camera on the final look for the punchline. {characteristics}. {dialogue}",
-        True,
-    ),
-    (
-        "skit",
-        "Build-up then twist, 9:16. She {outfit} sets up an ordinary moment in {background}, the "
-        "camera holds, a beat of anticipation, then a sudden push-in as she turns to lens and "
-        "delivers the line. {characteristics}. {dialogue}",
-        True,
-    ),
-    (
-        "storytelling",
-        "Storytime that lands on a reveal. A woman {outfit} in {background} speaks to camera with "
-        "a calm build, then a deliberate beat of silence and a direct-to-lens delivery of the key "
-        "line, subtle slow push-in, cinematic grade. {characteristics}. {dialogue}",
-        True,
-    ),
-    (
-        "micro_trottoir",
-        "Street interview with a reveal punchline, 9:16 handheld. A woman {outfit} answers an "
-        "off-screen interviewer in {background}, candid documentary framing, building to a beat "
-        "where she turns to camera and drops the twist line. {characteristics}. {dialogue}",
-        True,
-    ),
-    (
-        "podcast",
-        "Podcast clip that builds to a reveal. She {outfit} at the mic in {background}, relaxed "
-        "conversational build, then a direct-to-camera beat for the key line with a subtle "
-        "push-in and a knowing look. {characteristics}. {dialogue}",
-        True,
-    ),
-    (
-        "showing_body",
-        "Mirror reveal, vertical. A woman {outfit} checks her look in a mirror in {background}, "
-        "slow confident poses, then turns from the mirror straight to camera on the reveal beat, "
-        "flattering soft key light, subtle slow motion. {characteristics}.",
-        False,
-    ),
-    (
-        "snapchat",
-        "Thirst-trap to twist, 9:16. She {outfit} poses with runway confidence in {background}, "
-        "slow camera orbit, then a hard cut and a Snapchat caption bar drops the twist. "
-        "Caption: {caption}. {characteristics}.",
-        False,
-    ),
-    (
-        "snapchat",
-        "Candid 'wait for it' clip. A woman {outfit} in {background} in a mundane moment, natural "
-        "handheld, holds on the anticipation, then the Snapchat caption bar reveals the twist. "
-        "Caption: {caption}. {characteristics}.",
-        False,
-    ),
-    (
-        "snapchat",
-        "Double-take reveal, vertical, filmed candidly. A woman {outfit} in {background}; the "
-        "camera does a quick double-take and zoom on the reveal beat, raw phone-camera feel, "
-        "Snapchat caption up top. Caption: {caption}. {characteristics}.",
         False,
     ),
 ]

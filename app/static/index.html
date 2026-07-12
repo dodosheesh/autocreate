@@ -253,6 +253,7 @@
         Charge la bibliothèque prête à l'emploi, ou ajoute les tiens. Slots :
         <code>{outfit} {background} {characteristics} {dialogue} {caption}</code>.</div>
       <button class="btn small" id="load-templates">📚 Charger les templates par défaut</button>
+      <button class="btn small ghost" id="del-all-templates">🗑️ Tout supprimer</button>
       <div class="row" style="margin-top:14px">
         <div><label>Catégorie</label><select id="t-cat"></select></div>
         <div style="display:flex;align-items:flex-end">
@@ -355,7 +356,10 @@
             <div><label>Musique (URL, optionnel)</label>
               <input type="url" id="music" placeholder="https://…"></div>
           </div>
-          <button class="btn" id="generate">⚡ Generate</button>
+          <div><label>Demande custom (optionnel, fusionnée à chaque prompt de ce batch)</label>
+            <textarea id="custom-prompt" rows="2" placeholder="Ex : elle compte de 1 à 3 avec les doigts avant de parler…"></textarea></div>
+          <label class="chk" style="margin-top:8px"><input type="checkbox" id="omit-bg"> Ne mentionner aucun background (pas de décor imposé)</label>
+          <button class="btn" id="generate" style="margin-top:10px">⚡ Generate</button>
         </div>
 
         <div class="card">
@@ -830,6 +834,12 @@ $("#load-templates").addEventListener("click", async () => {
     toast(r.added + " template(s) chargé(s)"); loadAllBanks(); }
   catch (e) { toast("Templates : " + e.message); }
 });
+$("#del-all-templates").addEventListener("click", async () => {
+  if (!confirm("Supprimer TOUS les templates de scène ? (tu pourras recharger les templates par défaut ensuite)")) return;
+  try { const r = await api("/banks/templates", {method: "DELETE"});
+    toast(r.deleted + " template(s) supprimé(s)"); loadAllBanks(); }
+  catch (e) { toast("Templates : " + e.message); }
+});
 $("#t-add").addEventListener("click", async () => {
   try {
     await api("/banks/templates", {method: "POST", body: JSON.stringify({
@@ -943,7 +953,9 @@ $("#generate").addEventListener("click", async () => {
   if (!Object.keys(c).length) return toast("Aucune vidéo demandée");
   const body = { model_id: getModel(), counts_per_category: c,
                  resolution: state.resolution, bitrate: state.bitrate,
-                 duration_s: +$("#duration").value, model_variant: $("#variant").value };
+                 duration_s: +$("#duration").value, model_variant: $("#variant").value,
+                 custom_prompt: $("#custom-prompt").value.trim(),
+                 omit_background: $("#omit-bg").checked };
   const budget = parseFloat($("#budget").value);
   if (!isNaN(budget)) body.budget_cap_usd = budget;
   if ($("#music").value) body.music_url = $("#music").value;

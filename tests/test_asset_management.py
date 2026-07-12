@@ -180,6 +180,37 @@ def test_delete_model_utilise_par_un_job_refuse(client):
     assert client.get(f"/api/models/{mid}").status_code == 200  # toujours là
 
 
+def test_delete_outfit_utilise_par_un_job(client):
+    # Un outfit référencé par un JobItem/PictureItem doit se supprimer quand même
+    # (FK détachée d'abord ; pas de 500).
+    from app.db.models import JobItem, PictureItem, PictureJob
+
+    oid = client.post("/api/banks/outfits", json={"image_url": "https://r2.example/used.jpg", "tags": ["x"]}).json()["id"]
+    with SessionLocal() as db:
+        m = Model(tenant_id="tnt-am", name="OU", face_reference_url="https://r2.example/f.jpg")
+        db.add(m); db.flush()
+        vj = GenerationJob(tenant_id="tnt-am", model_id=m.id)
+        pj = PictureJob(tenant_id="tnt-am", model_id=m.id, count=1)
+        db.add_all([vj, pj]); db.flush()
+        db.add(JobItem(job_id=vj.id, category="skit", combo_hash="o1", filled_prompt="p",
+                       outfit_id=uuid.UUID(oid)))
+        db.add(PictureItem(job_id=pj.id, combo_hash="o2", filled_prompt="p", outfit_id=uuid.UUID(oid)))
+        db.commit()
+    assert client.delete(f"/api/banks/outfits/{oid}").status_code == 200
+    assert not any(o["id"] == oid for o in client.get("/api/banks/outfits").json())
+
+
+def test_delete_all_templates(client):
+    client.post("/api/banks/templates", json={
+        "category": "skit", "template_text": "A woman {outfit} {background} {characteristics}. {dialogue}"})
+    client.post("/api/banks/templates", json={
+        "category": "podcast", "template_text": "She {outfit} at a mic in {background}. {dialogue}"})
+    assert len(client.get("/api/banks/templates").json()) >= 2
+    r = client.delete("/api/banks/templates")
+    assert r.status_code == 200 and r.json()["deleted"] >= 2
+    assert client.get("/api/banks/templates").json() == []
+
+
 def test_delete_model_force_supprime_les_jobs(client):
     from app.db.models import JobItem, PictureItem, PictureJob
 

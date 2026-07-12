@@ -57,6 +57,8 @@ _ADDITIVE_COLUMNS = [
     ("generation_jobs", "music_url", "TEXT"),
     ("generation_jobs", "compose_shortfall", "JSON DEFAULT '{}'"),
     ("generation_jobs", "error", "TEXT"),
+    ("generation_jobs", "custom_prompt", "TEXT"),
+    ("generation_jobs", "omit_background", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ("users", "token_version", "INTEGER DEFAULT 0"),
     ("model_characteristics", "recurring", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ("model_characteristics", "seedream", "BOOLEAN NOT NULL DEFAULT FALSE"),

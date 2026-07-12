@@ -230,6 +230,10 @@ class GenerationJob(Base):
     aspect: Mapped[str] = mapped_column(String(8), default="9:16")
     model_variant: Mapped[str] = mapped_column(String(64), default="seedance_2.0")
     music_url: Mapped[str | None] = mapped_column(Text)  # piste mixée à l'assemblage
+    # Demande custom (one-shot) fusionnée au prompt de chaque item du job.
+    custom_prompt: Mapped[str | None] = mapped_column(Text)
+    # Case « pas de background » : aucun décor tiré, slot {background} vidé.
+    omit_background: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=false())
     budget_cap_usd: Mapped[float | None] = mapped_column(Float)
     estimated_cost_usd: Mapped[float | None] = mapped_column(Float)
     actual_cost_usd: Mapped[float | None] = mapped_column(Float)
