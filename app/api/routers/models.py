@@ -1,14 +1,23 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.api import schemas
 from app.api.deps import current_user
 from app.api.scope import owned, tenant_query
 from app.db.base import get_db
-from app.db.models import GenerationJob, Model, ModelCharacteristic, PictureJob, User
+from app.db.models import (
+    CalibrationLog,
+    GenerationJob,
+    JobItem,
+    Model,
+    ModelCharacteristic,
+    PictureItem,
+    PictureJob,
+    User,
+)
 
 router = APIRouter(prefix="/api/models", tags=["models"])
 
@@ -56,28 +65,46 @@ def update_model(
 
 @router.delete("/{model_id}")
 def delete_model(
-    model_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+    model_id: uuid.UUID,
+    force: bool = False,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
 ):
-    model = owned(db, Model, model_id, user)
-    # Les jobs vidéo/photo référencent le model via une FK non-nullable sans
-    # cascade : on refuse la suppression (409) plutôt que de laisser Postgres
-    # lever une IntegrityError (500) ou d'effacer silencieusement l'historique.
-    n_jobs = (db.scalar(
-        select(func.count()).select_from(GenerationJob).where(GenerationJob.model_id == model_id)
-    ) or 0) + (db.scalar(
-        select(func.count()).select_from(PictureJob).where(PictureJob.model_id == model_id)
-    ) or 0)
-    if n_jobs:
+    """Supprime un model. S'il est utilisé par des jobs :
+    - sans `force` : refuse (409) en indiquant le nombre de jobs concernés ;
+    - avec `force=true` : supprime AUSSI ces jobs (et leurs items/calibrations),
+      après confirmation côté UI. Les médias déjà générés restent sur R2, mais
+      leur suivi (jobs/items) est effacé."""
+    owned(db, Model, model_id, user)
+
+    vid_jobs = db.scalars(
+        select(GenerationJob.id).where(GenerationJob.model_id == model_id)
+    ).all()
+    pic_jobs = db.scalars(
+        select(PictureJob.id).where(PictureJob.model_id == model_id)
+    ).all()
+    n_jobs = len(vid_jobs) + len(pic_jobs)
+
+    if n_jobs and not force:
         raise HTTPException(
             409,
-            f"Ce model est utilisé par {n_jobs} job(s) de génération : "
-            "supprime ces jobs d'abord, ou conserve le model.",
+            f"Ce model est utilisé par {n_jobs} job(s) de génération. "
+            "Relance avec force=true pour les supprimer avec le model.",
         )
-    for charac in list(model.characteristics):
-        db.delete(charac)
-    db.delete(model)
+
+    # Cascade manuelle (FK sans ON DELETE) : enfants d'abord, puis les jobs,
+    # puis les caractéristiques, puis le model.
+    if vid_jobs:
+        db.execute(delete(CalibrationLog).where(CalibrationLog.job_id.in_(vid_jobs)))
+        db.execute(delete(JobItem).where(JobItem.job_id.in_(vid_jobs)))
+        db.execute(delete(GenerationJob).where(GenerationJob.id.in_(vid_jobs)))
+    if pic_jobs:
+        db.execute(delete(PictureItem).where(PictureItem.job_id.in_(pic_jobs)))
+        db.execute(delete(PictureJob).where(PictureJob.id.in_(pic_jobs)))
+    db.execute(delete(ModelCharacteristic).where(ModelCharacteristic.model_id == model_id))
+    db.execute(delete(Model).where(Model.id == model_id))
     db.commit()
-    return {"deleted": str(model_id)}
+    return {"deleted": str(model_id), "deleted_jobs": n_jobs}
 
 
 @router.post("/{model_id}/characteristics", response_model=schemas.CharacteristicOut)

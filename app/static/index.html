@@ -695,9 +695,18 @@ async function delBank(kind, id, after) {
   catch (e) { toast(e.message); }
 }
 window.delModel = async (id) => {
-  try { await api("/models/" + id, {method: "DELETE"}); activeModelId = "";
-    await loadModels(); loadModelsList(); loadCharacteristics(); }
-  catch (e) { toast(e.message); }
+  try {
+    await api("/models/" + id, {method: "DELETE"});
+  } catch (e) {
+    // 409 : le model est utilisé par des jobs → on propose la suppression forcée
+    if (/force=true|utilisé par/i.test(e.message)) {
+      if (!confirm("Ce model est utilisé par des jobs de génération.\n\nÊtes-vous sûr de vouloir le supprimer AVEC tous ses jobs (vidéos/photos) ? Les médias déjà générés restent sur R2 mais le suivi sera effacé.")) return;
+      try { await api("/models/" + id + "?force=true", {method: "DELETE"}); }
+      catch (e2) { return toast(e2.message); }
+    } else { return toast(e.message); }
+  }
+  activeModelId = "";
+  await loadModels(); loadModelsList(); loadCharacteristics();
 };
 window.delChar = async (id) => {
   try { await api(`/models/${getModel()}/characteristics/${id}`, {method: "DELETE"}); loadCharacteristics(); }

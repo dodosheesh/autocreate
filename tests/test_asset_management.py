@@ -180,6 +180,33 @@ def test_delete_model_utilise_par_un_job_refuse(client):
     assert client.get(f"/api/models/{mid}").status_code == 200  # toujours là
 
 
+def test_delete_model_force_supprime_les_jobs(client):
+    from app.db.models import JobItem, PictureItem, PictureJob
+
+    mid = client.post("/api/models", json={"name": "Force", "face_reference_url": "https://r2.example/f.jpg"}).json()["id"]
+    with SessionLocal() as db:
+        vj = GenerationJob(tenant_id="tnt-am", model_id=uuid.UUID(mid))
+        pj = PictureJob(tenant_id="tnt-am", model_id=uuid.UUID(mid), count=1)
+        db.add_all([vj, pj]); db.flush()
+        db.add(JobItem(job_id=vj.id, category="skit", combo_hash="x", filled_prompt="p"))
+        db.add(PictureItem(job_id=pj.id, combo_hash="y", filled_prompt="p"))
+        db.commit()
+        vjid, pjid = vj.id, pj.id
+
+    # sans force → 409
+    assert client.delete(f"/api/models/{mid}").status_code == 409
+    # avec force → supprime le model ET ses jobs/items
+    r = client.delete(f"/api/models/{mid}?force=true")
+    assert r.status_code == 200, r.text
+    assert r.json()["deleted_jobs"] == 2
+    assert client.get(f"/api/models/{mid}").status_code == 404
+    with SessionLocal() as db:
+        assert db.get(GenerationJob, vjid) is None
+        assert db.get(PictureJob, pjid) is None
+        assert db.query(JobItem).filter_by(job_id=vjid).count() == 0
+        assert db.query(PictureItem).filter_by(job_id=pjid).count() == 0
+
+
 def test_patch_model_face_et_caracteristique(client):
     mid = client.post("/api/models", json={"name": "Editable", "face_reference_url": "https://REMPLACER.r2.dev/old.jpg"}).json()["id"]
     cid = client.post(f"/api/models/{mid}/characteristics", json={
