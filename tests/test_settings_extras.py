@@ -86,3 +86,14 @@ def test_pricing_upsert(client):
     )
     assert r2.json()["id"] == r.json()["id"]
     assert r2.json()["rate_usd"] == pytest.approx(0.18)
+
+
+def test_pricing_delete(client):
+    pid = client.post(
+        "/api/pricing",
+        json={"model": "obsolete", "resolution": None, "with_ref": None,
+              "unit": "per_image", "rate_usd": 0.05},
+    ).json()["id"]
+    assert client.delete(f"/api/pricing/{pid}").status_code == 200
+    assert pid not in [r["id"] for r in client.get("/api/pricing").json()]
+    assert client.delete(f"/api/pricing/{pid}").status_code == 404  # déjà supprimé

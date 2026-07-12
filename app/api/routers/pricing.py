@@ -58,6 +58,17 @@ def update_pricing(pricing_id: uuid.UUID, payload: PricingUpdate, db: Session = 
     return row
 
 
+@router.delete("/{pricing_id}")
+def delete_pricing(pricing_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Supprime une ligne tarifaire (ex : une ligne devenue inutile)."""
+    row = db.get(Pricing, pricing_id)
+    if row is None:
+        raise HTTPException(404, "Tarif introuvable")
+    db.delete(row)
+    db.commit()
+    return {"deleted": str(pricing_id)}
+
+
 @router.post("", response_model=PricingOut)
 def create_pricing(payload: PricingCreate, db: Session = Depends(get_db)):
     """Ajoute une ligne tarifaire (ex : nouveau modèle / résolution). Upsert

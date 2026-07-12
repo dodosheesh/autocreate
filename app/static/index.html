@@ -763,8 +763,13 @@ async function loadPricing() {
       <td>${r.with_ref == null ? "—" : (r.with_ref ? "oui" : "non")}</td>
       <td class="muted">${esc(r.unit)}</td>
       <td><input type="number" step="0.0001" min="0" value="${r.rate_usd}" data-price="${r.id}" style="width:110px"></td>
+      <td><button class="x" onclick="delPricing('${r.id}')" title="supprimer cette ligne">✕</button></td>
     </tr>`).join("");
 }
+window.delPricing = async (id) => {
+  try { await api(`/pricing/${id}`, {method: "DELETE"}); toast("Ligne supprimée"); loadPricing(); refreshEstimate(); }
+  catch (err) { toast("Tarif : " + err.message); }
+};
 $("#pricing-rows").addEventListener("change", async (e) => {
   const id = e.target.dataset.price;
   if (!id) return;
