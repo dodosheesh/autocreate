@@ -1,11 +1,8 @@
 import random
 
-import pytest
-
 from app.services.composer import CharacteristicInput
 from app.services.variation import (
     CategoryPools,
-    ComposeError,
     Option,
     TemplateOption,
     background_option,
@@ -114,10 +111,15 @@ def test_categorie_parlante_rend_le_dialogue_et_garde_le_script():
     assert "deep masculine voice" in item.filled_prompt  # rendu naturel dans le prompt
 
 
-def test_speaking_sans_banque_dialogues_leve_erreur():
+def test_speaking_sans_banque_dialogues_reporte_en_shortfall():
+    # Template parlant mais aucune banque de dialogues : la catégorie est
+    # reportée en shortfall, sans faire échouer le reste du batch.
     empty = pools(speaking=True, n_dialogues=0)
-    with pytest.raises(ComposeError, match="dialogues vide"):
-        compose_batch({"podcast": 1}, {"podcast": empty}, CHARACS, FACE, rng=random.Random(5))
+    result = compose_batch(
+        {"podcast": 1}, {"podcast": empty}, CHARACS, FACE, rng=random.Random(5)
+    )
+    assert result.items == []
+    assert result.shortfall_per_category == {"podcast": 1}
 
 
 def test_slot_caption_rempli_depuis_la_banque():
@@ -133,9 +135,19 @@ def test_slot_caption_rempli_depuis_la_banque():
     assert "Caption: user caption" in item.filled_prompt
 
 
-def test_categorie_sans_template_leve_erreur():
-    with pytest.raises(ComposeError, match="aucun template"):
-        compose_batch({"skit": 1}, {}, CHARACS, FACE)
+def test_categorie_sans_template_reportee_en_shortfall():
+    # Un style sans template ne fait PAS échouer tout le batch : il est ignoré
+    # et reporté en shortfall, pendant que les styles pourvus sont composés.
+    result = compose_batch(
+        {"skit": 1, "podcast": 2},
+        {"podcast": pools()},  # skit absent → sans template
+        CHARACS,
+        FACE,
+        rng=random.Random(1),
+    )
+    assert result.shortfall_per_category == {"skit": 1}
+    assert len(result.items) == 2
+    assert all(it.category == "podcast" for it in result.items)
 
 
 def test_weighted_draw_respecte_les_poids():

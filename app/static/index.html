@@ -900,14 +900,16 @@ async function openJob(id) {
   const j = await api("/jobs/" + id);
   lastJobStatus = j.status;
   const shortfall = Object.keys(j.compose_shortfall || {}).length
-    ? `<div class="warn-box" style="display:block">Combos épuisés : ${esc(JSON.stringify(j.compose_shortfall))}</div>` : "";
+    ? `<div class="warn-box" style="display:block">Styles ignorés / combos épuisés : ${esc(JSON.stringify(j.compose_shortfall))}</div>` : "";
+  const jobErr = j.error
+    ? `<div class="warn-box" style="display:block; color:var(--err)">${esc(j.error)}</div>` : "";
   $("#job-detail").innerHTML = `
     <div style="margin-top:16px; display:flex; justify-content:space-between; align-items:center">
       <h2 style="margin:0">Job ${esc(id.slice(0, 8))} ${badge(j.status)}</h2>
       <span><button class="btn small ghost" onclick="recheckJob('${id}')">🔄 Vérifier kie.ai</button>
       <button class="btn small ghost" onclick="openJob('${id}')">↻</button>
       <button class="btn small" onclick="downloadZip('/jobs/${id}/export.zip', 'videos_${esc(id.slice(0,8))}.zip')">📦 Télécharger le ZIP</button></span>
-    </div>${shortfall}
+    </div>${jobErr}${shortfall}
     <div class="items">${j.items.map(it => `
       <div class="item">
         ${it.final_video_url ? `<video src="${esc(safeUrl(it.final_video_url))}" controls preload="metadata"></video>` : ""}

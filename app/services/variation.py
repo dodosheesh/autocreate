@@ -195,14 +195,28 @@ def compose_batch(
         if count <= 0:
             continue
         pools = pools_by_category.get(category)
+        # Catégorie sans template prêt : on la REPORTE en shortfall et on continue.
+        # (Ne JAMAIS faire échouer tout le batch parce qu'un seul style est vide —
+        # sinon « une vidéo de chaque style » plante dès qu'un style n'a pas de template.)
         if pools is None or not pools.templates:
-            raise ComposeError(f"Catégorie {category} : aucun template en banque")
+            shortfall[category] = count
+            continue
         produced = 0
         attempts_since_new = 0
         while produced < count:
-            item = _compose_one(
-                category, pools, characteristics, face_reference_url, max_refs, rng
-            )
+            try:
+                item = _compose_one(
+                    category, pools, characteristics, face_reference_url, max_refs, rng
+                )
+            except ComposeError:
+                # Template inutilisable (parlant sans dialogues, slot caption sans
+                # captions…) : tirage gâché. On retente d'autres templates ; si
+                # l'espace s'épuise, on reporte le reste en shortfall sans planter.
+                attempts_since_new += 1
+                if attempts_since_new >= MAX_DRAW_ATTEMPTS:
+                    shortfall[category] = count - produced
+                    break
+                continue
             if item.combo_hash in seen:
                 attempts_since_new += 1
                 if attempts_since_new >= MAX_DRAW_ATTEMPTS:

@@ -190,6 +190,16 @@ def compose_job(job_id: str) -> None:
                     )
                 )
             job.compose_shortfall = result.shortfall_per_category
+            if not result.items:
+                # Rien de composable : aucun template prêt pour les styles demandés.
+                # On échoue le job avec un message actionnable (au lieu de rester bloqué).
+                empties = ", ".join(sorted(result.shortfall_per_category)) or "—"
+                job.status = JobStatus.FAILED
+                job.error = (
+                    f"Aucun template prêt pour les styles demandés ({empties}). "
+                    "Ajoute au moins un template pour ces styles dans l'onglet Réglages."
+                )
+                return
         estimate_and_gate.delay(job_id)
     except variation.ComposeError as exc:
         _fail_job(job_id, f"compose: {exc}")
