@@ -1,4 +1,4 @@
-"""Export ZIP des médias approuvés (photos/vidéos) + manifest.json."""
+"""Export ZIP des médias approuvés (photos/vidéos) — médias seuls, sans JSON."""
 
 import io
 import uuid
@@ -48,7 +48,7 @@ def _fake_download(url, dest, **kw):
     dest.write_bytes(b"\x89PNG\r\n fake image bytes")
 
 
-def test_export_zip_contient_medias_et_manifest(client):
+def test_export_zip_contient_medias_seuls(client):
     job_id = _job_with_approved(n=2)
     with patch("app.services.export_zip.safe_download", side_effect=_fake_download):
         r = client.get(f"/api/pictures/jobs/{job_id}/export.zip")
@@ -56,12 +56,9 @@ def test_export_zip_contient_medias_et_manifest(client):
     assert r.headers["content-type"] == "application/zip"
     zf = zipfile.ZipFile(io.BytesIO(r.content))
     names = zf.namelist()
-    assert "manifest.json" in names
+    assert not any(n.endswith(".json") for n in names)  # AUCUN JSON dans le zip
     assert sum(1 for n in names if n.endswith(".png")) == 2  # les 2 médias
-    import json
-    manifest = json.loads(zf.read("manifest.json"))
-    assert len(manifest) == 2
-    assert all(m["prompt"] for m in manifest)  # prompts inclus
+    assert len(names) == 2  # rien d'autre que les médias
 
 
 def test_export_zip_sans_approuve_409(client):
@@ -73,7 +70,7 @@ def test_export_zip_sans_approuve_409(client):
     assert client.get(f"/api/pictures/jobs/{jid}/export.zip").status_code == 409
 
 
-def test_export_zip_media_hs_note_dans_manifest(client):
+def test_export_zip_media_hs_ignore(client):
     job_id = _job_with_approved(n=1)
 
     def boom(url, dest, **kw):
@@ -82,10 +79,8 @@ def test_export_zip_media_hs_note_dans_manifest(client):
     with patch("app.services.export_zip.safe_download", side_effect=boom):
         r = client.get(f"/api/pictures/jobs/{job_id}/export.zip")
     assert r.status_code == 200  # le zip se construit quand même
-    import json
     zf = zipfile.ZipFile(io.BytesIO(r.content))
-    manifest = json.loads(zf.read("manifest.json"))
-    assert manifest[0]["file"] is None and "download refusé" in manifest[0]["error"]
+    assert zf.namelist() == []  # média HS ignoré, aucun fichier ajouté
 
 
 def test_export_zip_cross_tenant_404(client):

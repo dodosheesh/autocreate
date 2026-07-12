@@ -906,8 +906,7 @@ async function openJob(id) {
       <h2 style="margin:0">Job ${esc(id.slice(0, 8))} ${badge(j.status)}</h2>
       <span><button class="btn small ghost" onclick="recheckJob('${id}')">🔄 Vérifier kie.ai</button>
       <button class="btn small ghost" onclick="openJob('${id}')">↻</button>
-      <button class="btn small ghost" onclick="downloadZip('/jobs/${id}/export.zip', 'videos_${esc(id.slice(0,8))}.zip')">📦 ZIP</button>
-      <button class="btn small" onclick="exportJob('${id}')">Exporter les approuvés</button></span>
+      <button class="btn small" onclick="downloadZip('/jobs/${id}/export.zip', 'videos_${esc(id.slice(0,8))}.zip')">📦 Télécharger le ZIP</button></span>
     </div>${shortfall}
     <div class="items">${j.items.map(it => `
       <div class="item">
@@ -925,13 +924,6 @@ async function review(itemId, decision) {
   try { await api(`/items/${itemId}/review`, {method: "POST", body: JSON.stringify({decision})});
         if (currentJob) openJob(currentJob); }
   catch (err) { toast("Review : " + err.message); }
-}
-async function exportJob(id) {
-  const e = await api(`/jobs/${id}/export`);
-  if (!e.approved_count) return toast("Aucun item approuvé");
-  const blob = new Blob([JSON.stringify(e, null, 2)], {type: "application/json"});
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob); a.download = `export_${id.slice(0, 8)}.json`; a.click();
 }
 async function downloadZip(path, filename) {
   toast("Préparation du ZIP…");
@@ -951,7 +943,7 @@ async function recheckJob(id) {
   try { await api(`/jobs/${id}/recheck`, {method: "POST"}); toast("Vérifié auprès de kie.ai"); openJob(id); }
   catch (err) { toast("Recheck : " + err.message); }
 }
-window.openJob = openJob; window.review = review; window.exportJob = exportJob; window.recheckJob = recheckJob;
+window.openJob = openJob; window.review = review; window.recheckJob = recheckJob;
 
 // ================= PHOTOS =================
 let currentPicJob = null;
@@ -1028,8 +1020,7 @@ async function openPicJob(id) {
     <div style="margin-top:14px; display:flex; justify-content:space-between; align-items:center">
       <b>Photos ${esc(id.slice(0,8))} ${badge(j.status)}</b>
       <span><button class="btn small ghost" onclick="recheckPicJob('${id}')">🔄 Vérifier kie.ai</button>
-      <button class="btn small ghost" onclick="downloadZip('/pictures/jobs/${id}/export.zip', 'photos_${esc(id.slice(0,8))}.zip')">📦 ZIP</button>
-      <button class="btn small" onclick="exportPicJob('${id}')">Exporter approuvées</button></span>
+      <button class="btn small" onclick="downloadZip('/pictures/jobs/${id}/export.zip', 'photos_${esc(id.slice(0,8))}.zip')">📦 Télécharger le ZIP</button></span>
     </div>
     <div class="items">${j.items.map(it => `
       <div class="item">
@@ -1052,15 +1043,8 @@ async function reviewPic(itemId, decision) {
         if (currentPicJob) openPicJob(currentPicJob); }
   catch (err) { toast("Review : " + err.message); }
 }
-async function exportPicJob(id) {
-  const e = await api(`/pictures/jobs/${id}/export`);
-  if (!e.approved_count) return toast("Aucune photo approuvée");
-  const blob = new Blob([JSON.stringify(e, null, 2)], {type: "application/json"});
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-  a.download = `pictures_${id.slice(0,8)}.json`; a.click();
-}
 window.delPrompt = delPrompt; window.openPicJob = openPicJob;
-window.reviewPic = reviewPic; window.exportPicJob = exportPicJob;
+window.reviewPic = reviewPic;
 
 // --- bootstrap ---
 requireAuth().then(() => {
