@@ -97,3 +97,34 @@ def test_diagnostics_exige_auth():
     anon = TestClient(app)
     assert anon.get("/api/diagnostics").status_code == 401
     assert anon.get("/api/diagnostics/reference-dimensions").status_code == 401
+    assert anon.post("/api/diagnostics/reference-dimensions/purge").status_code == 401
+
+
+def test_purge_zippe_puis_supprime_les_pools(client):
+    # Toutes les images sont déclarées hors bornes → tout doit être purgé
+    # (sauf le visage model : signalé, jamais supprimé).
+    import json as _json
+
+    def small(url):
+        return {"status": 200, "width": 100, "height": 100, "seedance_ok": False}
+
+    def fake_dl(url, dest, **kw):
+        dest.write_bytes(b"\x89PNG fake")
+
+    with patch("app.api.routers.diagnostics._probe_url", side_effect=small), \
+         patch("app.net.safe_download", side_effect=fake_dl):
+        r = client.post("/api/diagnostics/reference-dimensions/purge")
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == "application/zip"
+    s = _json.loads(r.headers["X-Purge-Summary"])
+    assert s["deleted"]["outfit"] == 2      # 2 outfits du fixture supprimés
+    assert s["deleted"]["characteristic"] == 1
+    assert s["deleted_total"] == 3
+    assert s["faces_to_fix"] == ["M"]        # visage model signalé, pas supprimé
+    assert s["zipped"] == 4                   # les 4 images sauvées dans le ZIP
+    # les pools sont bien vidés
+    with SessionLocal() as db:
+        from app.db.models import Background, ModelCharacteristic, Outfit
+        assert db.query(Outfit).filter_by(tenant_id="tnt-diag").count() == 0
+        assert db.query(ModelCharacteristic).count() == 0
+        assert db.query(Background).filter_by(tenant_id="tnt-diag").count() == 0

@@ -277,7 +277,7 @@
       <div class="hint">Si une génération reste bloquée en <code>pending</code> ou échoue : vérifie l'état du
         worker/Redis et repère les images enregistrées avec une URL cassée (placeholder R2).</div>
       <button class="btn small" id="diag-btn">🩺 Lancer le diagnostic</button>
-      <button class="btn small" id="dim-btn">📐 Trouver les images hors dimension (vidéo)</button>
+      <button class="btn small" id="dim-btn">📐 Télécharger + purger les images hors dimension (vidéo)</button>
       <div id="diag-out" style="margin-top:12px"></div>
       <div id="dim-out" style="margin-top:12px"></div>
     </div>
@@ -493,6 +493,7 @@ async function scanDimensions() {
   const btn = $("#dim-btn"), out = $("#dim-out");
   btn.disabled = true; out.innerHTML = '<span class="muted">Scan de toutes les images…</span>';
   try {
+    // 1) repérage (aperçu avant purge)
     const d = await api("/diagnostics/reference-dimensions");
     if (!d.total_checked) { out.innerHTML = '<span class="muted">Aucune image de référence enregistrée.</span>'; btn.disabled = false; return; }
     if (!d.problems_count) {
@@ -500,17 +501,41 @@ async function scanDimensions() {
       btn.disabled = false; return;
     }
     const rows = d.problems.map(p => {
-      const isDim = p.status === 200;
-      const detail = isDim
+      const detail = p.status === 200
         ? `${p.width}×${p.height} — hors ${d.min_px}–${d.max_px} px`
         : `non téléchargeable (${esc(p.error || p.status)})`;
       return `<div class="est-line"><span><b>${esc(p.type)}</b> — ${esc(p.label || "")}</span>
-        <span style="color:var(--err)">${esc(detail)}</span></div>
-        <div class="hint" style="margin:0 0 6px"><a href="${safeUrl(p.url)}" target="_blank" rel="noopener" style="color:var(--accent)">ouvrir l'image ↗</a></div>`;
+        <span style="color:var(--err)">${esc(detail)}</span></div>`;
     }).join("");
-    out.innerHTML = `<div class="warn-box" style="display:block">⚠ ${d.problems_count} image(s) à corriger — ré-uploade une version <b>≥ ${d.min_px} px de côté</b> (et ≤ ${d.max_px} px) :</div>${rows}`;
+    out.innerHTML = `<div class="warn-box" style="display:block">⚠ ${d.problems_count} image(s) hors dimension :</div>${rows}`;
+    // 2) confirmation avant purge (opération destructive)
+    if (!confirm(`${d.problems_count} image(s) hors dimension vont être TÉLÉCHARGÉES en ZIP puis SUPPRIMÉES de leurs pools (outfits, caractéristiques, backgrounds).\n\nLe visage d'une model n'est jamais supprimé (à ré-uploader à la main). Continuer ?`)) {
+      out.innerHTML += '<div class="hint" style="margin-top:8px">Purge annulée.</div>';
+      btn.disabled = false; return;
+    }
+    // 3) purge : télécharge le ZIP + supprime les lignes, lit le résumé dans l'en-tête
+    btn.textContent = "Téléchargement + purge…";
+    const r = await fetch("/api/diagnostics/reference-dimensions/purge", {method: "POST"});
+    if (r.status === 401) { location.href = "/login"; return; }
+    if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.detail || "purge impossible"); }
+    const blob = await r.blob();
+    let s = {}; try { s = JSON.parse(r.headers.get("X-Purge-Summary") || "{}"); } catch (_) {}
+    if (s.zipped) {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = "images_hors_dimension.zip";
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+    }
+    const del = s.deleted || {};
+    const faceNote = (s.faces_to_fix && s.faces_to_fix.length)
+      ? `<div class="warn-box" style="display:block; margin-top:8px">⚠ Visage(s) model à ré-uploader à la main (non supprimés) : <b>${esc(s.faces_to_fix.join(", "))}</b> — édite la fiche model.</div>` : "";
+    out.innerHTML = `<div class="hint" style="color:var(--ok)">✔ ZIP téléchargé (${s.zipped || 0} image(s)). Supprimées des pools : `
+      + `outfits ${del.outfit || 0}, caractéristiques ${del.characteristic || 0}, backgrounds ${del.background || 0}.</div>${faceNote}`;
+    // rafraîchit les listes impactées
+    loadCharacteristics().catch(() => {});
+    loadBankList("outfits", "#list-outfits", o => imgRow(o, "delOutfit")).catch(() => {});
+    loadBankList("backgrounds", "#list-backgrounds", b => imgRow(b, "delBackground")).catch(() => {});
   } catch (e) { out.innerHTML = `<span style="color:var(--err)">${esc(e.message)}</span>`; }
-  btn.disabled = false;
+  btn.disabled = false; btn.textContent = "📐 Télécharger + purger les images hors dimension (vidéo)";
 }
 async function api(path, opts) {
   const r = await fetch("/api" + path, Object.assign({headers: {"Content-Type": "application/json"}}, opts));
