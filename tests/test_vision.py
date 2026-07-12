@@ -87,6 +87,26 @@ def test_vision_route_vers_claude_si_cle_anthropic(mock_post, mock_settings):
                and p["source"]["url"] == "https://r2/img.jpg" for p in content)
 
 
+def test_clean_generated_prompt_strip_markdown():
+    from app.integrations.vision import _clean_generated_prompt
+    assert _clean_generated_prompt("# Prompt\nThe woman stands in a store.") == "The woman stands in a store."
+    assert _clean_generated_prompt("**Prompt:** A neon street") == "A neon street"
+    assert _clean_generated_prompt("## Prompt: hello") == "hello"
+    assert _clean_generated_prompt("```\nA plain prompt\n```") == "A plain prompt"
+    assert _clean_generated_prompt("A clean prompt already") == "A clean prompt already"
+
+
+@patch("app.integrations.vision.get_settings")
+@patch("app.integrations.vision.httpx.post")
+def test_reverse_engineer_nettoie_le_prefixe(mock_post, mock_settings):
+    mock_settings.return_value = MagicMock(anthropic_api_key="", kie_api_key="k",
+                                           kie_vision_model="m", kie_vision_base_url="https://x/v1")
+    mock_post.return_value = _mock_response(
+        200, {"choices": [{"message": {"content": "# Prompt\nA soft portrait, window light"}}]}
+    )
+    assert reverse_engineer_prompt("https://r2/img.jpg") == "A soft portrait, window light"
+
+
 def test_anthropic_content_traduit_data_uri():
     from app.integrations.vision import _anthropic_content
     parts = [

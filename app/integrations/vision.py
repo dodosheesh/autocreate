@@ -9,6 +9,7 @@ Le modèle et l'URL sont configurables (`KIE_VISION_MODEL`,
 
 import base64
 import mimetypes
+import re
 
 import httpx
 
@@ -20,9 +21,13 @@ from app.config import get_settings
 REVERSE_ENGINEER_SYSTEM = (
     "You are a prompt engineer. Given a reference photo, write a single reusable "
     "image-generation prompt that captures its scene, composition, lighting, camera, "
-    "pose, framing, mood and style. Describe the SUBJECT generically as 'the woman' — "
+    "framing, mood and style. Describe the SUBJECT generically as 'the woman' — "
     "never identify or describe a specific real person's facial identity, since the "
-    "character's face is supplied separately. Output only the prompt text, no preamble."
+    "character's face is supplied separately. "
+    "Keep the description TASTEFUL, non-explicit and safe-for-work: focus on the "
+    "setting, wardrobe, lighting and overall vibe rather than the body; avoid "
+    "sexualized, suggestive, revealing or otherwise sensitive wording that image "
+    "safety filters would reject. Output only the prompt text, no preamble, no markdown."
 )
 
 
@@ -142,6 +147,23 @@ def _frame_data_uri(path: str) -> str:
     return f"data:{mime};base64,{b64}"
 
 
+def _clean_generated_prompt(text: str) -> str:
+    """Retire les artefacts markdown que certains modèles vision ajoutent en
+    tête (« # Prompt », « **Prompt:** », fences ```), pour ne garder que le
+    prompt exploitable."""
+    text = (text or "").strip()
+    # fences de code éventuels ```lang ... ```
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-zA-Z]*\s*", "", text)
+        text = re.sub(r"\s*```$", "", text).strip()
+    # label « # Prompt », « ## Prompt: », « **Prompt:** », « Prompt: » en tête
+    # (# / * / : / espaces autour du mot, dans n'importe quel ordre)
+    text = re.sub(r"^[#*\s]*prompt[#*\s]*:?[#*\s]*", "", text, count=1, flags=re.IGNORECASE)
+    # tout dièse d'en-tête résiduel en tout début
+    text = re.sub(r"^\s*#{1,6}\s*", "", text)
+    return text.strip()
+
+
 def reverse_engineer_prompt(image_url: str, model_description: str | None = None) -> str:
     """Renvoie un prompt de génération décrivant l'image, adapté à la model.
 
@@ -151,12 +173,14 @@ def reverse_engineer_prompt(image_url: str, model_description: str | None = None
     user_text = "Reverse-engineer this photo into a reusable generation prompt."
     if model_description:
         user_text += f" Adapt the wording so it fits this recurring model: {model_description}."
-    return _call_vision(
-        REVERSE_ENGINEER_SYSTEM,
-        [
-            {"type": "text", "text": user_text},
-            {"type": "image_url", "image_url": {"url": image_url}},
-        ],
+    return _clean_generated_prompt(
+        _call_vision(
+            REVERSE_ENGINEER_SYSTEM,
+            [
+                {"type": "text", "text": user_text},
+                {"type": "image_url", "image_url": {"url": image_url}},
+            ],
+        )
     )
 
 
@@ -210,4 +234,4 @@ def reverse_engineer_video_prompt(
     parts = [{"type": "text", "text": user_text}]
     for path in frame_paths:
         parts.append({"type": "image_url", "image_url": {"url": _frame_data_uri(path)}})
-    return _call_vision(REVERSE_ENGINEER_VIDEO_SYSTEM, parts)
+    return _clean_generated_prompt(_call_vision(REVERSE_ENGINEER_VIDEO_SYSTEM, parts))
