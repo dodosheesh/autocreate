@@ -318,7 +318,7 @@ class PicturePromptOut(BaseModel):
 class PictureJobCreate(BaseModel):
     model_id: uuid.UUID
     count: int = Field(ge=1, le=200)
-    image_size: ImageSize = "1:1"
+    image_size: ImageSize = "4:3"
     image_resolution: Literal["1K", "2K"] = "2K"
     output_format: Literal["png", "jpeg"] = "png"
     model_variant: str = "seedream"
