@@ -885,7 +885,7 @@ async function openJob(id) {
       <div class="item">
         ${it.final_video_url ? `<video src="${esc(safeUrl(it.final_video_url))}" controls preload="metadata"></video>` : ""}
         <div>${badge(it.status)} ${badge("qc: " + it.qc_status)} ${it.review_status !== "pending" ? badge(it.review_status) : ""}</div>
-        <div class="prompt">${esc(it.category)} — ${esc((it.filled_prompt || "").slice(0, 140))}</div>
+        <div class="prompt" title="${esc(it.filled_prompt || "")}">${esc(it.category)} — ${esc((it.filled_prompt || "").slice(0, 140))}</div>
         ${it.error ? `<div class="prompt" style="color:var(--err)">${esc(it.error.slice(0, 120))}</div>` : ""}
         ${it.status === "done" ? `<div class="actions">
           <button class="btn small ok" onclick="review('${it.id}','approved')">✓ Approve</button>
@@ -990,7 +990,7 @@ async function openPicJob(id) {
       <div class="item">
         ${it.final_image_url ? `<img src="${esc(safeUrl(it.final_image_url))}">` : ""}
         <div>${badge(it.status)} ${badge("qc: "+it.qc_status)} ${it.review_status!=="pending"?badge(it.review_status):""}</div>
-        <div class="prompt">${esc((it.filled_prompt||"").slice(0,120))}</div>
+        <div class="prompt" title="${esc(it.filled_prompt||"")}">${esc((it.filled_prompt||"").slice(0,120))}</div>
         ${it.error ? `<div class="prompt" style="color:var(--err)">${esc(it.error.slice(0,100))}</div>` : ""}
         ${it.status==="done" ? `<div class="actions">
           <button class="btn small ok" onclick="reviewPic('${it.id}','approved')">✓</button>
