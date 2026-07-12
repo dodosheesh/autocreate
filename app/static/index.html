@@ -988,9 +988,14 @@ async function loadTemplates() {
   const tmpls = await api("/banks/templates");
   const rv = tmpls.filter(t => t.source_video_url);
   $("#rv-templates").innerHTML = rv.length
-    ? rv.map(t => `<div class="est-line"><span class="muted">${badge(t.status)} [${esc(t.category)}] ${esc((t.template_text || "").slice(0, 70))}</span></div>`).join("")
+    ? rv.map(t => `<div class="est-line"><span class="muted">${badge(t.status)} [${esc(t.category)}] ${esc((t.template_text || "").slice(0, 70))}</span>
+        <button class="btn small ghost" onclick="delRvTemplate('${t.id}')" title="supprimer">✕</button></div>`).join("")
     : '<span class="muted">aucune vidéo répliquée</span>';
 }
+window.delRvTemplate = async (id) => {
+  try { await api("/banks/templates/" + id, {method: "DELETE"}); toast("Template supprimé"); loadTemplates(); }
+  catch (e) { toast("Suppression : " + e.message); }
+};
 
 let currentJob = null;
 async function loadJobs() {
