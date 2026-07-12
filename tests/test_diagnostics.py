@@ -36,7 +36,8 @@ def client():
 def test_diagnostics_detecte_urls_cassees_et_etat_worker(client):
     with patch("app.api.routers.diagnostics._broker_ok", return_value=True), \
          patch("app.api.routers.diagnostics._workers", return_value=["celery@w1"]), \
-         patch("app.api.routers.diagnostics._probe_url", return_value=200):
+         patch("app.api.routers.diagnostics._probe_url",
+               return_value={"status": 200, "width": 1024, "height": 1024, "seedance_ok": True}):
         r = client.get("/api/diagnostics")
     assert r.status_code == 200, r.text
     d = r.json()
@@ -51,10 +52,22 @@ def test_diagnostics_detecte_urls_cassees_et_etat_worker(client):
 def test_diagnostics_worker_absent(client):
     with patch("app.api.routers.diagnostics._broker_ok", return_value=True), \
          patch("app.api.routers.diagnostics._workers", return_value=[]), \
-         patch("app.api.routers.diagnostics._probe_url", return_value=403):
+         patch("app.api.routers.diagnostics._probe_url",
+               return_value={"status": "unreachable", "error": "403"}):
         d = client.get("/api/diagnostics").json()
     assert d["workers_online"] == 0  # signale l'absence de worker
-    assert d["images_public_ok"] is False  # 403 → images pas publiques
+    assert d["images_public_ok"] is False  # unreachable → images pas publiques
+
+
+def test_diagnostics_detecte_image_trop_petite_pour_seedance(client):
+    with patch("app.api.routers.diagnostics._broker_ok", return_value=True), \
+         patch("app.api.routers.diagnostics._workers", return_value=["w1"]), \
+         patch("app.api.routers.diagnostics._probe_url",
+               return_value={"status": 200, "width": 180, "height": 180, "seedance_ok": False}):
+        d = client.get("/api/diagnostics").json()
+    assert d["images_public_ok"] is True  # téléchargeable
+    assert d["seedance_dimension_issues"]  # mais hors 300–6000 px → signalé
+    assert any("180×180" in v for v in d["seedance_dimension_issues"].values())
 
 
 def test_diagnostics_exige_auth():

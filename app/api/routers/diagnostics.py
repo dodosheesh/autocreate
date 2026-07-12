@@ -32,17 +32,31 @@ def _is_placeholder(url: str | None) -> bool:
     return (not u) or any(tok in u for tok in _PLACEHOLDER_TOKENS)
 
 
-def _probe_url(url: str) -> int | str:
-    """Vérifie qu'une image est RÉELLEMENT téléchargeable publiquement (comme le
-    ferait kie.ai). Renvoie le code HTTP, ou 'unreachable' si l'appel échoue."""
-    import httpx
+# Seedance (vidéo) exige des images de référence entre 300 et 6000 px de côté.
+SEEDANCE_MIN_PX, SEEDANCE_MAX_PX = 300, 6000
+
+
+def _probe_url(url: str) -> dict:
+    """Télécharge l'image (anti-SSRF) et renvoie son accessibilité + dimensions.
+    Sert à repérer une image non publique OU hors des bornes 300–6000 px que
+    Seedance refuse (« Width must be between 300px and 6000px »)."""
+    import tempfile
+    from pathlib import Path
+
+    from PIL import Image
+
+    from app.net import safe_download
 
     try:
-        r = httpx.get(url, timeout=6, follow_redirects=True,
-                      headers={"Range": "bytes=0-0"})
-        return r.status_code
-    except Exception:
-        return "unreachable"
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp) / "probe"
+            safe_download(url, dest)
+            with Image.open(dest) as im:
+                w, h = im.size
+        in_range = SEEDANCE_MIN_PX <= min(w, h) and max(w, h) <= SEEDANCE_MAX_PX
+        return {"status": 200, "width": w, "height": h, "seedance_ok": in_range}
+    except Exception as exc:
+        return {"status": "unreachable", "error": str(exc)[:150]}
 
 
 def _broker_ok() -> bool:
@@ -101,7 +115,13 @@ def diagnostics(db: Session = Depends(get_db), user: User = Depends(current_user
         if u:
             samples[label] = u
     reachable = {label: _probe_url(url) for label, url in samples.items()}
-    all_ok = all(isinstance(v, int) and 200 <= v < 400 for v in reachable.values())
+    all_public = all(p.get("status") == 200 for p in reachable.values())
+    # Dimensions hors bornes Seedance (300–6000 px) → cause du « Width must be… »
+    dim_issues = {
+        label: f"{p['width']}×{p['height']}"
+        for label, p in reachable.items()
+        if p.get("status") == 200 and not p.get("seedance_ok")
+    }
 
     workers = _workers()
     return {
@@ -110,6 +130,7 @@ def diagnostics(db: Session = Depends(get_db), user: User = Depends(current_user
         "worker_names": workers,
         "broken_reference_urls": broken,
         "broken_total": sum(broken.values()),
-        "image_reachability": reachable,  # code HTTP par type (200 = ok)
-        "images_public_ok": all_ok,
+        "image_reachability": reachable,  # {status, width, height, seedance_ok} par type
+        "images_public_ok": all_public,
+        "seedance_dimension_issues": dim_issues,  # images hors 300–6000 px (vidéo)
     }

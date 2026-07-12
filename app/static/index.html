@@ -464,13 +464,20 @@ async function runDiagnostics() {
     const brokenRows = Object.entries(d.broken_reference_urls)
       .map(([k, v]) => `<div class="est-line"><span>${k}</span><span class="${v ? '' : 'muted'}" style="${v ? 'color:var(--err)' : ''}">${v} cassée(s)</span></div>`).join("");
     const reachRows = Object.entries(d.image_reachability || {})
-      .map(([k, v]) => { const good = typeof v === "number" && v >= 200 && v < 400;
-        return `<div class="est-line"><span>image ${esc(k)} téléchargeable</span><span style="color:${good ? 'var(--ok)' : 'var(--err)'}">${good ? 'OK' : v}</span></div>`; }).join("");
+      .map(([k, v]) => {
+        const okDl = v.status === 200;
+        const dimBad = okDl && v.seedance_ok === false;
+        const txt = okDl ? `${v.width}×${v.height}${dimBad ? ' ⚠ hors 300–6000px (vidéo)' : ''}` : (v.error || v.status || "KO");
+        const color = !okDl ? 'var(--err)' : (dimBad ? 'var(--warn)' : 'var(--ok)');
+        return `<div class="est-line"><span>image ${esc(k)}</span><span style="color:${color}">${esc(String(txt))}</span></div>`;
+      }).join("");
+    const dimIssues = Object.entries(d.seedance_dimension_issues || {});
     out.innerHTML = `
       <div class="est-line"><span>Broker Redis joignable</span><span>${ok(d.broker_reachable)}</span></div>
       <div class="est-line"><span>Workers en ligne</span><span class="${d.workers_online ? '' : 'muted'}" style="${d.workers_online ? '' : 'color:var(--err)'}">${d.workers_online}</span></div>
       ${reachRows}
-      ${!d.images_public_ok && reachRows ? '<div class="warn-box" style="display:block">⚠ Des images de référence ne sont PAS téléchargeables publiquement (403/404/unreachable). C\'est la cause typique du « internal error » de kie.ai. Active l\'accès public de ton bucket R2 (Public Development URL) et vérifie R2_PUBLIC_BASE_URL.</div>' : ''}
+      ${!d.images_public_ok && reachRows ? '<div class="warn-box" style="display:block">⚠ Des images de référence ne sont PAS téléchargeables publiquement (403/404/unreachable). Active l\'accès public de ton bucket R2 et vérifie R2_PUBLIC_BASE_URL.</div>' : ''}
+      ${dimIssues.length ? `<div class="warn-box" style="display:block">⚠ Vidéo (Seedance) : ${dimIssues.map(([k, s]) => `<b>${esc(k)}</b> ${esc(s)}`).join(", ")} — hors des bornes <b>300–6000 px</b>. C'est la cause du « Width must be between 300px and 6000px ». Ré-uploade une version <b>plus grande</b> (≥ 300 px de côté) de cette image.</div>` : ''}
       ${brokenRows}
       ${d.broken_total ? `<div class="warn-box" style="display:block">⚠ ${d.broken_total} image(s) de référence ont une URL cassée (placeholder R2).
         Elles ont été enregistrées avant la config R2 → <b>supprime et ré-uploade</b> ces éléments (model, caractéristiques, outfits, backgrounds).</div>`
