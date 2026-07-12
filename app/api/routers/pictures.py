@@ -8,6 +8,7 @@ async, prompt sauvegardé à vie) → POST /jobs pour générer N photos de la m
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -29,6 +30,7 @@ from app.db.models import (
 from app.integrations.vision import reverse_engineer_prompt as _vision_reverse
 from app.services.calibration import get_calibrated_qc_rate
 from app.services.estimator import estimate_pictures, max_pictures_for_budget
+from app.services.export_zip import build_media_zip
 from app.services.pricing import load_rates
 from app.workers.picture_tasks import compose_picture_job, recheck_picture_job
 
@@ -202,4 +204,28 @@ def export_job(
         job_id=job.id,
         approved_count=len(approved),
         videos=[{"item_id": str(i.id), "url": i.final_image_url} for i in approved],
+    )
+
+
+@router.get("/jobs/{job_id}/export.zip")
+def export_job_zip(
+    job_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    """ZIP de toutes les photos approuvées du job (fichiers + manifest.json)."""
+    job = owned(db, PictureJob, job_id, user)
+    approved = [
+        i for i in job.items
+        if i.review_status == ReviewStatus.APPROVED and i.final_image_url
+    ]
+    if not approved:
+        raise HTTPException(409, "Aucune photo approuvée à exporter")
+    entries = [
+        {"item_id": i.id, "url": i.final_image_url, "prompt": i.filled_prompt}
+        for i in approved
+    ]
+    data = build_media_zip(entries, default_ext="png")
+    return Response(
+        content=data,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="photos_{str(job_id)[:8]}.zip"'},
     )

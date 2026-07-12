@@ -879,6 +879,7 @@ async function openJob(id) {
       <h2 style="margin:0">Job ${esc(id.slice(0, 8))} ${badge(j.status)}</h2>
       <span><button class="btn small ghost" onclick="recheckJob('${id}')">🔄 Vérifier kie.ai</button>
       <button class="btn small ghost" onclick="openJob('${id}')">↻</button>
+      <button class="btn small ghost" onclick="downloadZip('/jobs/${id}/export.zip', 'videos_${esc(id.slice(0,8))}.zip')">📦 ZIP</button>
       <button class="btn small" onclick="exportJob('${id}')">Exporter les approuvés</button></span>
     </div>${shortfall}
     <div class="items">${j.items.map(it => `
@@ -905,6 +906,20 @@ async function exportJob(id) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob); a.download = `export_${id.slice(0, 8)}.json`; a.click();
 }
+async function downloadZip(path, filename) {
+  toast("Préparation du ZIP…");
+  try {
+    const r = await fetch("/api" + path);
+    if (r.status === 401) { location.href = "/login"; return; }
+    if (!r.ok) { const j = await r.json().catch(() => ({})); return toast(j.detail || "Export ZIP impossible"); }
+    const blob = await r.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(a.href);
+  } catch (e) { toast("ZIP : " + e.message); }
+}
+window.downloadZip = downloadZip;
 async function recheckJob(id) {
   try { await api(`/jobs/${id}/recheck`, {method: "POST"}); toast("Vérifié auprès de kie.ai"); openJob(id); }
   catch (err) { toast("Recheck : " + err.message); }
@@ -984,6 +999,7 @@ async function openPicJob(id) {
     <div style="margin-top:14px; display:flex; justify-content:space-between; align-items:center">
       <b>Photos ${esc(id.slice(0,8))} ${badge(j.status)}</b>
       <span><button class="btn small ghost" onclick="recheckPicJob('${id}')">🔄 Vérifier kie.ai</button>
+      <button class="btn small ghost" onclick="downloadZip('/pictures/jobs/${id}/export.zip', 'photos_${esc(id.slice(0,8))}.zip')">📦 ZIP</button>
       <button class="btn small" onclick="exportPicJob('${id}')">Exporter approuvées</button></span>
     </div>
     <div class="items">${j.items.map(it => `

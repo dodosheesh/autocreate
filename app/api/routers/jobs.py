@@ -2,6 +2,7 @@ import random
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -23,6 +24,7 @@ from app.db.models import (
 from app.services import composer
 from app.services.calibration import get_calibrated_qc_rate
 from app.services.estimator import ItemSpec, estimate_batch, max_videos_for_budget
+from app.services.export_zip import build_media_zip
 from app.services.pricing import load_rates
 from app.workers.tasks import compose_job, dispatch_seedance, recheck_video_job
 
@@ -339,4 +341,28 @@ def export_job(
             }
             for item in approved
         ],
+    )
+
+
+@router.get("/jobs/{job_id}/export.zip")
+def export_job_zip(
+    job_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    """ZIP de toutes les vidéos approuvées du job (fichiers + manifest.json)."""
+    job = owned(db, GenerationJob, job_id, user)
+    approved = [
+        i for i in job.items
+        if i.review_status == ReviewStatus.APPROVED and i.final_video_url
+    ]
+    if not approved:
+        raise HTTPException(409, "Aucune vidéo approuvée à exporter")
+    entries = [
+        {"item_id": i.id, "url": i.final_video_url, "prompt": i.filled_prompt}
+        for i in approved
+    ]
+    data = build_media_zip(entries, default_ext="mp4")
+    return Response(
+        content=data,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="videos_{str(job_id)[:8]}.zip"'},
     )
