@@ -128,3 +128,36 @@ def test_purge_zippe_puis_supprime_les_pools(client):
         assert db.query(Outfit).filter_by(tenant_id="tnt-diag").count() == 0
         assert db.query(ModelCharacteristic).count() == 0
         assert db.query(Background).filter_by(tenant_id="tnt-diag").count() == 0
+
+
+def test_purge_detache_les_references_avant_suppression(client):
+    # Un outfit référencé par un job passé : la purge doit détacher la FK
+    # (JobItem.outfit_id -> NULL) PUIS supprimer l'outfit, sans IntegrityError.
+    from app.db.models import GenerationJob, ItemStatus, JobItem, Model, Outfit
+
+    with SessionLocal() as db:
+        m = Model(tenant_id="tnt-diag", name="FK", face_reference_url="https://pub.r2.dev/fk.jpg")
+        db.add(m); db.flush()
+        o = Outfit(tenant_id="tnt-diag", image_url="https://pub.r2.dev/used.jpg", tags=["used"])
+        db.add(o); db.flush()
+        job = GenerationJob(tenant_id="tnt-diag", model_id=m.id, status="completed")
+        db.add(job); db.flush()
+        it = JobItem(job_id=job.id, category="skit", combo_hash="fk1",
+                     filled_prompt="p", outfit_id=o.id, status=ItemStatus.DONE)
+        db.add(it); db.commit()
+        oid, iid = o.id, it.id
+
+    def small(url):
+        return {"status": 200, "width": 100, "height": 100, "seedance_ok": False}
+
+    def fake_dl(url, dest, **kw):
+        dest.write_bytes(b"x")
+
+    with patch("app.api.routers.diagnostics._probe_url", side_effect=small), \
+         patch("app.net.safe_download", side_effect=fake_dl):
+        r = client.post("/api/diagnostics/reference-dimensions/purge")
+    assert r.status_code == 200, r.text
+    with SessionLocal() as db:
+        from app.db.models import JobItem as JI, Outfit as OF
+        assert db.get(OF, oid) is None              # outfit supprimé
+        assert db.get(JI, iid).outfit_id is None      # référence historique détachée

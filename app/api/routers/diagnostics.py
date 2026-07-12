@@ -6,18 +6,20 @@ But : donner à l'utilisateur une réponse claire quand une génération reste
 
 import json
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.api.deps import current_user
 from app.db.base import get_db
 from app.db.models import (
     Background,
+    JobItem,
     Model,
     ModelCharacteristic,
     Outfit,
+    PictureItem,
     PicturePrompt,
     User,
 )
@@ -185,25 +187,37 @@ def purge_bad_reference_images(
     # 2) suppression des lignes de pool (hors visage model)
     deleted = {"characteristic": 0, "outfit": 0, "background": 0}
     faces_to_fix: list[str] = []
-    for p in problems:
-        if p["kind"] == "model_face":
-            faces_to_fix.append(p.get("label") or p["id"])
-            continue
-        display, model = _DELETABLE[p["kind"]]
-        import uuid as _uuid
+    import uuid as _uuid
 
-        row = db.get(model, _uuid.UUID(p["id"]))
-        if row is None:
-            continue
-        # Les assets viennent déjà d'une requête scopée au tenant. Défense en
-        # profondeur : si la ligne porte un tenant_id (outfit/background), il doit
-        # correspondre ; la caractéristique n'en a pas (scopée via sa model).
-        row_tid = getattr(row, "tenant_id", None)
-        if row_tid is not None and row_tid != user.tenant_id:
-            continue
-        db.delete(row)
-        deleted[p["kind"]] += 1
-    db.commit()
+    try:
+        for p in problems:
+            if p["kind"] == "model_face":
+                faces_to_fix.append(p.get("label") or p["id"])
+                continue
+            _display, model = _DELETABLE[p["kind"]]
+            row = db.get(model, _uuid.UUID(p["id"]))
+            if row is None:
+                continue
+            # Les assets viennent déjà d'une requête scopée au tenant. Défense en
+            # profondeur : si la ligne porte un tenant_id (outfit/background), il doit
+            # correspondre ; la caractéristique n'en a pas (scopée via sa model).
+            row_tid = getattr(row, "tenant_id", None)
+            if row_tid is not None and row_tid != user.tenant_id:
+                continue
+            # Détacher les références historiques (FK) AVANT de supprimer, sinon
+            # Postgres lève une IntegrityError si un job passé pointe cet asset.
+            # Les médias déjà générés gardent leur URL finale : aucune perte.
+            if p["kind"] == "outfit":
+                db.execute(update(JobItem).where(JobItem.outfit_id == row.id).values(outfit_id=None))
+                db.execute(update(PictureItem).where(PictureItem.outfit_id == row.id).values(outfit_id=None))
+            elif p["kind"] == "background":
+                db.execute(update(JobItem).where(JobItem.background_id == row.id).values(background_id=None))
+            db.delete(row)
+            deleted[p["kind"]] += 1
+        db.commit()
+    except Exception as exc:  # remonte une raison claire au lieu d'un 500 opaque
+        db.rollback()
+        raise HTTPException(500, f"purge : suppression impossible ({str(exc)[:200]})")
 
     summary = {
         "problems_found": len(problems),
