@@ -18,8 +18,11 @@ def test_build_seedream_input_multi_refs():
         "prompt": "a portrait",
         "image_urls": ["https://r2/face.jpg", "https://r2/tattoo.jpg"],
         "aspect_ratio": "9:16",
-        "quality": "2K",
+        "quality": "high",  # 2K → high (schéma seedream)
+        "output_format": "png",
     }
+    # 1K → basic
+    assert build_seedream_input("p", ["u"], resolution="1K")["quality"] == "basic"
 
 
 def test_dispatch_photo_utilise_seedream():
@@ -42,7 +45,7 @@ def test_dispatch_photo_utilise_seedream():
     payload = mk.call_args[0][0]
     assert payload["image_urls"] == ["https://pub.r2.dev/f.jpg", "https://pub.r2.dev/t.jpg"]
     assert payload["aspect_ratio"] == "9:16"
-    assert payload["quality"] in ("1K", "2K")
+    assert payload["quality"] in ("basic", "high")
     with SessionLocal() as db:
         it = db.get(PictureItem, uuid.UUID(item_id))
         assert it.status == ItemStatus.DISPATCHED

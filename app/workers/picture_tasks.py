@@ -266,6 +266,7 @@ def dispatch_nano_banana(self, item_id: str) -> None:
                 reference_image_urls=item.reference_image_urls,
                 image_size=job.image_size,
                 resolution=job.image_resolution,  # 1K/2K choisi par job
+                output_format=job.output_format,
             )
             task_id = kie.create_seedream_task(payload)
             item.kie_task_id = task_id

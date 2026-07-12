@@ -110,15 +110,18 @@ def build_seedream_input(
     reference_image_urls: list[str],
     image_size: str = "1:1",
     resolution: str = "2K",
+    output_format: str = "png",
 ) -> dict[str, Any]:
-    """Input Seedream 5.0 Pro image-to-image : édition multi-références (visage +
-    caractéristiques). Clés attendues par ce modèle : `aspect_ratio` (et non
-    image_size) + `quality` (1K/2K, et non image_resolution). image_urls ≤ 10."""
+    """Input Seedream 5.0 Pro image-to-image (schéma officiel kie.ai) :
+    - `aspect_ratio` ∈ {1:1,4:3,3:4,16:9,9:16,2:3,3:2}
+    - `quality` = `basic` (1K) ou `high` (2K) — surtout PAS "1K"/"2K"
+    - image_urls ≤ 10 (jpeg/png/webp, ≤ 10 Mo)."""
     return {
         "prompt": prompt,
         "image_urls": reference_image_urls,
         "aspect_ratio": image_size,
-        "quality": resolution,
+        "quality": "high" if str(resolution).upper() == "2K" else "basic",
+        "output_format": output_format,
     }
 
 

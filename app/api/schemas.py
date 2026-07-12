@@ -293,7 +293,8 @@ class ExportOut(BaseModel):
 
 # --- Pictures (nano banana) ---
 
-ImageSize = Literal["1:1", "4:5", "9:16", "16:9", "3:4", "4:3"]
+# Ratios acceptés par Seedream 5.0 Pro (schéma officiel) — PAS de 4:5.
+ImageSize = Literal["1:1", "4:3", "3:4", "16:9", "9:16", "2:3", "3:2"]
 
 
 class PicturePromptCreate(BaseModel):
