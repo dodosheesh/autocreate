@@ -33,10 +33,10 @@ SEED_PRICING = [
     ("elevenlabs_s2s", None, None, "per_min", 0.12),
     # Nano Banana (Gemini image) — ~0,09 $/image (ancien modèle photo).
     ("nano_banana", None, None, "per_image", 0.09),
-    # Seedream 5.0 Pro (ByteDance) — ~0,045 $/image en 1K, ~0,09 $/image en 2K
-    # (1re référence gratuite, +0,003 $/réf. suppl.). On est en 2K par défaut.
-    # Resynchronise la valeur EXACTE de ton compte kie.ai dans l'éditeur de tarifs.
-    ("seedream", None, None, "per_image", 0.09),
+    # Seedream 5.0 Pro (ByteDance) sur kie.ai — 1K = 7 crédits (0,035 $), 2K = 14
+    # crédits (0,07 $). Images d'entrée : 0,5 crédit (0,0025 $) chacune, 1re gratuite.
+    # On est en 2K par défaut → 0,07 $/image (hors réf. suppl.).
+    ("seedream", None, None, "per_image", 0.07),
 ]
 
 
