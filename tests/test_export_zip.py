@@ -86,3 +86,25 @@ def test_export_zip_media_hs_ignore(client):
 def test_export_zip_cross_tenant_404(client):
     job_id = _job_with_approved(tenant="autre", n=1)
     assert client.get(f"/api/pictures/jobs/{job_id}/export.zip").status_code == 404
+
+
+def test_approve_all_photos(client):
+    # Job avec 3 photos livrées (DONE) mais pas encore reviewées.
+    with SessionLocal() as db:
+        m = Model(tenant_id="tnt-zip", name="AA", face_reference_url="https://pub.r2.dev/f.jpg")
+        db.add(m); db.flush()
+        job = PictureJob(tenant_id="tnt-zip", model_id=m.id, status="completed", count=3)
+        db.add(job); db.flush()
+        for i in range(3):
+            db.add(PictureItem(
+                job_id=job.id, combo_hash=f"aa{i}", filled_prompt="p",
+                status=ItemStatus.DONE, review_status=ReviewStatus.PENDING,
+                final_image_url=f"https://pub.r2.dev/pictures/aa{i}.png"))
+        db.commit(); jid = str(job.id)
+
+    r = client.post(f"/api/pictures/jobs/{jid}/approve-all")
+    assert r.status_code == 200, r.text
+    assert all(it["review_status"] == "approved" for it in r.json()["items"])
+    # idempotent + cross-tenant protégé
+    other = _job_with_approved(tenant="autre", n=1)
+    assert client.post(f"/api/pictures/jobs/{other}/approve-all").status_code == 404

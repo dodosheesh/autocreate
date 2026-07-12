@@ -908,6 +908,7 @@ async function openJob(id) {
       <h2 style="margin:0">Job ${esc(id.slice(0, 8))} ${badge(j.status)}</h2>
       <span><button class="btn small ghost" onclick="recheckJob('${id}')">🔄 Vérifier kie.ai</button>
       <button class="btn small ghost" onclick="openJob('${id}')">↻</button>
+      <button class="btn small ok" onclick="approveAllJob('${id}')">✓ Tout approuver</button>
       <button class="btn small" onclick="downloadZip('/jobs/${id}/export.zip', 'videos_${esc(id.slice(0,8))}.zip')">📦 Télécharger le ZIP</button></span>
     </div>${jobErr}${shortfall}
     <div class="items">${j.items.map(it => `
@@ -945,7 +946,12 @@ async function recheckJob(id) {
   try { await api(`/jobs/${id}/recheck`, {method: "POST"}); toast("Vérifié auprès de kie.ai"); openJob(id); }
   catch (err) { toast("Recheck : " + err.message); }
 }
+async function approveAllJob(id) {
+  try { await api(`/jobs/${id}/approve-all`, {method: "POST"}); toast("Toutes les vidéos livrées approuvées"); openJob(id); }
+  catch (err) { toast("Approuver tout : " + err.message); }
+}
 window.openJob = openJob; window.review = review; window.recheckJob = recheckJob;
+window.approveAllJob = approveAllJob;
 
 // ================= PHOTOS =================
 let currentPicJob = null;
@@ -1022,6 +1028,7 @@ async function openPicJob(id) {
     <div style="margin-top:14px; display:flex; justify-content:space-between; align-items:center">
       <b>Photos ${esc(id.slice(0,8))} ${badge(j.status)}</b>
       <span><button class="btn small ghost" onclick="recheckPicJob('${id}')">🔄 Vérifier kie.ai</button>
+      <button class="btn small ok" onclick="approveAllPicJob('${id}')">✓ Tout approuver</button>
       <button class="btn small" onclick="downloadZip('/pictures/jobs/${id}/export.zip', 'photos_${esc(id.slice(0,8))}.zip')">📦 Télécharger le ZIP</button></span>
     </div>
     <div class="items">${j.items.map(it => `
@@ -1039,7 +1046,11 @@ async function recheckPicJob(id) {
   try { await api(`/pictures/jobs/${id}/recheck`, {method: "POST"}); toast("Vérifié auprès de kie.ai"); openPicJob(id); }
   catch (err) { toast("Recheck : " + err.message); }
 }
-window.recheckPicJob = recheckPicJob;
+async function approveAllPicJob(id) {
+  try { await api(`/pictures/jobs/${id}/approve-all`, {method: "POST"}); toast("Toutes les photos livrées approuvées"); openPicJob(id); }
+  catch (err) { toast("Approuver tout : " + err.message); }
+}
+window.recheckPicJob = recheckPicJob; window.approveAllPicJob = approveAllPicJob;
 async function reviewPic(itemId, decision) {
   try { await api(`/pictures/items/${itemId}/review`, {method:"POST", body: JSON.stringify({decision})});
         if (currentPicJob) openPicJob(currentPicJob); }

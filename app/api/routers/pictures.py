@@ -194,6 +194,20 @@ def review_item(
     return item
 
 
+@router.post("/jobs/{job_id}/approve-all", response_model=schemas.PictureJobOut)
+def approve_all(
+    job_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    """Approuve d'un coup toutes les photos livrées (statut DONE) du job."""
+    job = owned(db, PictureJob, job_id, user)
+    for item in job.items:
+        if item.status == ItemStatus.DONE:
+            item.review_status = ReviewStatus.APPROVED
+    db.commit()
+    db.refresh(job)
+    return job
+
+
 @router.get("/jobs/{job_id}/export", response_model=schemas.ExportOut)
 def export_job(
     job_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
