@@ -74,6 +74,15 @@
               border-bottom: 1px dashed var(--border); font-size: 13px; }
   .est-line:last-child { border-bottom: 0; }
   .est-line .v { font-variant-numeric: tabular-nums; }
+  /* Listes potentiellement longues (banques, prompts) : hauteur bornée + défilement
+     interne pour ne pas repousser le panneau de commande tout en bas. */
+  #pic-prompts, #rv-templates, #list-outfits, #list-backgrounds, #list-templates,
+  #list-dialogues, #list-captions, #list-voices {
+    max-height: 300px; overflow-y: auto; padding-right: 6px;
+    border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px;
+    background: var(--panel2); }
+  .list-head { display: flex; justify-content: space-between; align-items: center;
+    font-size: 12px; color: var(--muted); margin-top: 12px; }
   .warn-box { background: rgba(240,168,50,.12); border: 1px solid var(--warn);
               color: var(--warn); border-radius: 8px; padding: 8px 10px;
               font-size: 12px; margin-top: 10px; display: none; }
@@ -398,7 +407,8 @@
         <div style="display:flex; align-items:flex-end">
           <button class="btn small" id="pic-reverse" style="width:100%">Uploader &amp; reverse-engineer</button></div>
       </div>
-      <div id="pic-prompts" style="margin-top:12px; font-size:12px"></div>
+      <div class="list-head" id="pic-prompts-head" style="display:none"></div>
+      <div id="pic-prompts" style="font-size:12px"></div>
     </div>
 
     <div class="card">
@@ -1048,6 +1058,11 @@ $("#pic-reverse").addEventListener("click", async () => {
 });
 async function loadPrompts() {
   const prompts = await api("/pictures/prompts");
+  const head = $("#pic-prompts-head");
+  if (prompts.length) {
+    head.style.display = "flex";
+    head.innerHTML = `<span>${prompts.length} prompt(s) en banque</span><span class="muted">liste défilante ↓</span>`;
+  } else { head.style.display = "none"; }
   $("#pic-prompts").innerHTML = prompts.length
     ? prompts.map(p => { const txt = p.status === "failed" && p.error
         ? `<span style="color:var(--err)">échec : ${esc(p.error.slice(0, 70))}</span>`
