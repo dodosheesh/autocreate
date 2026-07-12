@@ -71,6 +71,15 @@ def test_camera_fixe_hors_snapchat():
     prompt = result.items[0].filled_prompt
     assert "STATIC locked camera" in prompt and "no zoom" in prompt
     assert "No music" in prompt
+    # continuité : une seule prise, même outfit, pas de cut
+    assert "Single continuous take" in prompt and "SAME outfit" in prompt
+
+
+def test_dialogue_sans_silence_entre_les_lignes():
+    result = compose_batch({"skit": 1}, {"skit": pools(speaking=True)}, CHARACS, FACE,
+                           rng=random.Random(7))
+    prompt = result.items[0].filled_prompt
+    assert "NO long pause" in prompt and "NO silence" in prompt
 
 
 def test_snapchat_autorise_mouvement_camera():
