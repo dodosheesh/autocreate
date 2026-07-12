@@ -45,6 +45,15 @@ def _merge_outfit(prompt_text: str, outfit: Option | None) -> str:
     return f"{prompt_text.rstrip()}{sep} She is {outfit.text}."
 
 
+def _apply_style(text: str, style_suffix: str) -> str:
+    """Ajoute le modificateur de style (ex. rendu amateur) à la fin du prompt."""
+    style_suffix = (style_suffix or "").strip()
+    if not style_suffix:
+        return text
+    sep = " " if text.rstrip().endswith((".", "!", "?")) else ". "
+    return f"{text.rstrip()}{sep}{style_suffix}"
+
+
 def compose_pictures(
     count: int,
     prompts: list[Option],  # Option.text = prompt_text de la banque
@@ -53,6 +62,7 @@ def compose_pictures(
     face_reference_url: str,
     max_refs: int = 10,
     rng: random.Random | None = None,
+    style_suffix: str = "",
 ) -> PictureComposeResult:
     if not prompts:
         raise PictureComposeError("Aucun prompt en banque (reverse-engineerer une image d'abord)")
@@ -85,6 +95,7 @@ def compose_pictures(
 
         text = _merge_outfit(prompt.text, outfit)
         text = composer.inject_characteristics(text, active)
+        text = _apply_style(text, style_suffix)
         extra_refs = [outfit.image_url] if outfit and outfit.image_url else []
         refs = composer.select_reference_images(
             face_reference_url, active, extra_refs=extra_refs, max_refs=max_refs

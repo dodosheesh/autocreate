@@ -84,6 +84,17 @@ def test_compose_pictures_dedup_et_count():
     assert len({i.combo_hash for i in result.items}) == 6
 
 
+def test_compose_pictures_applique_le_style_amateur():
+    style = "Casual amateur smartphone snapshot, natural light."
+    result = compose_pictures(
+        1, prompts_pool(1), [], CHARACS, FACE, rng=random.Random(3), style_suffix=style,
+    )
+    assert result.items[0].filled_prompt.endswith(style)
+    # sans style_suffix : aucun ajout
+    plain = compose_pictures(1, prompts_pool(1), [], CHARACS, FACE, rng=random.Random(3))
+    assert not plain.items[0].filled_prompt.endswith(style)
+
+
 def test_compose_pictures_shortfall():
     # 2 prompts × 1 outfit = 2 combos pour 5 demandés
     result = compose_pictures(

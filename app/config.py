@@ -62,6 +62,16 @@ class Settings(BaseSettings):
     # try again later »). N'affecte pas les refus définitifs (contenu sensible…).
     generation_max_retries: int = 2
 
+    # Style ajouté À LA FIN de chaque prompt PHOTO pour un rendu « amateur »
+    # (photo prise au téléphone, non retouchée) au lieu du rendu studio/pro qui
+    # sonne faux. Vidé (chaîne "") = désactivé. Surchargeable via PHOTO_AMATEUR_STYLE.
+    photo_amateur_style: str = (
+        "Casual amateur smartphone snapshot, shot on a phone, natural available "
+        "light, candid and unposed, authentic everyday look, subtle sensor noise "
+        "and slight softness, no professional retouching, no studio lighting, "
+        "not a glossy magazine photo."
+    )
+
     public_base_url: str = "http://localhost:8000"
 
     r2_account_id: str = ""

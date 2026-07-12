@@ -200,6 +200,7 @@ def compose_picture_job(job_id: str) -> None:
                 characteristics=characteristics,
                 face_reference_url=model.face_reference_url,
                 max_refs=get_settings().nano_banana_max_refs,
+                style_suffix=get_settings().photo_amateur_style,
             )
             for composed in result.items:
                 db.add(

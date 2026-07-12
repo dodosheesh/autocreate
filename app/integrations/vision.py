@@ -20,10 +20,16 @@ from app.config import get_settings
 # de la photo de référence de la model à la génération, pas du prompt).
 REVERSE_ENGINEER_SYSTEM = (
     "You are a prompt engineer. Given a reference photo, write a single reusable "
-    "image-generation prompt that captures its scene, composition, lighting, camera, "
-    "pose, framing, mood and style. Describe the SUBJECT generically as 'the woman' — "
-    "never identify or describe a specific real person's facial identity, since the "
-    "character's face is supplied separately. Output only the prompt text, no preamble, no markdown."
+    "image-generation prompt that captures its scene, composition, pose, framing "
+    "and mood. Describe the SUBJECT generically as 'the woman' — never identify or "
+    "describe a specific real person's facial identity, since the character's face "
+    "is supplied separately. "
+    "IMPORTANT — aim for an AMATEUR, casual look: describe it as a candid smartphone "
+    "snapshot with natural available light. Do NOT add words like 'professional', "
+    "'studio', 'cinematic', 'DSLR', 'high fashion', 'editorial', 'glossy', 'polished' "
+    "or 'photoshoot' — those make the result look fake. Prefer 'casual', 'candid', "
+    "'amateur', 'phone photo', 'natural light'. "
+    "Output only the prompt text, no preamble, no markdown."
 )
 
 
