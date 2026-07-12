@@ -25,10 +25,21 @@ class CharacteristicInput:
     reference_image_url: str
     injection_hint: str
     priority: int = 0
-    # True = trait RÉCURRENT présent sur chaque média (ex. un tatouage signature).
-    # False = fait partie du pool dont UN SEUL est tiré au hasard par média.
+    # VIDÉO : trait récurrent (chaque média) vs pool (1 tiré au hasard/média).
     recurring: bool = False
+    # PHOTO (Seedream) : image utilisée comme référence à chaque génération photo.
+    seedream: bool = False
     id: str = ""
+
+
+def select_photo_characteristics(
+    characteristics: list["CharacteristicInput"],
+) -> list["CharacteristicInput"]:
+    """Sélection PHOTO (Seedream) : si au moins une caractéristique est cochée
+    « seedream », on n'utilise QUE celles-là (aucune du pool aléatoire). Sinon
+    (aucune cochée) on ne met aucune caractéristique — seul le visage sert de
+    référence. Déterministe (pas de tirage aléatoire)."""
+    return sorted((c for c in characteristics if c.seedream), key=lambda c: c.priority)
 
 
 def select_active_characteristics(

@@ -64,8 +64,9 @@ def compose_pictures(
     while len(items) < count:
         prompt = weighted_draw(prompts, rng)
         outfit = weighted_draw(outfits, rng) if outfits else None
-        # 1 caractéristique aléatoire par image + les récurrentes (ex. tatouage)
-        active = composer.select_active_characteristics(characteristics, rng)
+        # PHOTO : uniquement les caractéristiques cochées « seedream » (+ visage),
+        # aucune du pool aléatoire.
+        active = composer.select_photo_characteristics(characteristics)
         active_ids = sorted(c.id for c in active)
         combo = composer.combo_hash(
             {

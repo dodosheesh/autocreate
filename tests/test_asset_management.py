@@ -210,6 +210,12 @@ def test_caracteristique_recurring_create_et_toggle(client):
     # bascule le piercing en récurrent puis inverse
     r = client.patch(f"/api/models/{mid}/characteristics/{c['id']}", json={"recurring": True})
     assert r.status_code == 200 and r.json()["recurring"] is True
+    # flag seedream (photo) indépendant : create + toggle
+    assert c["seedream"] is False
+    r2 = client.patch(f"/api/models/{mid}/characteristics/{c['id']}", json={"seedream": True})
+    assert r2.status_code == 200 and r2.json()["seedream"] is True
+    # les deux flags coexistent sans s'écraser
+    assert r2.json()["recurring"] is True
 
 
 def test_patch_model_cross_tenant_refuse(client):

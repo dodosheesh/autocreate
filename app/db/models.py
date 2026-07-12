@@ -116,11 +116,16 @@ class ModelCharacteristic(Base):
     reference_image_url: Mapped[str] = mapped_column(Text)  # photo de CE trait précis
     injection_hint: Mapped[str] = mapped_column(Text)  # description intégrable au prompt
     always_include: Mapped[bool] = mapped_column(Boolean, default=True)  # hérité (non utilisé)
-    # True = trait RÉCURRENT injecté sur chaque média (ex. tatouage signature).
-    # False (défaut) = fait partie du pool dont UN SEUL est tiré au hasard par média.
-    # server_default aligné sur la migration additive (NOT NULL DEFAULT FALSE) pour
-    # que base fraîche (create_all) et base migrée aient le même DDL.
+    # VIDÉO : True = trait RÉCURRENT injecté sur chaque média (ex. tatouage
+    # signature) ; False = pool dont UN SEUL est tiré au hasard par média.
     recurring: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=false(), default=False
+    )
+    # PHOTO (Seedream) : True = cette image + son prompt sont utilisés comme
+    # référence à CHAQUE génération photo. Si au moins une caractéristique est
+    # cochée seedream, la génération photo n'utilise QUE celles-là (+ le visage),
+    # aucune du pool aléatoire.
+    seedream: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=false(), default=False
     )
     priority: Mapped[int] = mapped_column(Integer, default=0)

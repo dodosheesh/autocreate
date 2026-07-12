@@ -24,6 +24,7 @@ CHARACS = [
         label="tattoo",
         reference_image_url="https://r2.example/tattoo.jpg",
         injection_hint="a floral tattoo on her forearm",
+        seedream=True,  # photo : uniquement les caractéristiques cochées seedream
     )
 ]
 
@@ -97,7 +98,7 @@ def test_compose_sans_prompt_leve_erreur():
 
 
 def test_compose_refs_cap_nano_banana():
-    # 20 caractéristiques RÉCURRENTES (toutes injectées) → doit couper à max_refs.
+    # 20 caractéristiques cochées SEEDREAM (toutes injectées) → doit couper à max_refs.
     many = [
         CharacteristicInput(
             id=f"t{i}",
@@ -105,7 +106,7 @@ def test_compose_refs_cap_nano_banana():
             reference_image_url=f"https://r2.example/t{i}.jpg",
             injection_hint=f"trait {i}",
             priority=i,
-            recurring=True,
+            seedream=True,
         )
         for i in range(20)
     ]

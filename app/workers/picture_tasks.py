@@ -187,6 +187,7 @@ def compose_picture_job(job_id: str) -> None:
                     injection_hint=c.injection_hint,
                     priority=c.priority,
                     recurring=c.recurring,
+                    seedream=c.seedream,
                 )
                 for c in model.characteristics
             ]

@@ -155,18 +155,21 @@
 
     <div class="card">
       <h2><span class="step">2</span>Caractéristiques spéciales</h2>
-      <div class="hint">Photos générées avec <b>Seedream</b> : jusqu'à 10 images de référence (visage + caractéristiques).
-        Coche <b>« réf. permanente »</b> sur les caractéristiques dont l'<b>image + le prompt</b> doivent être
-        utilisés sur <b>chaque</b> génération (précision). Les caractéristiques non cochées forment un pool
-        dont <b>une seule</b> est tirée au hasard par média (variété).</div>
+      <div class="hint">Deux réglages <b>indépendants</b> par caractéristique :<br>
+        • <b>🎬 Vidéo</b> — « réf. permanente » : présente sur <b>chaque</b> vidéo (sinon pool : une tirée au hasard par vidéo).<br>
+        • <b>🖼 Photo (Seedream)</b> — « seedream » : <b>SEULES</b> les caractéristiques cochées sont utilisées comme référence (+ le visage), <b>aucune du pool aléatoire</b>.</div>
       <div class="row" style="margin-top:0">
         <div><label>Label</label><input type="text" id="c-label" placeholder="tatouage avant-bras gauche"></div>
         <div><label>Photo du trait</label><input type="file" id="c-photo" accept="image/*"></div>
       </div>
       <label>Comment le décrire dans le prompt (injection hint, en anglais)</label>
       <input type="text" id="c-hint" placeholder="a delicate floral tattoo on her left forearm">
-      <label style="margin-top:10px;display:flex;align-items:center;gap:8px;cursor:pointer">
-        <input type="checkbox" id="c-tattoo" style="width:auto"> réf. permanente — image + prompt utilisés comme référence sur <b>chaque</b> génération</label>
+      <div class="row" style="margin-top:8px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
+          <input type="checkbox" id="c-tattoo" style="width:auto"> 🎬 réf. permanente (vidéo)</label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
+          <input type="checkbox" id="c-seedream" style="width:auto"> 🖼 seedream (photo)</label>
+      </div>
       <button class="btn small" id="c-add" style="margin-top:10px">Ajouter la caractéristique</button>
       <div class="list-wrap" id="list-characteristics"></div>
     </div>
@@ -560,16 +563,20 @@ async function loadModelsList() {
 async function loadCharacteristics() {
   if (!getModel()) { $("#list-characteristics").innerHTML = ""; return; }
   const m = await api("/models/" + getModel());
-  renderList("#list-characteristics", m.characteristics || [], c =>
-    `<div class="list-row"><span class="grow"><img src="${esc(safeUrl(c.reference_image_url))}">`
-    + `<span class="lbl">${c.recurring ? '<span class="badge b-ready">réf. perm.</span> ' : ''}${esc(c.label)} — ${esc(c.injection_hint)}</span></span>`
-    + `<button class="btn small ghost" style="flex:none" onclick="toggleTattoo('${m.id}','${c.id}',${c.recurring ? 'false' : 'true'})">${c.recurring ? 'pool aléatoire' : 'réf. permanente'}</button>`
-    + `<button class="btn small ghost" style="flex:none" onclick="editCharImg('${m.id}','${c.id}')">remplacer</button>`
-    + `<button class="x" onclick="delChar('${c.id}')" title="supprimer">✕</button></div>`);
+  renderList("#list-characteristics", m.characteristics || [], c => {
+    const badges = (c.recurring ? '<span class="badge b-ready" title="présent sur chaque vidéo">🎬 réf.</span> ' : '')
+      + (c.seedream ? '<span class="badge b-dispatched" title="référence photo Seedream">🖼 seedream</span> ' : '');
+    return `<div class="list-row"><span class="grow"><img src="${esc(safeUrl(c.reference_image_url))}">`
+    + `<span class="lbl">${badges}${esc(c.label)} — ${esc(c.injection_hint)}</span></span>`
+    + `<button class="btn small ghost" style="flex:none" title="réf. permanente vidéo" onclick="toggleCharFlag('${m.id}','${c.id}','recurring',${c.recurring ? 'false' : 'true'})">🎬${c.recurring ? '✓' : ''}</button>`
+    + `<button class="btn small ghost" style="flex:none" title="référence photo seedream" onclick="toggleCharFlag('${m.id}','${c.id}','seedream',${c.seedream ? 'false' : 'true'})">🖼${c.seedream ? '✓' : ''}</button>`
+    + `<button class="btn small ghost" style="flex:none" onclick="editCharImg('${m.id}','${c.id}')">img</button>`
+    + `<button class="x" onclick="delChar('${c.id}')" title="supprimer">✕</button></div>`;
+  });
 }
-window.toggleTattoo = async (mid, cid, val) => {
+window.toggleCharFlag = async (mid, cid, field, val) => {
   try {
-    await api(`/models/${mid}/characteristics/${cid}`, {method: "PATCH", body: JSON.stringify({recurring: val})});
+    await api(`/models/${mid}/characteristics/${cid}`, {method: "PATCH", body: JSON.stringify({[field]: val})});
     loadCharacteristics();
   } catch (e) { toast(e.message); }
 };
@@ -692,9 +699,10 @@ $("#c-add").addEventListener("click", async () => {
     const url = await uploadFile($("#c-photo"));
     await api(`/models/${getModel()}/characteristics`, {method: "POST", body: JSON.stringify({
       label: $("#c-label").value, reference_image_url: url, injection_hint: $("#c-hint").value,
-      recurring: $("#c-tattoo").checked})});
+      recurring: $("#c-tattoo").checked, seedream: $("#c-seedream").checked})});
     toast("Caractéristique ajoutée");
-    $("#c-label").value = ""; $("#c-hint").value = ""; $("#c-photo").value = ""; $("#c-tattoo").checked = false;
+    $("#c-label").value = ""; $("#c-hint").value = ""; $("#c-photo").value = "";
+    $("#c-tattoo").checked = false; $("#c-seedream").checked = false;
     loadCharacteristics();
   } catch (e) { toast("Caractéristique : " + e.message); }
 });

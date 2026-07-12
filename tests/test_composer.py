@@ -5,11 +5,12 @@ from app.services.composer import (
     combo_hash,
     inject_characteristics,
     select_active_characteristics,
+    select_photo_characteristics,
     select_reference_images,
 )
 
 
-def charac(label: str, priority: int = 0, recurring: bool = False) -> CharacteristicInput:
+def charac(label: str, priority: int = 0, recurring: bool = False, seedream: bool = False) -> CharacteristicInput:
     return CharacteristicInput(
         id=label,
         label=label,
@@ -17,7 +18,21 @@ def charac(label: str, priority: int = 0, recurring: bool = False) -> Characteri
         injection_hint=f"a visible {label}",
         priority=priority,
         recurring=recurring,
+        seedream=seedream,
     )
+
+
+def test_select_photo_seulement_les_seedream_aucun_pool():
+    chars = [charac("a", seedream=True, priority=1), charac("b"), charac("c"),
+             charac("d", seedream=True, priority=0)]
+    photo = select_photo_characteristics(chars)
+    # uniquement les cochées seedream, triées par priorité, aucun tirage du pool
+    assert [c.label for c in photo] == ["d", "a"]
+
+
+def test_select_photo_aucune_cochee_renvoie_vide():
+    # aucune seedream → aucune caractéristique (seul le visage servira de réf.)
+    assert select_photo_characteristics([charac("a"), charac("b")]) == []
 
 
 def test_injection_dans_le_slot():
