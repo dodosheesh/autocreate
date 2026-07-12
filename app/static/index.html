@@ -140,6 +140,7 @@
     <button data-page="settings">⚙ Réglages</button>
     <button data-page="video" class="on">🎬 Vidéos</button>
     <button data-page="photo">🖼 Photos</button>
+    <button data-page="reverse">🔁 Reverse engineer</button>
   </div>
   <div class="who"><span id="whoami"></span>
     <button class="btn small ghost" id="logout">Déconnexion</button></div>
@@ -363,19 +364,6 @@
         </div>
 
         <div class="card">
-          <h2>Répliquer une vidéo (reverse-engineering)</h2>
-          <div class="hint">Uploade une vidéo à répliquer : elle devient un <b>template</b> réutilisable
-            (action, caméra, rythme, ambiance) — ta model et tes assets remplacent l'original.</div>
-          <div class="row" style="margin-top:0">
-            <div><label>Vidéo(s) de référence <span class="muted">— sélection multiple OK</span></label><input type="file" id="rv-file" accept="video/*" multiple></div>
-            <div><label>Catégorie du template</label><select id="rv-cat"></select></div>
-          </div>
-          <label style="margin-top:8px"><input type="checkbox" id="rv-speaking" style="width:auto"> la model parle (ajoute le slot dialogue)</label>
-          <button class="btn small" id="rv-go" style="margin-top:10px">Uploader &amp; analyser</button>
-          <div id="rv-templates" style="margin-top:12px; font-size:12px"></div>
-        </div>
-
-        <div class="card">
           <h2>Jobs vidéo</h2>
           <table>
             <thead><tr><th>créé</th><th>catégories</th><th>statut</th><th>estimé</th><th>réel</th></tr></thead>
@@ -404,19 +392,6 @@
   <section class="page" id="page-photo">
     <h1>Génération photo</h1>
     <div class="sub">Nano Banana via kie.ai · consistance visage + caractéristiques · métadonnées nettoyées</div>
-
-    <div class="card">
-      <h2>Banque de prompts (reverse-engineering)</h2>
-      <div class="hint">Uploade une ou plusieurs images de référence : chacune est transformée en prompt réutilisable, adapté à ta model.
-        Le prompt est sauvegardé à vie.</div>
-      <div class="row" style="margin-top:0">
-        <div><label>Image(s) de référence <span class="muted">— sélection multiple OK</span></label><input type="file" id="pic-ref-file" accept="image/*" multiple></div>
-        <div style="display:flex; align-items:flex-end">
-          <button class="btn small" id="pic-reverse" style="width:100%">Uploader &amp; reverse-engineer</button></div>
-      </div>
-      <div class="list-head" id="pic-prompts-head" style="display:none"></div>
-      <div id="pic-prompts" style="font-size:12px"></div>
-    </div>
 
     <div class="card">
       <h2>Générer des photos</h2>
@@ -457,6 +432,38 @@
       <h2>Jobs photo</h2>
       <div id="pic-jobs"></div>
       <div id="pic-detail"></div>
+    </div>
+  </section>
+
+  <!-- ================= REVERSE ENGINEER ================= -->
+  <section class="page" id="page-reverse">
+    <h1>Reverse engineer</h1>
+    <div class="sub">Transforme des références (photos & vidéos) en prompts / templates réutilisables.</div>
+
+    <div class="card">
+      <h2>Banque de prompts photo (reverse-engineering)</h2>
+      <div class="hint">Uploade une ou plusieurs images de référence : chacune est transformée en prompt réutilisable, adapté à ta model.
+        Le prompt est sauvegardé à vie et sert dans l'onglet <b>Photos</b>.</div>
+      <div class="row" style="margin-top:0">
+        <div><label>Image(s) de référence <span class="muted">— sélection multiple OK</span></label><input type="file" id="pic-ref-file" accept="image/*" multiple></div>
+        <div style="display:flex; align-items:flex-end">
+          <button class="btn small" id="pic-reverse" style="width:100%">Uploader &amp; reverse-engineer</button></div>
+      </div>
+      <div class="list-head" id="pic-prompts-head" style="display:none"></div>
+      <div id="pic-prompts" style="font-size:12px"></div>
+    </div>
+
+    <div class="card">
+      <h2>Répliquer une vidéo (reverse-engineering)</h2>
+      <div class="hint">Uploade une vidéo à répliquer : elle devient un <b>template</b> réutilisable
+        (action, rythme, ambiance) — ta model et tes assets remplacent l'original. Sert dans l'onglet <b>Vidéos</b>.</div>
+      <div class="row" style="margin-top:0">
+        <div><label>Vidéo(s) de référence <span class="muted">— sélection multiple OK</span></label><input type="file" id="rv-file" accept="video/*" multiple></div>
+        <div><label>Catégorie du template</label><select id="rv-cat"></select></div>
+      </div>
+      <label style="margin-top:8px"><input type="checkbox" id="rv-speaking" style="width:auto"> la model parle (ajoute le slot dialogue)</label>
+      <button class="btn small" id="rv-go" style="margin-top:10px">Uploader &amp; analyser</button>
+      <div id="rv-templates" style="margin-top:12px; font-size:12px"></div>
     </div>
   </section>
 
