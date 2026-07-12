@@ -115,9 +115,9 @@ def _compose_one(
     background = None if omit_background else weighted_draw(pools.backgrounds, rng)
 
     wants_caption = f"{{{CAPTION_SLOT}}}" in template.template_text
+    # Caption OPTIONNELLE : si la banque captions est vide, on n'échoue pas —
+    # le slot {caption} reste vide (ex. snapchat sans caption enregistrée).
     caption = weighted_draw(pools.captions, rng) if wants_caption else None
-    if wants_caption and caption is None:
-        raise ComposeError(f"Catégorie {category} : slot {{caption}} mais banque captions vide")
 
     dialogue = None
     if template.speaking:

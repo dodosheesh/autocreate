@@ -198,8 +198,9 @@ def compose_job(job_id: str) -> None:
                 empties = ", ".join(sorted(result.shortfall_per_category)) or "—"
                 job.status = JobStatus.FAILED
                 job.error = (
-                    f"Aucun template prêt pour les styles demandés ({empties}). "
-                    "Ajoute au moins un template pour ces styles dans l'onglet Réglages."
+                    f"Aucune vidéo composable pour : {empties}. Vérifie qu'il y a bien un "
+                    "template PRÊT (status ready) pour ces styles, et — si « la model parle » "
+                    "— au moins une ligne de dialogue dans la banque pour cette catégorie."
                 )
                 return
         estimate_and_gate.delay(job_id)

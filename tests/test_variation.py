@@ -55,6 +55,17 @@ def pools(
     )
 
 
+def test_caption_optionnelle_banque_vide():
+    # snapchat avec slot {caption} mais AUCUNE caption en banque : compose quand même.
+    p = pools(with_caption=True)
+    p_no_cap = CategoryPools(templates=p.templates, outfits=p.outfits,
+                             backgrounds=p.backgrounds, dialogues=p.dialogues, captions=[])
+    result = compose_batch({"snapchat": 1}, {"snapchat": p_no_cap}, CHARACS, FACE,
+                           rng=random.Random(5))
+    assert len(result.items) == 1
+    assert result.shortfall_per_category == {}
+
+
 def test_camera_fixe_hors_snapchat():
     result = compose_batch({"skit": 1}, {"skit": pools()}, CHARACS, FACE, rng=random.Random(7))
     prompt = result.items[0].filled_prompt
