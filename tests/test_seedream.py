@@ -17,9 +17,8 @@ def test_build_seedream_input_multi_refs():
     assert payload == {
         "prompt": "a portrait",
         "image_urls": ["https://r2/face.jpg", "https://r2/tattoo.jpg"],
-        "image_size": "9:16",
-        "image_resolution": "2K",
-        "max_images": 1,
+        "aspect_ratio": "9:16",
+        "quality": "2K",
     }
 
 
@@ -42,8 +41,8 @@ def test_dispatch_photo_utilise_seedream():
     # le modèle utilisé est bien Seedream, avec les multi-références
     payload = mk.call_args[0][0]
     assert payload["image_urls"] == ["https://pub.r2.dev/f.jpg", "https://pub.r2.dev/t.jpg"]
-    assert payload["image_size"] == "9:16"
-    assert "image_resolution" in payload
+    assert payload["aspect_ratio"] == "9:16"
+    assert payload["quality"] in ("1K", "2K")
     with SessionLocal() as db:
         it = db.get(PictureItem, uuid.UUID(item_id))
         assert it.status == ItemStatus.DISPATCHED

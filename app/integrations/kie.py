@@ -110,16 +110,15 @@ def build_seedream_input(
     reference_image_urls: list[str],
     image_size: str = "1:1",
     resolution: str = "2K",
-    max_images: int = 1,
 ) -> dict[str, Any]:
-    """Input Seedream EDIT : édition multi-références (visage + caractéristiques
-    sélectionnées) → consistance/précision du personnage. image_urls ≤ 10."""
+    """Input Seedream 5.0 Pro image-to-image : édition multi-références (visage +
+    caractéristiques). Clés attendues par ce modèle : `aspect_ratio` (et non
+    image_size) + `quality` (1K/2K, et non image_resolution). image_urls ≤ 10."""
     return {
         "prompt": prompt,
         "image_urls": reference_image_urls,
-        "image_size": image_size,
-        "image_resolution": resolution,
-        "max_images": max_images,
+        "aspect_ratio": image_size,
+        "quality": resolution,
     }
 
 
