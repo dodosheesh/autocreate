@@ -331,6 +331,9 @@ class PicturePromptOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+PhotoStyle = Literal["facecam_selfie", "amateur", "professional", "amateur_blurry"]
+
+
 class PictureJobCreate(BaseModel):
     model_id: uuid.UUID
     count: int = Field(ge=1, le=200)
@@ -338,6 +341,8 @@ class PictureJobCreate(BaseModel):
     image_resolution: Literal["1K", "2K"] = "2K"
     output_format: Literal["png", "jpeg"] = "png"
     model_variant: str = "seedream"
+    # Styles photo cochés (0..n) ; vide = prompt brut, sans modificateur de style.
+    styles: list[PhotoStyle] = []
     budget_cap_usd: float | None = None
 
 
@@ -365,6 +370,7 @@ class PictureJobOut(BaseModel):
     image_size: str
     image_resolution: str = "2K"
     output_format: str
+    styles: list[str] = []
     model_variant: str
     budget_cap_usd: float | None
     estimated_cost_usd: float | None

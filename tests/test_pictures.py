@@ -84,15 +84,29 @@ def test_compose_pictures_dedup_et_count():
     assert len({i.combo_hash for i in result.items}) == 6
 
 
-def test_compose_pictures_applique_le_style_amateur():
-    style = "Casual amateur smartphone snapshot, natural light."
+def test_compose_pictures_applique_le_style_choisi():
+    from app.services.photo_styles import build_style_suffix
+
+    style = build_style_suffix(["amateur"])
+    assert style  # non vide
     result = compose_pictures(
         1, prompts_pool(1), [], CHARACS, FACE, rng=random.Random(3), style_suffix=style,
     )
     assert result.items[0].filled_prompt.endswith(style)
-    # sans style_suffix : aucun ajout
-    plain = compose_pictures(1, prompts_pool(1), [], CHARACS, FACE, rng=random.Random(3))
+    # aucun style coché → aucun modificateur de style ajouté
+    plain = compose_pictures(1, prompts_pool(1), [], CHARACS, FACE, rng=random.Random(3),
+                             style_suffix=build_style_suffix([]))
     assert not plain.items[0].filled_prompt.endswith(style)
+
+
+def test_build_style_suffix_combine_et_ignore_inconnus():
+    from app.services.photo_styles import build_style_suffix
+
+    assert build_style_suffix([]) == ""
+    assert build_style_suffix(None) == ""
+    combo = build_style_suffix(["facecam_selfie", "amateur", "inconnu"])
+    assert "selfie" in combo.lower() and "amateur" in combo.lower()
+    assert "inconnu" not in combo
 
 
 def test_compose_pictures_shortfall():

@@ -189,6 +189,7 @@ def create_job(
         image_size=payload.image_size,
         image_resolution=payload.image_resolution,
         output_format=payload.output_format,
+        styles=payload.styles,
         model_variant=payload.model_variant,
         budget_cap_usd=payload.budget_cap_usd,
     )

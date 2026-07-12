@@ -318,6 +318,8 @@ class PictureJob(Base):
         String(8), nullable=False, server_default="2K", default="2K"
     )
     output_format: Mapped[str] = mapped_column(String(8), default="png")
+    # Styles photo cochés à la génération (facecam_selfie/amateur/professional/…).
+    styles: Mapped[list] = mapped_column(JSON, default=list)
     model_variant: Mapped[str] = mapped_column(String(64), default="nano_banana")
     budget_cap_usd: Mapped[float | None] = mapped_column(Float)
     estimated_cost_usd: Mapped[float | None] = mapped_column(Float)

@@ -50,6 +50,9 @@
                              border: 1px solid var(--border); }
   .subpanel .sub-hint { color: var(--muted); font-size: 12px; margin: 0 0 4px; }
   label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+  label.chk { display: inline-flex; align-items: center; gap: 6px; color: var(--text);
+    font-size: 13px; margin: 0; cursor: pointer; }
+  label.chk input { width: auto; margin: 0; }
   select, input[type=text], input[type=number], input[type=url], input[type=password], input[type=file], textarea {
     width: 100%; background: var(--panel2); color: var(--text);
     border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
@@ -432,6 +435,15 @@
             <option value="1K">1K (0,035 $/img)</option>
           </select></div>
         <div><label>Budget max (USD)</label><input type="number" id="pic-budget" min="0" step="1" placeholder="—"></div>
+      </div>
+      <div style="margin-top:10px">
+        <label>Type de photo <span class="muted">— coche 0, 1 ou plusieurs</span></label>
+        <div id="pic-styles" style="display:flex; flex-wrap:wrap; gap:14px; margin-top:4px">
+          <label class="chk"><input type="checkbox" value="facecam_selfie"> Facecam / selfie</label>
+          <label class="chk"><input type="checkbox" value="amateur"> Amateur</label>
+          <label class="chk"><input type="checkbox" value="professional"> Professionnel</label>
+          <label class="chk"><input type="checkbox" value="amateur_blurry"> Amateur flou</label>
+        </div>
       </div>
       <div class="hint" style="margin:10px 0 0">Estimation : <span class="mono" id="pic-est">—</span></div>
       <button class="btn" id="pic-generate">🖼️ Générer les photos</button>
@@ -1093,8 +1105,9 @@ $("#pic-resolution").addEventListener("change", refreshPicEstimate);
 
 $("#pic-generate").addEventListener("click", async () => {
   if (!getModel()) return toast("Aucune model — configure-la dans Réglages");
+  const styles = Array.from($("#pic-styles").querySelectorAll("input:checked")).map(i => i.value);
   const body = {model_id: getModel(), count: +$("#pic-count").value, image_size: $("#pic-size").value,
-                image_resolution: $("#pic-resolution").value};
+                image_resolution: $("#pic-resolution").value, styles};
   const b = parseFloat($("#pic-budget").value);
   if (!isNaN(b)) body.budget_cap_usd = b;
   $("#pic-generate").disabled = true;

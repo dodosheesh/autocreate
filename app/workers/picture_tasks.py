@@ -40,6 +40,7 @@ from app.integrations.vision import reverse_engineer_video_prompt as _vision_rev
 from app.media.frames import extract_keyframes
 from app.media.scrub import strip_metadata
 from app.services import picture_composer
+from app.services.photo_styles import build_style_suffix
 from app.services.composer import CharacteristicInput
 from app.services.estimator import estimate_pictures
 from app.services.pricing import load_rates
@@ -200,7 +201,7 @@ def compose_picture_job(job_id: str) -> None:
                 characteristics=characteristics,
                 face_reference_url=model.face_reference_url,
                 max_refs=get_settings().nano_banana_max_refs,
-                style_suffix=get_settings().photo_amateur_style,
+                style_suffix=build_style_suffix(job.styles),
             )
             for composed in result.items:
                 db.add(

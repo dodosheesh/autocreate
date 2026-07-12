@@ -63,6 +63,7 @@ _ADDITIVE_COLUMNS = [
     ("job_items", "generation_attempts", "INTEGER NOT NULL DEFAULT 0"),
     ("picture_items", "generation_attempts", "INTEGER NOT NULL DEFAULT 0"),
     ("picture_jobs", "image_resolution", "VARCHAR(8) NOT NULL DEFAULT '2K'"),
+    ("picture_jobs", "styles", "JSON DEFAULT '[]'"),
 ]
 
 
