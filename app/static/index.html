@@ -124,6 +124,9 @@
               padding: 7px 10px; border-bottom: 1px solid var(--border); font-size: 12px; }
   .list-row:last-child { border-bottom: 0; }
   .list-row .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .list-row .lbl.wrap { overflow: visible; text-overflow: clip; white-space: normal;
+    line-height: 1.45; font-size: 12px; }
+  .list-row.top { align-items: flex-start; }
   .list-row .x { color: var(--err); cursor: pointer; background: none; border: 0;
                  font-size: 15px; padding: 0 4px; flex: none; }
   .list-row img { width: 34px; height: 34px; object-fit: cover; border-radius: 6px; flex: none; }
@@ -256,7 +259,7 @@
       <button class="btn small" id="load-templates">📚 Charger les templates par défaut</button>
       <button class="btn small ghost" id="del-all-templates">🗑️ Tout supprimer</button>
       <div class="row" style="margin-top:14px">
-        <div><label>Catégorie</label><select id="t-cat"></select></div>
+        <div><label>Catégorie <span class="muted">— filtre aussi la liste ci-dessous</span></label><select id="t-cat"></select></div>
         <div style="display:flex;align-items:flex-end">
           <label style="margin:0"><input type="checkbox" id="t-speaking" style="width:auto"> speaking (déclenche la voix)</label></div>
       </div>
@@ -719,10 +722,22 @@ function loadAllBanks() {
   loadBankList("voices", "#list-voices", v => delRow(`[${esc(v.tag)}] ${esc(v.label)} · ${esc(v.elevenlabs_voice_id)}`, v.id, "delVoice")).catch(() => {});
   loadBankList("outfits", "#list-outfits", o => imgRow(o, "delOutfit")).catch(() => {});
   loadBankList("backgrounds", "#list-backgrounds", b => imgRow(b, "delBackground")).catch(() => {});
-  loadBankList("templates", "#list-templates", t => delRow(`${badge(t.status || "ready")} [${esc(t.category)}] ${esc((t.template_text || "").slice(0, 60))}`, t.id, "delTemplate")).catch(() => {});
+  loadTemplatesList().catch(() => {});  // filtrés par la catégorie sélectionnée, texte entier
   loadBankList("dialogues", "#list-dialogues", d => delRow(`[${esc(d.category)}] ${esc((d.raw_text || "").replace(/\n/g, " / ").slice(0, 60))}`, d.id, "delDialogue")).catch(() => {});
   loadBankList("captions", "#list-captions", c => delRow(`[${esc(c.category)}] ${esc((c.text || "").slice(0, 60))}`, c.id, "delCaption")).catch(() => {});
 }
+// Templates filtrés par la catégorie sélectionnée + texte ENTIER (lisible).
+async function loadTemplatesList() {
+  const cat = $("#t-cat").value;
+  const items = await api("/banks/templates?category=" + encodeURIComponent(cat));
+  const el = $("#list-templates"); if (!el) return;
+  el.innerHTML = items.length
+    ? items.map(t => `<div class="list-row top"><span class="grow"><span class="lbl wrap">`
+        + `${badge(t.status || "ready")} ${t.speaking ? badge("speaking") : ""} ${esc(t.template_text || "")}</span></span>`
+        + `<button class="x" onclick="delTemplate('${t.id}')" title="supprimer">✕</button></div>`).join("")
+    : `<span class="muted">aucun template « ${esc(cat)} » — charge les défauts ou ajoute-en un</span>`;
+}
+window.loadTemplatesList = loadTemplatesList;
 async function delBank(kind, id, after) {
   try { await api(`/banks/${kind}/${id}`, {method: "DELETE"}); after(); }
   catch (e) { toast(e.message); }
@@ -800,6 +815,8 @@ $("#cats").innerHTML = CATEGORIES.map(c =>
   `<div class="cat"><b>${c}</b><input type="number" min="0" value="0" data-cat="${c}"></div>`).join("");
 const CAT_OPTIONS = CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join("");
 ["#t-cat", "#d-cat", "#cap-cat", "#rv-cat"].forEach(s => { $(s).innerHTML = CAT_OPTIONS; });
+// Changer la catégorie filtre la liste des templates affichés en dessous.
+$("#t-cat").addEventListener("change", () => loadTemplatesList().catch(() => {}));
 
 // ================= RÉGLAGES : handlers =================
 $("#m-create").addEventListener("click", async () => {
