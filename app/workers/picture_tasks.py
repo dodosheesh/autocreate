@@ -13,6 +13,7 @@
                                           → scrub métadonnées → upload R2 → done
 """
 
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -22,6 +23,7 @@ from app.config import get_settings
 from app.db.base import db_session
 from app.db.models import (
     Background,
+    DialogueLine,
     ItemStatus,
     JobStatus,
     Model,
@@ -34,6 +36,8 @@ from app.db.models import (
     QcStatus,
 )
 from app.integrations import kie, r2
+from app.integrations.elevenlabs import transcribe_audio
+from app.media import audio as media_audio
 from app.integrations.vision import describe_image as _vision_describe
 from app.integrations.vision import reverse_engineer_prompt as _vision_reverse
 from app.integrations.vision import reverse_engineer_video_prompt as _vision_reverse_video
@@ -117,10 +121,27 @@ def describe_asset(self, kind: str, asset_id: str, suffix: str = "") -> None:
                 row.status = "failed"
 
 
+def _transcribe_video(video_path: str, workdir: str) -> str:
+    """Extrait l'audio de la vidéo puis le transcrit (ElevenLabs Scribe).
+    Best-effort : renvoie "" si pas d'audio / échec (ne bloque pas le template)."""
+    try:
+        wav = str(Path(workdir) / "ref_audio.wav")
+        subprocess.run(
+            media_audio.build_extract_audio_command(video_path, wav),
+            capture_output=True,
+        )
+        if not Path(wav).exists() or Path(wav).stat().st_size < 1024:
+            return ""  # pas de piste audio exploitable
+        return " ".join(transcribe_audio(wav).split())  # 1 ligne, espaces normalisés
+    except Exception:
+        return ""
+
+
 @celery_app.task(bind=True, max_retries=2)
 def reverse_engineer_video(self, template_id: str) -> None:
     """Vidéo de référence → template vidéo réutilisable (avec slots), stocké
-    comme PromptTemplate. download → keyframes FFmpeg → vision → ensure_slots."""
+    comme PromptTemplate. download → keyframes FFmpeg → vision → ensure_slots.
+    Si `speaking`, transcrit aussi la parole (Scribe) → ligne de dialogue [F]."""
     try:
         with db_session() as db:
             tmpl = db.get(PromptTemplate, _pk(template_id))
@@ -128,12 +149,17 @@ def reverse_engineer_video(self, template_id: str) -> None:
                 return
             source_url = tmpl.source_video_url
             speaking = tmpl.speaking
+            category = tmpl.category
+            tenant_id = tmpl.tenant_id
 
+        transcript = ""
         with tempfile.TemporaryDirectory() as tmp:
             video_path = Path(tmp) / "ref.mp4"
             _download(source_url, video_path)
             frames = extract_keyframes(str(video_path), tmp, n=6)
             raw = _vision_reverse_video(frames, model_description=None, speaking=speaking)
+            if speaking:  # récupère aussi ce qui est DIT dans la vidéo de référence
+                transcript = _transcribe_video(str(video_path), tmp)
         template_text = ensure_slots(raw, speaking)
 
         with db_session() as db:
@@ -142,6 +168,13 @@ def reverse_engineer_video(self, template_id: str) -> None:
                 return  # supprimé ou déjà traité pendant le traitement
             tmpl.template_text = template_text
             tmpl.status = "ready"
+            # La parole transcrite devient une ligne de dialogue réutilisable
+            # (taggée [F] par défaut ; re-tague [M]/[H]/[W] à la main si besoin).
+            if transcript:
+                db.add(DialogueLine(
+                    tenant_id=tenant_id, category=category,
+                    raw_text=f"[F] {transcript}", weight=1.0,
+                ))
     except Exception as exc:
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)

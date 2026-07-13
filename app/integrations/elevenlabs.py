@@ -51,3 +51,25 @@ def speech_to_speech(audio_path: str, voice_id: str, out_path: str) -> str:
     with open(out_path, "wb") as f:
         f.write(resp.content)
     return out_path
+
+
+def transcribe_audio(audio_path: str) -> str:
+    """Transcrit un fichier audio en texte (ElevenLabs Scribe, speech-to-text).
+    Renvoie le texte reconnu (chaîne vide si rien / pas de parole)."""
+    settings = get_settings()
+    if not settings.elevenlabs_api_key:
+        raise ElevenLabsError("ELEVENLABS_API_KEY manquant")
+    url = f"{settings.elevenlabs_base_url.rstrip('/')}/v1/speech-to-text"
+    with open(audio_path, "rb") as audio_file:
+        resp = httpx.post(
+            url,
+            headers={"xi-api-key": settings.elevenlabs_api_key},
+            data={"model_id": settings.elevenlabs_stt_model},
+            files={"file": (Path(audio_path).name, audio_file, "audio/wav")},
+            timeout=300,
+        )
+    if resp.status_code != 200:
+        raise ElevenLabsError(
+            f"speech_to_text → HTTP {resp.status_code} : {resp.text[:500]}"
+        )
+    return (resp.json().get("text") or "").strip()

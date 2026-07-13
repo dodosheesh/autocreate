@@ -83,6 +83,7 @@ class Settings(BaseSettings):
     elevenlabs_api_key: str = ""
     elevenlabs_base_url: str = "https://api.elevenlabs.io"
     elevenlabs_sts_model: str = "eleven_multilingual_sts_v2"
+    elevenlabs_stt_model: str = "scribe_v1"  # speech-to-text (transcription reverse-video)
     # stability haut = delivery plus stable inter-reels ;
     # similarity_boost haut = plus collé au timbre cible
     elevenlabs_stability: float = 0.5

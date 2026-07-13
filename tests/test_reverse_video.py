@@ -65,14 +65,15 @@ def test_reverse_video_flow(client):
         assert tmpl["status"] == "pending"
         assert mock_task.delay.call_count == 1
 
-    # 2. exécuter la tâche inline : download + keyframes + vision mockés
-    with patch("app.workers.picture_tasks._download"):
-        with patch("app.workers.picture_tasks.extract_keyframes", return_value=["f0.jpg", "f1.jpg"]):
-            with patch(
-                "app.workers.picture_tasks._vision_reverse_video",
-                return_value="A woman dances energetically down a street, handheld tracking shot, neon night mood.",
-            ):
-                pt.reverse_engineer_video(tmpl["id"])
+    # 2. exécuter la tâche inline : download + keyframes + vision + transcription mockés
+    with patch("app.workers.picture_tasks._download"), \
+         patch("app.workers.picture_tasks.extract_keyframes", return_value=["f0.jpg", "f1.jpg"]), \
+         patch("app.workers.picture_tasks._transcribe_video", return_value=""), \
+         patch(
+             "app.workers.picture_tasks._vision_reverse_video",
+             return_value="A woman dances energetically down a street, handheld tracking shot, neon night mood.",
+         ):
+        pt.reverse_engineer_video(tmpl["id"])
 
     # 3. le template est ready, avec slots garantis + dialogue (speaking)
     got = client.get("/api/banks/templates").json()
@@ -82,6 +83,41 @@ def test_reverse_video_flow(client):
     assert "{characteristics}" in ready["template_text"]
     assert "{dialogue}" in ready["template_text"]
     assert "handheld tracking shot" in ready["template_text"]
+
+
+def test_reverse_video_transcrit_la_parole_en_dialogue(client):
+    with patch("app.api.routers.banks.reverse_engineer_video"):
+        tid = client.post("/api/banks/templates/reverse-video", json={
+            "source_video_url": "https://r2.example/talk.mp4",
+            "category": "micro_trottoir", "speaking": True}).json()["id"]
+    with patch("app.workers.picture_tasks._download"), \
+         patch("app.workers.picture_tasks.extract_keyframes", return_value=["f0.jpg"]), \
+         patch("app.workers.picture_tasks._vision_reverse_video",
+               return_value="A woman answers on the street. {outfit} {background} {characteristics} {dialogue}"), \
+         patch("app.workers.picture_tasks._transcribe_video",
+               return_value="yo bro let me know man to man"):
+        pt.reverse_engineer_video(tid)
+    # la parole transcrite est stockée comme ligne de dialogue [F] dans la catégorie
+    dialogues = client.get("/api/banks/dialogues?category=micro_trottoir").json()
+    assert any(d["raw_text"] == "[F] yo bro let me know man to man" for d in dialogues)
+
+
+def test_transcribe_audio_appelle_scribe(tmp_path):
+    from unittest.mock import MagicMock
+
+    from app.integrations import elevenlabs
+
+    a = tmp_path / "a.wav"
+    a.write_bytes(b"RIFFfakeaudio")
+    settings = MagicMock(elevenlabs_api_key="k", elevenlabs_base_url="https://api.elevenlabs.io",
+                         elevenlabs_stt_model="scribe_v1")
+    resp = MagicMock(status_code=200)
+    resp.json.return_value = {"text": "  hello world  "}
+    with patch("app.integrations.elevenlabs.get_settings", return_value=settings), \
+         patch("app.integrations.elevenlabs.httpx.post", return_value=resp) as post:
+        out = elevenlabs.transcribe_audio(str(a))
+    assert out == "hello world"
+    assert post.call_args.kwargs["data"]["model_id"] == "scribe_v1"
 
 
 def test_reverse_video_bulk_cree_n_templates(client):
