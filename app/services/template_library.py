@@ -111,20 +111,22 @@ DEFAULT_TEMPLATES: list[tuple[str, str, bool]] = [
         "natural hand gestures and eye contact with the camera. {characteristics}. {dialogue}",
         True,
     ),
-    # ---------------- snapchat (candide, filmé par un tiers, barre de légende) ----------------
+    # ---------------- snapchat (candide, filmé par un tiers) ----------------
     # SEULE catégorie où la caméra peut bouger/zoomer (vidéo filmée par quelqu'un d'autre).
+    # PAS de texte demandé à Seedance : le bandeau Snapchat (ton texte exact) est
+    # incrusté par-dessus par l'appli (FFmpeg) — on laisse juste l'espace en haut.
     (
         "snapchat",
         "Vertical 9:16 clip filmed candidly by someone else on a phone. A woman {outfit} in "
-        "{background} in an everyday social moment, realistic phone-camera look, a Snapchat-style "
-        "caption bar across the top. Caption: {caption}. {characteristics}.",
+        "{background} in an everyday social moment, realistic phone-camera look. Leave the top "
+        "area clean with empty space and render NO text or caption in the video. {characteristics}.",
         False,
     ),
     (
         "snapchat",
         "9:16 candid clip filmed from across the room. She {outfit} in {background} in a mundane "
-        "moment, natural available light, Snapchat caption bar up top. Caption: {caption}. "
-        "{characteristics}.",
+        "moment, natural available light. Keep the top area empty and render NO on-screen text "
+        "or caption. {characteristics}.",
         False,
     ),
 ]

@@ -114,9 +114,10 @@ def _compose_one(
     # Case « pas de background » : on ne tire aucun décor et le slot reste vide.
     background = None if omit_background else weighted_draw(pools.backgrounds, rng)
 
-    wants_caption = f"{{{CAPTION_SLOT}}}" in template.template_text
-    # Caption OPTIONNELLE : si la banque captions est vide, on n'échoue pas —
-    # le slot {caption} reste vide (ex. snapchat sans caption enregistrée).
+    # Le caption sert au BANDEAU snapchat incrusté par FFmpeg (texte EXACT), pas au
+    # prompt Seedance. On tire un caption pour la catégorie snapchat (ou si un
+    # template le demande). Optionnel : banque vide → pas de bandeau, sans échec.
+    wants_caption = category == "snapchat" or f"{{{CAPTION_SLOT}}}" in template.template_text
     caption = weighted_draw(pools.captions, rng) if wants_caption else None
 
     # Dialogue OPTIONNEL : un template « speaking » sans banque de dialogues ne
@@ -131,7 +132,10 @@ def _compose_one(
         # {characteristics} est laissé intact ici : inject_characteristics
         # remplit ce slot lui-même (ou ajoute en fin de prompt s'il est absent)
         DIALOGUE_SLOT: render_for_prompt(dialogue.text) if dialogue else "",
-        CAPTION_SLOT: caption.text if caption else "",
+        # Le texte du caption n'est JAMAIS injecté dans le prompt : Seedance le
+        # rendrait en dur et mal (texte IA illisible / mauvais contenu). Il est
+        # incrusté proprement par FFmpeg via caption_text. Slot toujours vidé.
+        CAPTION_SLOT: "",
     }
     # 1 caractéristique aléatoire par item + les récurrentes (ex. tatouage)
     active = composer.select_active_characteristics(characteristics, rng)

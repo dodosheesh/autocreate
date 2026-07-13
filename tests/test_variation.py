@@ -172,7 +172,9 @@ def test_speaking_sans_banque_dialogues_compose_quand_meme():
     assert result.items[0].dialogue_script is None
 
 
-def test_slot_caption_rempli_depuis_la_banque():
+def test_caption_pour_overlay_pas_dans_le_prompt():
+    # Le caption sert au bandeau FFmpeg (caption_text) mais n'est JAMAIS injecté
+    # dans le prompt Seedance (sinon l'IA le rend en dur, mal).
     result = compose_batch(
         {"snapchat": 1},
         {"snapchat": pools(with_caption=True)},
@@ -181,8 +183,19 @@ def test_slot_caption_rempli_depuis_la_banque():
         rng=random.Random(9),
     )
     item = result.items[0]
-    assert item.caption_text == "user caption"
-    assert "Caption: user caption" in item.filled_prompt
+    assert item.caption_text == "user caption"       # dispo pour l'overlay FFmpeg
+    assert "user caption" not in item.filled_prompt   # PAS dans le prompt Seedance
+
+
+def test_snapchat_tire_un_caption_sans_slot():
+    # Même un template snapchat SANS {caption} tire un caption (pour l'overlay).
+    p = pools(with_caption=True)
+    no_slot = CategoryPools(
+        templates=[TemplateOption(id="s0", template_text="A woman {outfit} in {background}. {characteristics}", speaking=False)],
+        outfits=p.outfits, backgrounds=p.backgrounds, dialogues=p.dialogues, captions=p.captions,
+    )
+    result = compose_batch({"snapchat": 1}, {"snapchat": no_slot}, CHARACS, FACE, rng=random.Random(2))
+    assert result.items[0].caption_text == "user caption"
 
 
 def test_categorie_sans_template_reportee_en_shortfall():

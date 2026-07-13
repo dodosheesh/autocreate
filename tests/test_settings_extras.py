@@ -51,9 +51,10 @@ def test_default_templates_slots_et_speaking_coherents():
         # un template speaking doit exposer le slot dialogue
         if speaking:
             assert "{dialogue}" in text
-        # snapchat doit exposer le slot caption
+        # snapchat : PAS de {caption} dans le prompt (le bandeau est incrusté par
+        # FFmpeg, jamais rendu par Seedance qui écrirait un texte IA illisible).
         if category == "snapchat":
-            assert "{caption}" in text
+            assert "{caption}" not in text
 
 
 def test_pricing_list_et_edition(client):
