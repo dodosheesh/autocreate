@@ -158,7 +158,11 @@ class DescribePendingRequest(BaseModel):
 
 class DialogueLineCreate(BaseModel):
     category: str
-    raw_text: str = Field(description="Lignes taggées [H]/[F]/[beat], ordre chronologique")
+    raw_text: str = Field(
+        description="Lignes taggées, ordre chrono. [H]/[F] = la model (voix grave / "
+        "voix féminine), [M] = un autre homme (ex. intervieweur), [W] = une autre femme, "
+        "[beat] = pause. Un voice_profile par tag utilisé."
+    )
     weight: float = Field(default=1.0, ge=0)
 
     @field_validator("raw_text")

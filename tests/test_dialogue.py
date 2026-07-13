@@ -52,3 +52,18 @@ def test_render_pour_prompt():
         'then after a brief pause, in a soft high-pitched feminine voice: '
         '"second line in kawaii voice".'
     )
+
+
+def test_render_multi_locuteurs_nomme_qui_parle():
+    # micro-trottoir : un homme (intervieweur) + la model → chaque réplique
+    # est attribuée à son locuteur (pas tout mis sur « she »).
+    rendered = render_for_prompt("[M] where are you from?\n[F] I am from Paris")
+    assert rendered == (
+        'A man off-camera says in a natural male voice: "where are you from?", '
+        'then she says in a soft high-pitched feminine voice: "I am from Paris".'
+    )
+
+
+def test_tags_m_et_w_valides():
+    segs = parse_tagged_script("[M] question\n[W] another woman replies")
+    assert [s.tag for s in segs] == ["M", "W"]

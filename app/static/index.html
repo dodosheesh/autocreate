@@ -271,14 +271,17 @@
 
     <div class="card">
       <h2><span class="step">6</span>Textes fournis (dialogues &amp; captions)</h2>
-      <div class="hint">C'est <b>toi</b> qui déposes ici le texte parlé et les légendes. Le dialogue est taggé
-        <code>[H]</code>/<code>[F]</code>/<code>[beat]</code>, une ligne = une voix, dans l'ordre chronologique.</div>
+      <div class="hint">C'est <b>toi</b> qui déposes ici le texte parlé et les légendes. Une ligne = une réplique.
+        Tags : <code>[H]</code>/<code>[F]</code> = <b>la model</b> (voix grave / voix féminine),
+        <code>[M]</code> = <b>un autre homme</b> (ex. l'intervieweur en micro-trottoir),
+        <code>[W]</code> = <b>une autre femme</b>, <code>[beat]</code> = pause.
+        Crée un <b>voice profile</b> (étape voix) par tag utilisé.</div>
       <div class="row" style="margin-top:0">
         <div><label>Dialogue — catégorie</label><select id="d-cat"></select></div>
         <div><label>Caption — catégorie</label><select id="cap-cat"></select></div>
       </div>
-      <label>Dialogue taggé — <b>chaque ligne DOIT commencer par [H], [F] ou [beat]</b> (sinon rejeté)</label>
-      <textarea id="d-text" rows="3" placeholder="[F] yoooo big dog&#10;[F] do you like what you see ?"></textarea>
+      <label>Dialogue taggé — <b>chaque ligne DOIT commencer par [H], [F], [M], [W] ou [beat]</b> (sinon rejeté)</label>
+      <textarea id="d-text" rows="3" placeholder="[M] alors, tu viens d'où ?&#10;[F] de Paris et toi ?"></textarea>
       <button class="btn small" id="d-add" style="margin-top:10px">Ajouter le dialogue</button>
       <label style="margin-top:12px">Caption (barre de texte Snapchat)</label>
       <input type="text" id="cap-text" placeholder="légende…">
