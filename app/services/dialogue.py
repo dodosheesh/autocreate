@@ -28,6 +28,16 @@ SPEAKERS: dict[str, tuple[str, str]] = {
 # Rétro-compat : timbre seul par tag (dérivé de SPEAKERS).
 VOICE_PROMPT_STYLES = {tag: style for tag, (_subject, style) in SPEAKERS.items()}
 
+# Normalisation : accepte les tags « à la suite » sur une même ligne (ex.
+# « [F] salut [H] bro ») en remettant chaque tag CONNU en début de ligne.
+_KNOWN_TAGS_ALT = "|".join(list(SPEAKERS) + [BEAT_TAG])
+_NORMALIZE_RE = re.compile(rf"\s*(\[(?:{_KNOWN_TAGS_ALT})\])")
+
+
+def _normalize_lines(raw_text: str) -> str:
+    """Une ligne par réplique, que les tags soient à la ligne OU à la suite."""
+    return _NORMALIZE_RE.sub(r"\n\1", raw_text).strip()
+
 
 class DialogueParseError(ValueError):
     pass
@@ -44,7 +54,7 @@ def parse_tagged_script(raw_text: str, valid_tags: set[str] | None = None) -> li
     Les lignes [beat] (micro-pause) ne créent pas de segment audio."""
     valid = valid_tags or set(SPEAKERS)
     segments: list[DialogueSegment] = []
-    for lineno, line in enumerate(raw_text.strip().splitlines(), start=1):
+    for lineno, line in enumerate(_normalize_lines(raw_text).splitlines(), start=1):
         line = line.strip()
         if not line:
             continue
@@ -76,7 +86,7 @@ def render_for_prompt(raw_text: str) -> str:
     first = True
     pending_beat = False
     prev_subject = None
-    for line in raw_text.strip().splitlines():
+    for line in _normalize_lines(raw_text).splitlines():
         line = line.strip()
         if not line:
             continue

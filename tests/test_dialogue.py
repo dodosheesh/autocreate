@@ -67,3 +67,13 @@ def test_render_multi_locuteurs_nomme_qui_parle():
 def test_tags_m_et_w_valides():
     segs = parse_tagged_script("[M] question\n[W] another woman replies")
     assert [s.tag for s in segs] == ["M", "W"]
+
+
+def test_tags_a_la_suite_meme_ligne():
+    # tags « à la suite » sur une seule ligne = même résultat qu'à la ligne
+    segs = parse_tagged_script("[M] tu viens d'où ? [F] de Paris [beat] [F] et toi ?")
+    assert [(s.tag, s.text) for s in segs] == [
+        ("M", "tu viens d'où ?"),
+        ("F", "de Paris"),
+        ("F", "et toi ?"),
+    ]
