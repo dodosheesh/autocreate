@@ -1016,11 +1016,27 @@ async function loadJobs() {
       <td class="mono">${j.actual_cost_usd != null ? "$" + j.actual_cost_usd.toFixed(2) : "—"}</td>
     </tr>`).join("") || '<tr><td colspan="5" class="muted">aucun job</td></tr>';
 }
+// Un média en cours de lecture dans ce conteneur → ne pas re-render (sinon la
+// vidéo repart à zéro). !paused && !ended couvre aussi la mise en mémoire tampon.
+function mediaPlaying(sel) {
+  return [...document.querySelectorAll(`${sel} video, ${sel} audio`)]
+    .some(m => !m.paused && !m.ended);
+}
+// Signature du contenu affiché : on ne re-render que si ELLE change (une autre
+// génération en cours ne doit pas rafraîchir — donc couper — la vidéo ouverte).
+function jobSig(j) {
+  return JSON.stringify([j.status, j.error, j.compose_shortfall,
+    (j.items || []).map(it => [it.status, it.qc_status, it.review_status, it.final_video_url])]);
+}
 let lastJobStatus = null;
-async function openJob(id) {
-  currentJob = id;
+let lastJobSig = null;
+async function openJob(id, auto = false) {
   const j = await api("/jobs/" + id);
   lastJobStatus = j.status;
+  // Auto-refresh : si rien n'a changé OU si une vidéo joue, on ne touche pas au DOM.
+  if (auto && id === currentJob && (jobSig(j) === lastJobSig || mediaPlaying("#job-detail"))) return;
+  currentJob = id;
+  lastJobSig = jobSig(j);
   const shortfall = Object.keys(j.compose_shortfall || {}).length
     ? `<div class="warn-box" style="display:block">Styles ignorés / combos épuisés : ${esc(JSON.stringify(j.compose_shortfall))}</div>` : "";
   const jobErr = j.error
@@ -1152,11 +1168,18 @@ async function loadPicJobs() {
       <td class="mono">${j.estimated_cost_usd!=null?"$"+j.estimated_cost_usd.toFixed(2):"—"}</td></tr>`).join("")
     }</tbody></table>` : '<span class="muted">aucun job photo</span>';
 }
+function picJobSig(j) {
+  return JSON.stringify([j.status,
+    (j.items || []).map(it => [it.status, it.qc_status, it.review_status, it.final_image_url])]);
+}
 let lastPicJobStatus = null;
-async function openPicJob(id) {
-  currentPicJob = id;
+let lastPicJobSig = null;
+async function openPicJob(id, auto = false) {
   const j = await api("/pictures/jobs/" + id);
   lastPicJobStatus = j.status;
+  if (auto && id === currentPicJob && (picJobSig(j) === lastPicJobSig || mediaPlaying("#pic-detail"))) return;
+  currentPicJob = id;
+  lastPicJobSig = picJobSig(j);
   $("#pic-detail").innerHTML = `
     <div style="margin-top:14px; display:flex; justify-content:space-between; align-items:center">
       <b>Photos ${esc(id.slice(0,8))} ${badge(j.status)}</b>
@@ -1201,24 +1224,18 @@ requireAuth().then(() => {
   loadPicJobs().catch(() => {});
   loadPricing().catch(() => {});
   loadTemplates().catch(() => {});
-  // Un média (vidéo/audio) en cours de lecture dans un conteneur : on ne re-rend
-  // pas ce conteneur (sinon l'auto-refresh recrée le <video> et la lecture repart
-  // à zéro → « ça bug toutes les X secondes »).
-  const mediaPlaying = (sel) =>
-    [...document.querySelectorAll(`${sel} video, ${sel} audio`)]
-      .some(m => !m.paused && !m.ended && !m.seeking && m.readyState > 2);
   setInterval(() => {
     loadJobs().catch(() => {});
-    if (currentJob && !mediaPlaying("#job-detail")) {  // pas pendant la lecture
+    if (currentJob && !mediaPlaying("#job-detail")) {  // jamais pendant la lecture
       (lastJobStatus === "dispatched"
-        ? api(`/jobs/${currentJob}/recheck`, {method: "POST"}).then(() => openJob(currentJob))
-        : openJob(currentJob)).catch(() => {});
+        ? api(`/jobs/${currentJob}/recheck`, {method: "POST"}).then(() => openJob(currentJob, true))
+        : openJob(currentJob, true)).catch(() => {});
     }
     loadPicJobs().catch(() => {});
     if (currentPicJob && !mediaPlaying("#pic-detail")) {
       (lastPicJobStatus === "dispatched"
-        ? api(`/pictures/jobs/${currentPicJob}/recheck`, {method: "POST"}).then(() => openPicJob(currentPicJob))
-        : openPicJob(currentPicJob)).catch(() => {});
+        ? api(`/pictures/jobs/${currentPicJob}/recheck`, {method: "POST"}).then(() => openPicJob(currentPicJob, true))
+        : openPicJob(currentPicJob, true)).catch(() => {});
     }
     loadPrompts().catch(() => {});  // prompts reverse-engineerés (photo)
     loadTemplates().catch(() => {});
