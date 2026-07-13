@@ -29,7 +29,10 @@ def camera_directive(category: str, speaking: bool) -> str:
         cam = (
             "Filmed candidly by another person holding a phone: the camera can move and "
             "zoom naturally like a real handheld recording. Realistic phone-camera look, "
-            "not cinematic, not AI-looking. No music."
+            "not cinematic, not AI-looking. No music. "
+            "Render ABSOLUTELY NO text, letters, words, captions, subtitles, speech "
+            "bubbles, stickers or UI overlays anywhere in the frame — the video must be "
+            "completely text-free (the caption is added afterward in post-production)."
         )
     else:
         cam = (

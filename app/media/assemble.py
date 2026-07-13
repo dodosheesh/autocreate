@@ -12,11 +12,41 @@ Le texte du caption passe par un fichier (drawtext textfile=) pour éviter
 tout problème d'échappement — le contenu vient de l'utilisateur.
 """
 
+import re
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.config import get_settings
+
+# Emojis / pictogrammes : la police vidéo (DejaVu) ne les rend pas → carrés moches.
+# On les retire du bandeau (drawtext ne sait pas afficher les emojis couleur).
+_EMOJI_RE = re.compile(
+    "[\U0001F000-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF"
+    "\U0000FE00-\U0000FE0F\U00002B00-\U00002BFF\U0000200D\U00002300-\U000023FF]+",
+    flags=re.UNICODE,
+)
+
+
+def _clean_caption(text: str) -> str:
+    """Retire les emojis et normalise les espaces (drawtext ne gère pas l'emoji)."""
+    return " ".join(_EMOJI_RE.sub("", text).split())
+
+
+def _wrap_caption(text: str, max_chars: int = 26, max_lines: int = 4) -> list[str]:
+    """Découpe le caption en lignes (par mots) pour qu'il ne déborde pas de l'écran."""
+    words = text.split()
+    lines: list[str] = []
+    cur = ""
+    for w in words:
+        if cur and len(cur) + 1 + len(w) > max_chars:
+            lines.append(cur)
+            cur = w
+        else:
+            cur = f"{cur} {w}".strip()
+    if cur:
+        lines.append(cur)
+    return lines[:max_lines]
 
 RESOLUTIONS: dict[str, tuple[int, int]] = {
     "480p": (480, 854),
@@ -39,24 +69,31 @@ BITRATES_KBPS: dict[tuple[str, str], int] = {
 class AssembleParams:
     resolution: str = "720p"
     bitrate: str = "standard"  # standard / high
-    caption_file: str | None = None  # fichier texte du caption (overlay Snapchat)
+    # Un fichier texte par LIGNE du caption (retour à la ligne → pas de texte coupé).
+    caption_files: tuple[str, ...] = field(default_factory=tuple)
     music_path: str | None = None  # piste musique locale à mixer sous la voix
 
 
-def _snapchat_overlay(caption_file: str, height: int) -> str:
-    """Bande noire semi-transparente pleine largeur dans le tiers haut,
-    texte blanc centré — façon barre de légende Snapchat."""
-    bar_y = round(height * 0.16)
-    bar_h = round(height * 0.075)
-    font_size = round(height * 0.032)
-    # expansion=none : le contenu du caption (fourni par l'utilisateur) est
-    # rendu littéralement, sans que drawtext interprète les directives %{...}
-    # (sinon fuite de métadonnées de frame / erreur FFmpeg via un caption piégé).
-    return (
-        f"drawbox=x=0:y={bar_y}:w=iw:h={bar_h}:color=black@0.55:t=fill,"
-        f"drawtext=textfile='{caption_file}':expansion=none:font=Sans:fontcolor=white:"
-        f"fontsize={font_size}:x=(w-text_w)/2:y={bar_y}+({bar_h}-text_h)/2"
-    )
+def _snapchat_overlay(caption_files: tuple[str, ...], height: int) -> str:
+    """Bande noire semi-transparente pleine largeur (tiers haut), texte blanc
+    centré sur PLUSIEURS lignes — façon barre de légende Snapchat. Chaque ligne
+    est un drawtext centré (évite le texte qui déborde/est coupé)."""
+    n = max(1, len(caption_files))
+    font_size = round(height * 0.030)
+    line_h = round(font_size * 1.35)
+    pad = round(font_size * 0.7)
+    bar_h = n * line_h + 2 * pad
+    bar_y = round(height * 0.14)
+    parts = [f"drawbox=x=0:y={bar_y}:w=iw:h={bar_h}:color=black@0.55:t=fill"]
+    for i, cf in enumerate(caption_files):
+        y = bar_y + pad + i * line_h
+        # expansion=none : le contenu utilisateur est rendu littéralement (pas
+        # d'interprétation des directives %{...} → pas de fuite/erreur FFmpeg).
+        parts.append(
+            f"drawtext=textfile='{cf}':expansion=none:font=Sans:fontcolor=white:"
+            f"fontsize={font_size}:x=(w-text_w)/2:y={y}"
+        )
+    return ",".join(parts)
 
 
 def build_assemble_command(
@@ -72,8 +109,8 @@ def build_assemble_command(
         f"scale={width}:{height}:force_original_aspect_ratio=increase,"
         f"crop={width}:{height},setsar=1"
     )
-    if params.caption_file:
-        vf += "," + _snapchat_overlay(params.caption_file, height)
+    if params.caption_files:
+        vf += "," + _snapchat_overlay(params.caption_files, height)
 
     cmd = [
         get_settings().ffmpeg_bin,
@@ -123,12 +160,16 @@ def assemble(
     if caption_text:
         if workdir is None:
             raise ValueError("workdir requis pour un caption_text")
-        caption_file = str(Path(workdir) / "caption.txt")
-        Path(caption_file).write_text(caption_text, encoding="utf-8")
+        lines = _wrap_caption(_clean_caption(caption_text))  # emoji retirés + wrap
+        caption_files: list[str] = []
+        for i, line in enumerate(lines):
+            cf = str(Path(workdir) / f"caption_{i}.txt")
+            Path(cf).write_text(line, encoding="utf-8")
+            caption_files.append(cf)
         params = AssembleParams(
             resolution=params.resolution,
             bitrate=params.bitrate,
-            caption_file=caption_file,
+            caption_files=tuple(caption_files),
             music_path=params.music_path,
         )
     cmd = build_assemble_command(input_path, output_path, params)

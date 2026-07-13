@@ -1,6 +1,11 @@
 import pytest
 
-from app.media.assemble import AssembleParams, build_assemble_command
+from app.media.assemble import (
+    AssembleParams,
+    _clean_caption,
+    _wrap_caption,
+    build_assemble_command,
+)
 
 
 def test_commande_720p_standard():
@@ -24,14 +29,30 @@ def test_resolution_inconnue():
         build_assemble_command("in.mp4", "out.mp4", AssembleParams("4k", "standard"))
 
 
-def test_overlay_caption_snapchat():
+def test_overlay_caption_snapchat_multiligne():
     cmd = build_assemble_command(
-        "in.mp4", "out.mp4", AssembleParams("720p", "standard", caption_file="cap.txt")
+        "in.mp4", "out.mp4",
+        AssembleParams("720p", "standard", caption_files=("l0.txt", "l1.txt")),
     )
     vf = cmd[cmd.index("-vf") + 1]
     assert "drawbox=" in vf and "color=black@0.55" in vf
-    assert "drawtext=textfile='cap.txt'" in vf
+    # une ligne = un drawtext centré (pas de texte coupé qui déborde)
+    assert "drawtext=textfile='l0.txt'" in vf and "drawtext=textfile='l1.txt'" in vf
+    assert vf.count("drawtext=") == 2
     assert "fontcolor=white" in vf
+
+
+def test_clean_caption_retire_emoji():
+    assert _clean_caption("Bulge 👤 between 🔥 her legs") == "Bulge between her legs"
+    assert _clean_caption("no emoji here") == "no emoji here"
+
+
+def test_wrap_caption_coupe_en_lignes():
+    lines = _wrap_caption("is cake even if it has a candle they still eat it right", max_chars=20)
+    assert len(lines) >= 2
+    assert all(len(x) <= 20 for x in lines)
+    # aucun mot perdu
+    assert " ".join(lines).split() == "is cake even if it has a candle they still eat it right".split()
 
 
 def test_mix_musique():
