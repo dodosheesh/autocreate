@@ -35,7 +35,9 @@ def test_overlay_caption_snapchat_multiligne():
         AssembleParams("720p", "standard", caption_files=("l0.txt", "l1.txt")),
     )
     vf = cmd[cmd.index("-vf") + 1]
-    assert "drawbox=" in vf and "color=black@0.55" in vf
+    # fond qui épouse le texte (box=1), plus de bande pleine largeur (drawbox)
+    assert "box=1" in vf and "boxcolor=black" in vf
+    assert "drawbox=" not in vf
     # une ligne = un drawtext centré (pas de texte coupé qui déborde)
     assert "drawtext=textfile='l0.txt'" in vf and "drawtext=textfile='l1.txt'" in vf
     assert vf.count("drawtext=") == 2
