@@ -47,7 +47,8 @@ def test_load_default_templates_idempotent(client):
 
 def test_default_templates_slots_et_speaking_coherents():
     for category, text, speaking in DEFAULT_TEMPLATES:
-        assert "{outfit}" in text and "{background}" in text
+        # {outfit} toujours ; {background} optionnel (scènes candides à lieu écrit).
+        assert "{outfit}" in text
         # un template speaking doit exposer le slot dialogue
         if speaking:
             assert "{dialogue}" in text

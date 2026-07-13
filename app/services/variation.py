@@ -111,8 +111,15 @@ def _compose_one(
 ) -> ComposedItem:
     template = weighted_draw(pools.templates, rng)
     outfit = weighted_draw(pools.outfits, rng)
-    # Case « pas de background » : on ne tire aucun décor et le slot reste vide.
-    background = None if omit_background else weighted_draw(pools.backgrounds, rng)
+    # On ne tire un décor QUE si le template a le slot {background} (un template
+    # dont la scène est déjà écrite — ex. « file d'attente au McDo » — ne doit pas
+    # pioché un décor aléatoire qui parasiterait la scène). Idem si case « pas de background ».
+    wants_background = "{background}" in template.template_text
+    background = (
+        weighted_draw(pools.backgrounds, rng)
+        if wants_background and not omit_background
+        else None
+    )
 
     # Le caption sert au BANDEAU snapchat incrusté par FFmpeg (texte EXACT), pas au
     # prompt Seedance. On tire un caption pour la catégorie snapchat (ou si un

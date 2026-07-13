@@ -187,6 +187,20 @@ def test_caption_pour_overlay_pas_dans_le_prompt():
     assert "user caption" not in item.filled_prompt   # PAS dans le prompt Seedance
 
 
+def test_template_sans_slot_background_ne_tire_aucun_decor():
+    # Un template dont la scène est écrite (pas de {background}) ne doit pas
+    # piocher un décor aléatoire ni sa référence image.
+    p = pools()
+    scene = CategoryPools(
+        templates=[TemplateOption(id="sc", template_text="A woman {outfit} waits in line at a fast-food counter. {characteristics}", speaking=False)],
+        outfits=p.outfits, backgrounds=p.backgrounds, dialogues=p.dialogues, captions=p.captions,
+    )
+    result = compose_batch({"snapchat": 1}, {"snapchat": scene}, CHARACS, FACE, rng=random.Random(4))
+    item = result.items[0]
+    assert item.background_id is None
+    assert not any("/b" in u for u in item.reference_image_urls)  # aucune ref décor
+
+
 def test_snapchat_tire_un_caption_sans_slot():
     # Même un template snapchat SANS {caption} tire un caption (pour l'overlay).
     p = pools(with_caption=True)

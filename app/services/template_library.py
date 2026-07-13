@@ -130,6 +130,40 @@ DEFAULT_TEMPLATES: list[tuple[str, str, bool]] = [
         "or caption. {characteristics}.",
         False,
     ),
+    # Scénarios candides « POV filmé de loin » (~20 m, léger zoom lent) : la scène est
+    # déjà écrite → PAS de slot {background} (aucun décor aléatoire n'est tiré).
+    (
+        "snapchat",
+        "Vertical 9:16 candid clip filmed discreetly from about 20 meters away on a phone, "
+        "with a slight slow zoom in on her. A woman {outfit} waits in line at a fast-food "
+        "counter (McDonald's / Wendy's style), glancing at the menu and her phone, unaware she "
+        "is being filmed. Realistic phone-camera look, render NO on-screen text. {characteristics}.",
+        False,
+    ),
+    (
+        "snapchat",
+        "Vertical 9:16 candid clip filmed from a distance (~20 meters) with a slight zoom, as if "
+        "recorded discreetly from the crowd. A woman {outfit} sits in stadium bleachers, casually "
+        "eating a hotdog and watching the game, unaware of the camera. Realistic phone-camera "
+        "feel, render NO on-screen text. {characteristics}.",
+        False,
+    ),
+    (
+        "snapchat",
+        "Vertical 9:16 POV clip filmed from inside a swimming pool by a guy holding a phone, from "
+        "a distance with a slight zoom. A woman {outfit} lies on a poolside lounger sunbathing, "
+        "relaxed, unaware she is being filmed from the water. Bright sunny day, realistic "
+        "phone-camera look, render NO on-screen text. {characteristics}.",
+        False,
+    ),
+    (
+        "snapchat",
+        "Vertical 9:16 candid street clip filmed from across the street (~20 meters) with a slight "
+        "zoom. A woman {outfit} walks down the sidewalk, and a man walking the other way turns his "
+        "head to look at her as she passes. Everyday city street, realistic phone-camera feel, she "
+        "is unaware of the camera, render NO on-screen text. {characteristics}.",
+        False,
+    ),
 ]
 
 
