@@ -120,10 +120,10 @@ def _compose_one(
     caption = weighted_draw(pools.captions, rng) if wants_caption else None
 
     # Dialogue OPTIONNEL : un template « speaking » sans banque de dialogues ne
-    # bloque plus la génération (le slot {dialogue} reste vide, la vidéo se fait
-    # sans réplique scriptée). Ajoute des dialogues pour qu'elle parle.
+    # bloque plus la génération (le slot {dialogue} reste vide — utile si tu écris
+    # la réplique directement dans le texte du template). Ajoute des dialogues
+    # dans la banque pour varier automatiquement.
     dialogue = weighted_draw(pools.dialogues, rng) if template.speaking else None
-    speaking_effective = dialogue is not None  # voix seulement s'il y a un script
 
     values = {
         "outfit": outfit.text if outfit else "",
@@ -140,8 +140,9 @@ def _compose_one(
     prompt = fill_template(template.template_text, values)
     prompt = composer.inject_characteristics(prompt, active)
     # Demande custom (one-shot) + directive caméra (fixe hors snapchat) / voix / pas de musique.
-    # Les instructions de voix ne sont ajoutées que s'il y a réellement un dialogue.
-    prompt = apply_scene_style(prompt, category, speaking_effective, custom_prompt)
+    # Directive voix liée à l'INTENTION (case speaking) : marche même si tu écris la
+    # réplique directement dans le texte du template, sans passer par la banque.
+    prompt = apply_scene_style(prompt, category, template.speaking, custom_prompt)
 
     extra_refs = [o.image_url for o in (outfit, background) if o and o.image_url]
     refs = composer.select_reference_images(
