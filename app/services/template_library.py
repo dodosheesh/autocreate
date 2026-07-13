@@ -79,8 +79,9 @@ DEFAULT_TEMPLATES: list[tuple[str, str, bool]] = [
     ),
     (
         "showing_body",
-        "9:16 mirror selfie video, phone in hand. A woman {outfit} in {background} films "
-        "herself in the mirror doing a few relaxed poses to show the outfit. {characteristics}.",
+        "9:16 phone video, full-body outfit check. A woman {outfit} in {background} poses "
+        "for her propped-up phone, a few relaxed full-body poses to show the outfit off. "
+        "{characteristics}.",
         False,
     ),
     # ---------------- micro_trottoir (micro-trottoir / interview de rue) ----------------

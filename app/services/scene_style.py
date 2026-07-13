@@ -33,7 +33,10 @@ def camera_directive(category: str, speaking: bool) -> str:
         )
     else:
         cam = (
-            "She is filming herself on her own phone (propped up or at arm's length). "
+            "She is filming herself on her own phone that is PROPPED UP on a stand or "
+            "surface in front of her, filming her DIRECTLY (this is NOT a mirror selfie "
+            "and there is NO mirror — do not show a mirror or a phone held up as a "
+            "reflection unless the location is clearly an indoor room). "
             "STATIC locked camera: the camera stays completely still — no zoom, no pan, "
             "no push-in, no dolly, no camera movement of any kind. Natural vertical phone "
             "video for social media (TikTok/Reels), candid and realistic, not cinematic, "
