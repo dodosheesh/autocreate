@@ -75,25 +75,24 @@ class AssembleParams:
 
 
 def _snapchat_overlay(caption_files: tuple[str, ...], height: int) -> str:
-    """Légende façon Snapchat/TikTok : chaque ligne a son PROPRE fond
-    semi-transparent qui ÉPOUSE le texte (pas de bande pleine largeur → pas de
-    grand vide sur les côtés), centrée horizontalement, placée dans la partie
-    INFÉRIEURE de la vidéo (pour ne pas masquer le visage)."""
-    font_size = round(height * 0.032)
-    line_h = round(font_size * 1.55)
-    box_pad = round(font_size * 0.38)
-    # Bloc de légende dans le bas de l'image (au-dessus des contrôles du lecteur).
+    """Barre de légende façon Snapchat : bande noire semi-transparente PLEINE
+    LARGEUR (collée aux deux bords), texte blanc centré qui passe à la ligne.
+    Placée dans la partie INFÉRIEURE de la vidéo (pour ne pas masquer le visage)."""
     n = max(1, len(caption_files))
-    start_y = round(height * 0.78) - (n - 1) * line_h
-    parts = []
+    font_size = round(height * 0.033)
+    line_h = round(font_size * 1.4)
+    pad = round(font_size * 0.6)
+    bar_h = n * line_h + 2 * pad
+    bar_y = round(height * 0.70)
+    # drawbox pleine largeur (x=0, w=iw) → collée aux deux côtés comme Snapchat.
+    parts = [f"drawbox=x=0:y={bar_y}:w=iw:h={bar_h}:color=black@0.5:t=fill"]
     for i, cf in enumerate(caption_files):
-        y = start_y + i * line_h
-        # box=1 : fond qui épouse le texte. expansion=none : contenu utilisateur
-        # rendu littéralement (pas d'interprétation %{...} → pas de fuite/erreur).
+        y = bar_y + pad + i * line_h
+        # expansion=none : contenu utilisateur rendu littéralement (pas
+        # d'interprétation %{...} → pas de fuite/erreur FFmpeg).
         parts.append(
             f"drawtext=textfile='{cf}':expansion=none:font=Sans:fontcolor=white:"
-            f"fontsize={font_size}:box=1:boxcolor=black@0.5:boxborderw={box_pad}:"
-            f"x=(w-text_w)/2:y={y}"
+            f"fontsize={font_size}:x=(w-text_w)/2:y={y}"
         )
     return ",".join(parts)
 
