@@ -1201,15 +1201,21 @@ requireAuth().then(() => {
   loadPicJobs().catch(() => {});
   loadPricing().catch(() => {});
   loadTemplates().catch(() => {});
+  // Un média (vidéo/audio) en cours de lecture dans un conteneur : on ne re-rend
+  // pas ce conteneur (sinon l'auto-refresh recrée le <video> et la lecture repart
+  // à zéro → « ça bug toutes les X secondes »).
+  const mediaPlaying = (sel) =>
+    [...document.querySelectorAll(`${sel} video, ${sel} audio`)]
+      .some(m => !m.paused && !m.ended && !m.seeking && m.readyState > 2);
   setInterval(() => {
     loadJobs().catch(() => {});
-    if (currentJob) {  // si dispatched, on pull kie.ai en silence avant de rafraîchir
+    if (currentJob && !mediaPlaying("#job-detail")) {  // pas pendant la lecture
       (lastJobStatus === "dispatched"
         ? api(`/jobs/${currentJob}/recheck`, {method: "POST"}).then(() => openJob(currentJob))
         : openJob(currentJob)).catch(() => {});
     }
     loadPicJobs().catch(() => {});
-    if (currentPicJob) {
+    if (currentPicJob && !mediaPlaying("#pic-detail")) {
       (lastPicJobStatus === "dispatched"
         ? api(`/pictures/jobs/${currentPicJob}/recheck`, {method: "POST"}).then(() => openPicJob(currentPicJob))
         : openPicJob(currentPicJob)).catch(() => {});
