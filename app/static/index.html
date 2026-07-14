@@ -1074,7 +1074,18 @@ $("#rvl-go").addEventListener("click", async () => {
 });
 
 function rvTemplateRow(t) {
-  return `<div class="est-line"><span class="muted">${badge(t.status)} [${esc(t.category)}] ${esc((t.template_text || "").slice(0, 70))}</span>
+  const full = t.template_text || "";
+  // Format long : indicateur de présence des paroles (transcript) — sans elles,
+  // le template n'est PAS utilisable en génération 30 s.
+  let tr = "";
+  if (t.category === LONG_FORM_CAT) {
+    tr = (t.transcript && t.transcript.trim())
+      ? ' <span style="color:#4ade80">🎙️ paroles OK</span>'
+      : ' <span style="color:#f87171">⚠ pas de paroles (transcript vide → inutilisable)</span>';
+  }
+  // Tooltip : prompt complet (+ paroles pour le format long) au survol.
+  const tip = esc(full + (t.transcript ? "\n\n— Paroles —\n" + t.transcript : ""));
+  return `<div class="est-line" title="${tip}"><span class="muted">${badge(t.status)} [${esc(t.category)}] ${esc(full.slice(0, 70))}${tr}</span>
     <button class="btn small ghost" onclick="delRvTemplate('${t.id}')" title="supprimer">✕</button></div>`;
 }
 async function loadTemplates() {

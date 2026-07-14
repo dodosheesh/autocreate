@@ -99,6 +99,41 @@ def test_long_form_sans_transcript_reporte_en_shortfall():
     assert result.shortfall_per_category.get(variation.LONG_FORM_CATEGORY) == 1
 
 
+def test_compose_long_form_sans_transcript_message_explicite():
+    # un template storytelling_long PRÊT mais sans transcript → échec avec un
+    # message clair (et pas le générique « aucun template prêt »).
+    import uuid as _uuid
+
+    from app.db.base import Base, SessionLocal, engine
+    from app.db.models import GenerationJob, Model, PromptTemplate
+    from app.workers import tasks
+
+    Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
+    with SessionLocal() as db:
+        m = Model(name="m", face_reference_url="https://r2/f.jpg", tenant_id="t")
+        db.add(m)
+        db.flush()
+        db.add(PromptTemplate(
+            tenant_id="t", category=variation.LONG_FORM_CATEGORY,
+            template_text="A woman {outfit} {characteristics} {dialogue}",
+            speaking=True, status="ready", transcript=None,
+            source_video_url="https://r2/v.mp4"))
+        job = GenerationJob(model_id=m.id, tenant_id="t", status="pending",
+                            counts_per_category={variation.LONG_FORM_CATEGORY: 1})
+        db.add(job)
+        db.commit()
+        job_id = str(job.id)
+
+    tasks.compose_job(job_id)
+
+    with SessionLocal() as db:
+        job = db.get(GenerationJob, _uuid.UUID(job_id))
+        assert job.status == "failed"
+        assert "paroles" in job.error  # message spécifique transcript manquant
+        assert "ELEVENLABS_API_KEY" in job.error
+
+
 def test_last_frame_command():
     cmd = build_last_frame_command("clip.mp4", "frame.jpg")
     joined = " ".join(cmd)

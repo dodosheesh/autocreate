@@ -143,6 +143,41 @@ def _build_pools(db, categories: list[str], tenant_id: str) -> dict[str, variati
     return pools
 
 
+def _compose_failure_message(db, tenant_id: str, empty_categories: list[str]) -> str:
+    """Message d'échec précis quand aucun item n'a pu être composé. Pour le format
+    long, distingue « aucun template » de « template prêt mais SANS transcript »."""
+    parts: list[str] = []
+    for cat in empty_categories:
+        if cat == variation.LONG_FORM_CATEGORY:
+            ready = db.scalars(
+                select(PromptTemplate).where(
+                    PromptTemplate.tenant_id == tenant_id,
+                    PromptTemplate.category == cat,
+                    PromptTemplate.status == "ready",
+                )
+            ).all()
+            with_tr = [t for t in ready if (t.transcript or "").strip()]
+            if ready and not with_tr:
+                parts.append(
+                    f"{cat} : {len(ready)} template(s) prêt(s) mais AUCUN avec paroles "
+                    "transcrites. La vidéo de référence n'avait pas de piste audio "
+                    "exploitable, ou la transcription (ElevenLabs Scribe) a échoué. "
+                    "Vérifie que ELEVENLABS_API_KEY est bien configurée côté worker, "
+                    "puis re-uploade la vidéo dans la section « Vidéos longues 30 s »."
+                )
+            else:
+                parts.append(
+                    f"{cat} : aucun template prêt. Uploade une vidéo dans la section "
+                    "« Vidéos longues 30 s » et attends qu'elle passe de « pending » à « ready »."
+                )
+        else:
+            parts.append(
+                f"{cat} : aucun template PRÊT. Ajoute un template pour ce style dans Réglages "
+                "(ou attends que la réplique vidéo passe de « pending » à « ready »)."
+            )
+    return " ".join(parts) or "Aucun template composable."
+
+
 @celery_app.task
 def compose_job(job_id: str) -> None:
     """Compose les items d'un job batch depuis les banques (brief §5),
@@ -203,14 +238,11 @@ def compose_job(job_id: str) -> None:
                 )
             job.compose_shortfall = result.shortfall_per_category
             if not result.items:
-                # Rien de composable : aucun template prêt pour les styles demandés.
-                # On échoue le job avec un message actionnable (au lieu de rester bloqué).
-                empties = ", ".join(sorted(result.shortfall_per_category)) or "—"
+                # Rien de composable : on échoue le job avec un message actionnable,
+                # spécifique au format long (transcript manquant) le cas échéant.
                 job.status = JobStatus.FAILED
-                job.error = (
-                    f"Aucun template PRÊT (status « ready ») pour : {empties}. "
-                    "Ajoute un template pour ces styles dans Réglages (ou attends que la "
-                    "réplique vidéo passe de « pending » à « ready »)."
+                job.error = _compose_failure_message(
+                    db, job.tenant_id, sorted(result.shortfall_per_category)
                 )
                 return
         estimate_and_gate.delay(job_id)

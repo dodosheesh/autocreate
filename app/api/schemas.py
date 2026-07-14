@@ -119,6 +119,9 @@ class TemplateOut(TemplateCreate):
     id: uuid.UUID
     status: str = "ready"
     source_video_url: str | None = None
+    # Paroles transcrites (format long 30 s) — présence = template exploitable
+    # en storytelling_long.
+    transcript: str | None = None
     error: str | None = None
 
     model_config = {"from_attributes": True}
