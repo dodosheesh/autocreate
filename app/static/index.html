@@ -519,9 +519,9 @@ function safeUrl(u){u=String(u==null?"":u);return /^https?:\/\//i.test(u)?u:"";}
 const badge = (s) => `<span class="badge b-${s}">${esc(s)}</span>`;
 const tags = (s) => s.split(",").map(t => t.trim()).filter(Boolean);
 
-function toast(msg) {
+function toast(msg, ms) {
   const t = $("#toast"); t.textContent = msg; t.style.display = "block";
-  setTimeout(() => t.style.display = "none", 3500);
+  setTimeout(() => t.style.display = "none", ms || 3500);
 }
 function errText(detail, fallback) {
   if (!detail) return fallback;
@@ -1077,17 +1077,29 @@ function rvTemplateRow(t) {
   const full = t.template_text || "";
   // Format long : indicateur de présence des paroles (transcript) — sans elles,
   // le template n'est PAS utilisable en génération 30 s.
-  let tr = "";
+  let tr = "", retry = "";
   if (t.category === LONG_FORM_CAT) {
     tr = (t.transcript && t.transcript.trim())
       ? ' <span style="color:#4ade80">🎙️ paroles OK</span>'
       : ' <span style="color:#f87171">⚠ pas de paroles (transcript vide → inutilisable)</span>';
+    // Re-lance la transcription EN DIRECT (utile si le worker n'avait pas la clé).
+    retry = `<button class="btn small ghost" onclick="retranscribe('${t.id}')" title="relancer la transcription des paroles">🎙️ Re-transcrire</button>`;
   }
-  // Tooltip : prompt complet (+ paroles pour le format long) au survol.
-  const tip = esc(full + (t.transcript ? "\n\n— Paroles —\n" + t.transcript : ""));
+  // Tooltip : prompt complet (+ paroles / erreur) au survol.
+  const tip = esc(full + (t.transcript ? "\n\n— Paroles —\n" + t.transcript : "")
+    + (t.error ? "\n\n— Erreur —\n" + t.error : ""));
   return `<div class="est-line" title="${tip}"><span class="muted">${badge(t.status)} [${esc(t.category)}] ${esc(full.slice(0, 70))}${tr}</span>
-    <button class="btn small ghost" onclick="delRvTemplate('${t.id}')" title="supprimer">✕</button></div>`;
+    <span>${retry}<button class="btn small ghost" onclick="delRvTemplate('${t.id}')" title="supprimer">✕</button></span></div>`;
 }
+window.retranscribe = async (id) => {
+  toast("Transcription en cours…");
+  try {
+    const r = await api("/banks/templates/" + id + "/retranscribe", {method: "POST"});
+    if (r.ok) toast(`✅ Paroles récupérées (${r.chars} caractères)`);
+    else toast("❌ Transcription : " + (r.error || "échec"), 8000);
+  } catch (e) { toast("Re-transcrire : " + e.message, 8000); }
+  loadTemplates();
+};
 async function loadTemplates() {
   const tmpls = await api("/banks/templates");
   const rv = tmpls.filter(t => t.source_video_url);

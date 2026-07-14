@@ -37,6 +37,17 @@ def test_ensure_slots_preserve_les_slots_presents():
     assert out.count("{outfit}") == 1  # pas de duplication
 
 
+def test_strip_background_slot():
+    from app.services.template_library import strip_background_slot
+
+    assert strip_background_slot(
+        "A woman sits on a bed in {background}, wearing {outfit}."
+    ) == "A woman sits on a bed, wearing {outfit}."
+    # {background} isolé aussi retiré, {outfit} préservé
+    assert "{background}" not in strip_background_slot("Scene {background}. {outfit}")
+    assert "{outfit}" in strip_background_slot("Scene {background}. {outfit}")
+
+
 def test_ensure_slots_sans_background_pour_format_long():
     # format long 30 s : le décor est celui de la vidéo → PAS de slot {background}
     out = ensure_slots("A woman talks in a cozy bedroom.", speaking=True, with_background=False)
@@ -168,6 +179,54 @@ def test_reverse_video_long_form_echoue_si_pas_de_paroles(client):
         assert tmpl.status == "failed"
         assert tmpl.transcript is None
         assert "paroles" in tmpl.error and "HTTP 401" in tmpl.error
+
+
+def test_retranscribe_repare_un_template_long(client):
+    # « Re-transcrire » relance la transcription EN DIRECT et rend le template
+    # utilisable (paroles tagguées H/F majoritairement masculin).
+    from app.db.models import PromptTemplate
+
+    with SessionLocal() as db:
+        t = PromptTemplate(
+            tenant_id="tnt-rv", category="storytelling_long",
+            template_text="A woman {outfit}. {characteristics}. {dialogue}",
+            speaking=True, status="failed", source_video_url="https://r2.example/x.mp4")
+        db.add(t)
+        db.commit()
+        tid = str(t.id)
+    with patch("app.workers.picture_tasks._transcribe_video",
+               return_value=("Hello there. How are you. I am fine.", "")), \
+         patch("app.workers.tasks._download"):
+        r = client.post(f"/api/banks/templates/{tid}/retranscribe")
+    assert r.status_code == 200, r.text
+    assert r.json()["ok"] is True
+    with SessionLocal() as db:
+        t = db.get(PromptTemplate, uuid.UUID(tid))
+        assert t.status == "ready"
+        assert t.transcript.startswith("[H]") and t.error is None
+
+
+def test_retranscribe_renvoie_l_erreur_exacte(client):
+    from app.db.models import PromptTemplate
+
+    with SessionLocal() as db:
+        t = PromptTemplate(
+            tenant_id="tnt-rv", category="storytelling_long",
+            template_text="A woman {outfit}. {dialogue}", speaking=True,
+            status="ready", source_video_url="https://r2.example/y.mp4")
+        db.add(t)
+        db.commit()
+        tid = str(t.id)
+    with patch("app.workers.picture_tasks._transcribe_video",
+               return_value=("", "transcription ElevenLabs échouée : HTTP 401")), \
+         patch("app.workers.tasks._download"):
+        r = client.post(f"/api/banks/templates/{tid}/retranscribe")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is False
+    assert "HTTP 401" in body["error"]
+    with SessionLocal() as db:  # template long sans paroles → repassé failed
+        assert db.get(PromptTemplate, uuid.UUID(tid)).status == "failed"
 
 
 def test_transcribe_audio_appelle_scribe(tmp_path):

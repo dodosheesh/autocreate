@@ -15,10 +15,24 @@ Les templates utilisent les slots résolus par le moteur :
 texte) et renvoie le nombre ajouté.
 """
 
+import re
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import PromptTemplate
+
+# « in/at/on {background} » ou « {background} » seul → retiré (format long : le
+# décor est celui de la vidéo, jamais un slot tiré de la banque). IGNORECASE.
+_BG_SLOT_RE = re.compile(r"\s*(?:\bin\b|\bat\b|\bon\b|\bbackground:\b)?\s*\{background\}", re.IGNORECASE)
+
+
+def strip_background_slot(text: str) -> str:
+    """Retire tout slot {background} d'un texte de template (format long 30 s :
+    le décor vient de la vidéo, on ne veut pas de décor tiré au sort)."""
+    out = _BG_SLOT_RE.sub("", text)
+    out = re.sub(r"\s{2,}", " ", out).replace(" ,", ",").replace(" .", ".")
+    return out.strip()
 
 # (category, template_text, speaking)
 # Règle de mise en scène : contenu réseaux sociaux réaliste, PAS de rendu « IA ».

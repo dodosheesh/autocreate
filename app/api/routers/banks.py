@@ -119,6 +119,56 @@ def reverse_video_bulk(
     return created
 
 
+@router.post("/templates/{template_id}/retranscribe")
+def retranscribe_template(
+    template_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """Relance la transcription des paroles d'un template reverse-vidéo, EN DIRECT
+    (synchrone, côté web) — pour diagnostiquer/réparer un format long sans paroles
+    sans re-uploader. Renvoie le transcript obtenu, ou l'erreur EXACTE.
+
+    Utile quand le worker qui a fait l'analyse initiale n'avait pas la clé
+    ElevenLabs (ou tournait une ancienne version) : ici on transcrit là où la
+    clé est configurée et on montre le résultat immédiatement."""
+    import tempfile
+    from pathlib import Path
+
+    from app.services.dialogue import tag_transcript_voices
+    from app.workers.picture_tasks import _transcribe_video
+    from app.workers.tasks import _download
+
+    tmpl = db.get(PromptTemplate, template_id)
+    if tmpl is None or tmpl.tenant_id != user.tenant_id:
+        raise HTTPException(404, "Template introuvable")
+    if not tmpl.source_video_url:
+        raise HTTPException(400, "Ce template n'a pas de vidéo source à transcrire")
+
+    long_form = tmpl.category == "storytelling_long"
+    with tempfile.TemporaryDirectory() as tmp:
+        video_path = Path(tmp) / "ref.mp4"
+        try:
+            _download(tmpl.source_video_url, video_path)
+        except Exception as exc:
+            raise HTTPException(400, f"Téléchargement de la vidéo échoué : {exc}")
+        transcript, err = _transcribe_video(str(video_path), tmp)
+
+    if transcript:
+        tmpl.transcript = (
+            tag_transcript_voices(transcript) if long_form else f"[F] {transcript}"
+        )
+        tmpl.status = "ready"
+        tmpl.error = None
+        db.commit()
+        return {"ok": True, "chars": len(transcript), "transcript": tmpl.transcript}
+    tmpl.error = err
+    if long_form:
+        tmpl.status = "failed"  # sans paroles, un template long reste inutilisable
+    db.commit()
+    return {"ok": False, "error": err}
+
+
 @router.delete("/templates")
 def delete_all_templates(
     category: str | None = None,

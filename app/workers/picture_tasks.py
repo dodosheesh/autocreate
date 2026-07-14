@@ -49,7 +49,7 @@ from app.services.photo_styles import build_style_suffix
 from app.services.composer import CharacteristicInput
 from app.services.estimator import estimate_pictures
 from app.services.pricing import load_rates
-from app.services.template_library import ensure_slots
+from app.services.template_library import ensure_slots, strip_background_slot
 from app.services.variation import Option, outfit_option
 from app.workers.celery_app import celery_app
 from app.workers.tasks import _download, _pk
@@ -176,6 +176,10 @@ def reverse_engineer_video(self, template_id: str) -> None:
             if want_speech:  # récupère aussi ce qui est DIT dans la vidéo de référence
                 transcript, tr_error = _transcribe_video(str(video_path), tmp)
         template_text = ensure_slots(raw, want_speech, with_background=not long_form)
+        if long_form:
+            # Le modèle vision écrit parfois un slot {background} de lui-même :
+            # on le retire (le décor du format long vient de la vidéo, pas d'une banque).
+            template_text = strip_background_slot(template_text)
 
         with db_session() as db:
             tmpl = db.get(PromptTemplate, _pk(template_id))
