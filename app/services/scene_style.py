@@ -22,38 +22,68 @@ _CONTINUITY = (
     "no wardrobe swap, no morphing between looks, the clothing stays identical throughout."
 )
 
+# L'appareil qui filme ne doit JAMAIS apparaître (c'est le point de vue caméra).
+_NO_DEVICE = (
+    "The recording device (phone or camera) is NOT visible anywhere in the frame — it is "
+    "the camera's own point of view, never shown: no phone, no tripod, no phone-on-a-stand "
+    "on screen, and no mirror reflection (unless the scene is clearly an indoor room)."
+)
+
+# ANTI-STATIQUE : elle FAIT toujours quelque chose, jamais figée comme un poteau.
+_LIVELINESS = (
+    "She is ALWAYS doing something natural, cute and lively and NEVER just stands still "
+    "like a statue or a pole: continuous subtle movement and playful gestures — shifting "
+    "her weight, a little hip sway, a hand on her hip, tilting her head, playing with her "
+    "hair, a cute playful expression, lifting a leg slightly, blowing a bubble with gum, a "
+    "small pose change. The clip must feel alive and engaging for social media, never frozen."
+)
+
 
 def camera_directive(category: str, speaking: bool) -> str:
     """Directive caméra/audio à coller en fin de prompt selon la catégorie."""
     if category == "snapchat":
-        cam = (
+        # Filmé par un tiers : la caméra peut bouger. Pas de clause « elle se filme ».
+        directive = (
             "Filmed candidly by another person holding a phone: the camera can move and "
             "zoom naturally like a real handheld recording. Realistic phone-camera look, "
             "not cinematic, not AI-looking. No music. "
             "Render ABSOLUTELY NO text, letters, words, captions, subtitles, speech "
             "bubbles, stickers or UI overlays anywhere in the frame — the video must be "
-            "completely text-free (the caption is added afterward in post-production)."
+            f"completely text-free (the caption is added afterward in post-production). {_CONTINUITY}"
         )
-    else:
+        if speaking:
+            directive += _SPEAKING_CLAUSE
+        return directive
+
+    if category == "podcast":
+        # VRAI podcast : caméra fixe sur trépied (PAS un téléphone, PAS un selfie).
         cam = (
-            "She is filming herself on her own phone that is PROPPED UP on a stand or "
-            "surface in front of her, filming her DIRECTLY (this is NOT a mirror selfie "
-            "and there is NO mirror — do not show a mirror or a phone held up as a "
-            "reflection unless the location is clearly an indoor room). "
-            "STATIC locked camera: the camera stays completely still — no zoom, no pan, "
-            "no push-in, no dolly, no camera movement of any kind. Natural vertical phone "
-            "video for social media (TikTok/Reels), candid and realistic, not cinematic, "
+            "Real podcast clip filmed on a proper camera on a tripod — this is NOT a phone "
+            "and NOT a selfie: she sits at a podcast microphone and talks like a guest on a "
+            "podcast, filmed from a fixed third-person camera angle. "
+            "STATIC locked camera: no zoom, no pan, no movement. Realistic, not cinematic, "
             "not AI-looking. No music."
         )
-    directive = f"{cam} {_CONTINUITY}"
-    if speaking:
-        directive += (
-            " The spoken lines are the girl's OWN real natural voice (she simply lowers "
-            "her voice when needed). She delivers the lines back-to-back with NO long pause "
-            "and NO silence or dead air between them — the lines flow together immediately "
-            "and naturally. Not sung, no voice-over, no background music."
+    else:  # skit, storytelling, showing_body, micro_trottoir → elle se filme au téléphone
+        cam = (
+            "She films herself on her OWN phone, which IS the camera (the phone's own point "
+            "of view). STATIC locked camera: the camera stays completely still — no zoom, no "
+            "pan, no push-in, no dolly, no camera movement of any kind. Natural vertical phone "
+            "video for social media (TikTok/Reels), candid and realistic, not cinematic, not "
+            "AI-looking. No music."
         )
+    directive = f"{cam} {_NO_DEVICE} {_LIVELINESS} {_CONTINUITY}"
+    if speaking:
+        directive += _SPEAKING_CLAUSE
     return directive
+
+
+_SPEAKING_CLAUSE = (
+    " The spoken lines are the girl's OWN real natural voice (she simply lowers her voice "
+    "when needed). She speaks at a natural, calm, clearly understandable pace — NEVER "
+    "rushed or sped up. She delivers the lines back-to-back with NO long pause and NO "
+    "silence or dead air between them. Not sung, no voice-over, no background music."
+)
 
 
 def apply_scene_style(

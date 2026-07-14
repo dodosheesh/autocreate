@@ -30,86 +30,90 @@ DEFAULT_TEMPLATES: list[tuple[str, str, bool]] = [
     # ---------------- skit (elle parle face caméra, comme à un pote) ----------------
     (
         "skit",
-        "Vertical 9:16 phone video. A young woman {outfit} stands in {background}, filming "
-        "herself on her propped-up phone. She talks straight to the camera like she is "
-        "talking to a friend, relaxed and playful, natural face and hand gestures. "
+        "Vertical 9:16 phone video. A young woman {outfit} in {background} talks straight to "
+        "the camera like she is talking to a friend, lively and playful, with expressive face "
+        "and animated hand gestures, shifting her pose and moving naturally the whole time. "
         "{characteristics}. {dialogue}",
         True,
     ),
     (
         "skit",
-        "9:16 selfie video. She {outfit} in {background} sets her phone down and steps back "
-        "into frame, then talks to the camera with casual, expressive everyday energy. "
-        "{characteristics}. {dialogue}",
+        "9:16 selfie video. A woman {outfit} in {background} talks to the camera with casual, "
+        "expressive everyday energy — playful gestures, a little hip sway, cute expressions, "
+        "always moving. {characteristics}. {dialogue}",
         True,
     ),
     # Reveal tenu par un outfit LONG (hoodie oversize / haut qui descend aux cuisses).
-    # L'action de lever brièvement le bas du haut est décrite ; CE qui est montré et
-    # la réplique restent portés par {outfit} et {dialogue} (tes propres textes).
     (
         "skit",
         "Vertical 9:16 phone video. A woman {outfit} — a long oversized hoodie that falls to "
-        "her thighs — stands in {background} filming herself on her propped-up phone. She "
-        "talks to the camera, and on the beat she briefly lifts the hem of the oversized "
-        "hoodie for a split second and lets it drop right back down, playful and quick. "
-        "{characteristics}. {dialogue}",
+        "her thighs — in {background} talks to the camera, playful and animated, and on the "
+        "beat she briefly lifts the hem of the oversized hoodie for a split second and lets it "
+        "drop right back down, quick and cheeky. {characteristics}. {dialogue}",
         True,
     ),
     # ---------------- storytelling (storytime face caméra) ----------------
     (
         "storytelling",
-        "Vertical 9:16 phone video, storytime to camera. A young woman {outfit} sits in "
-        "{background}, close intimate framing, talking sincerely to her phone about something "
-        "personal, small natural micro-expressions. {characteristics}. {dialogue}",
+        "Vertical 9:16 phone video, storytime to camera. A young woman {outfit} in {background} "
+        "talks sincerely to her phone about something personal, expressive and animated with "
+        "lively hand gestures and warm micro-expressions, never staying still. "
+        "{characteristics}. {dialogue}",
         True,
     ),
     (
         "storytelling",
-        "9:16 selfie video. She {outfit} in {background} tells a personal story straight to "
-        "the camera, calm and genuine, soft natural indoor light. {characteristics}. {dialogue}",
+        "9:16 selfie video. A woman {outfit} in {background} tells a personal story to the "
+        "camera, genuine and animated, gesturing and shifting her pose as she talks. "
+        "{characteristics}. {dialogue}",
         True,
     ),
-    # ---------------- showing_body (outfit check, peu ou pas parlé) ----------------
+    # ---------------- showing_body (outfit check — DOIT bouger, pas figée) ----------------
     (
         "showing_body",
-        "Vertical 9:16 phone video, outfit check. A woman {outfit} stands in {background} and "
-        "poses for her propped-up phone, turning and shifting her weight to show the fit, "
-        "confident and casual. {characteristics}.",
+        "Vertical 9:16 phone video, playful outfit check. A woman {outfit} in {background} "
+        "shows off her outfit with a lively little routine — turning, a hip sway, a hand on "
+        "her hip, a slow spin, tilting her head, cute confident poses that flow one into the "
+        "next, always moving. {characteristics}.",
         False,
     ),
     (
         "showing_body",
-        "9:16 phone video, full-body outfit check. A woman {outfit} in {background} poses "
-        "for her propped-up phone, a few relaxed full-body poses to show the outfit off. "
-        "{characteristics}.",
+        "9:16 full-body outfit check. A woman {outfit} in {background} does a playful sequence "
+        "of poses to show the fit — striking a pose, shifting her weight, lifting her back leg "
+        "slightly, blowing a bubble with gum, running a hand through her hair, staying lively "
+        "and never frozen. {characteristics}.",
         False,
     ),
     # ---------------- micro_trottoir (micro-trottoir / interview de rue) ----------------
     (
         "micro_trottoir",
         "Vertical 9:16 phone video, street-interview style. A woman {outfit} in {background} "
-        "answers an off-screen interviewer, candid and natural, reacting and gesturing as she "
-        "replies. {characteristics}. {dialogue}",
+        "answers an off-screen interviewer, candid and animated, reacting, laughing and "
+        "gesturing lively as she replies. {characteristics}. {dialogue}",
         True,
     ),
     (
         "micro_trottoir",
-        "9:16 vox-pop clip. She {outfit} stopped in {background}, a mic just out of frame, "
-        "spontaneous and real as she answers. {characteristics}. {dialogue}",
+        "9:16 vox-pop clip. A woman {outfit} in {background}, a mic just out of frame, answers "
+        "spontaneously with expressive reactions and hand gestures, moving naturally. "
+        "{characteristics}. {dialogue}",
         True,
     ),
-    # ---------------- podcast (au micro, face caméra) ----------------
+    # ---------------- podcast (VRAI plateau podcast — pas de {background} : le décor est écrit) ----------------
     (
         "podcast",
-        "Vertical 9:16 phone video, podcast clip. A woman {outfit} sits at a microphone in "
-        "{background}, relaxed conversational body language, talking to the camera and "
-        "gesturing naturally. {characteristics}. {dialogue}",
+        "Vertical 9:16 real podcast clip. A woman {outfit} sits at a podcast microphone in a "
+        "real podcast studio (soft warm studio lighting, acoustic foam panels and a cozy set "
+        "behind her), talking like a guest on a podcast — animated, leaning in, expressive "
+        "hand gestures and eye contact, lively the whole time. {characteristics}. {dialogue}",
         True,
     ),
     (
         "podcast",
-        "9:16 podcast moment. She {outfit} at the mic in {background} delivers a take with "
-        "natural hand gestures and eye contact with the camera. {characteristics}. {dialogue}",
+        "Vertical 9:16 podcast moment. A woman {outfit} at a big studio podcast mic in a warm "
+        "podcast set, delivers a take with animated hands, head movement and expressive "
+        "reactions, never sitting still. {characteristics}. {dialogue}",
         True,
     ),
     # ---------------- snapchat (candide, filmé par un tiers) ----------------
