@@ -124,14 +124,19 @@ def test_reverse_video_long_form_stocke_le_transcript_sans_polluer_la_banque(cli
          patch("app.workers.picture_tasks._vision_reverse_video",
                return_value="A woman tells a story in a warm cozy bedroom at night."), \
          patch("app.workers.picture_tasks._transcribe_video",
-               return_value="so this happened to me last week and honestly I could not believe it"):
+               return_value="So this happened last week. I could not believe it. "
+                             "It was wild. Then he showed up. Everything changed."):
         pt.reverse_engineer_video(tid)
 
     with SessionLocal() as db:
         tmpl = db.get(PromptTemplate, uuid.UUID(tid))
         assert tmpl.status == "ready"
         assert tmpl.speaking is True  # forcé (le format long est parlant)
-        assert tmpl.transcript.startswith("[F] so this happened")
+        # Voix MAJORITAIREMENT masculine [H], de temps en temps féminine [F].
+        assert tmpl.transcript.startswith("[H] So this happened")
+        h = tmpl.transcript.count("[H]")
+        f = tmpl.transcript.count("[F]")
+        assert h > f and f >= 1  # majorité masculine, mais au moins une féminine
         assert "{background}" not in tmpl.template_text  # décor baked
         # aucune ligne de dialogue ajoutée à la banque pour ce format
         lines = db.scalars(

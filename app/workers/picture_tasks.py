@@ -44,6 +44,7 @@ from app.integrations.vision import reverse_engineer_video_prompt as _vision_rev
 from app.media.frames import extract_keyframes
 from app.media.scrub import strip_metadata
 from app.services import picture_composer
+from app.services.dialogue import tag_transcript_voices
 from app.services.photo_styles import build_style_suffix
 from app.services.composer import CharacteristicInput
 from app.services.estimator import estimate_pictures
@@ -181,9 +182,12 @@ def reverse_engineer_video(self, template_id: str) -> None:
                 # uniquement du reverse-engineering, jamais des dialogues manuels).
                 tmpl.speaking = True
             if transcript:
-                # Paroles appariées à la scène (format long 30 s : scène + speech
-                # du même clip de référence).
-                tmpl.transcript = f"[F] {transcript}"
+                if long_form:
+                    # Voix de la model : MAJORITAIREMENT sa voix masculine profonde
+                    # [H], DE TEMPS EN TEMPS sa voix féminine [F] (le « twist »).
+                    tmpl.transcript = tag_transcript_voices(transcript)
+                else:
+                    tmpl.transcript = f"[F] {transcript}"
                 if not long_form:
                     # Reverse « court » : ligne de dialogue réutilisable dans la
                     # banque (taggée [F] ; re-tague au besoin).

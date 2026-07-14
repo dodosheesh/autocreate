@@ -6,6 +6,7 @@ from app.services.dialogue import (
     render_for_prompt,
     split_script_halves,
     split_transcript_halves,
+    tag_transcript_voices,
 )
 
 SCRIPT = """
@@ -128,6 +129,26 @@ def test_split_transcript_un_seul_mot_pas_de_deuxieme_moitie():
 
 def test_split_transcript_vide():
     assert split_transcript_halves("") == ("", "")
+
+
+def test_tag_transcript_majorite_masculine_occasionnelle_feminine():
+    # 6 phrases → voix masculine [H] majoritaire, [F] une fois sur 3 (3e, 6e).
+    out = tag_transcript_voices("one. two. three. four. five. six.")
+    lines = out.splitlines()
+    assert len(lines) == 6
+    assert lines[0].startswith("[H]") and lines[1].startswith("[H]")
+    assert lines[2].startswith("[F]")  # 3e phrase = voix féminine
+    assert lines[5].startswith("[F]")  # 6e phrase = voix féminine
+    assert out.count("[H]") == 4 and out.count("[F]") == 2  # majorité masculine
+
+
+def test_tag_transcript_une_phrase_reste_masculine():
+    # transcript court (1 phrase) → tout en voix masculine (majoritaire)
+    assert tag_transcript_voices("just one sentence here") == "[H] just one sentence here"
+
+
+def test_tag_transcript_vide():
+    assert tag_transcript_voices("") == ""
 
 
 def test_tags_a_la_suite_meme_ligne():

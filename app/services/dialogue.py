@@ -121,6 +121,28 @@ def _split_sentences(text: str) -> list[str]:
     return [text.strip()] if text.strip() else []
 
 
+def tag_transcript_voices(
+    text: str, major_tag: str = "H", minor_tag: str = "F", minor_period: int = 3
+) -> str:
+    """Tague un transcript brut (monologue, texte non taggé) en alternant les
+    voix de la model : MAJORITAIREMENT `major_tag` (voix masculine profonde [H])
+    et DE TEMPS EN TEMPS `minor_tag` (voix féminine [F]) — une phrase sur
+    `minor_period` prend la voix mineure.
+
+    Format long 30 s : la voix reste celle de LA MODEL (toujours « she »), on
+    fait juste basculer le timbre entre ses deux voix. Découpé par phrase pour
+    que le basculement tombe sur une frontière naturelle."""
+    sentences = _split_sentences(text)
+    if not sentences:
+        return ""
+    period = max(2, minor_period)
+    lines = [
+        f"[{minor_tag if (i + 1) % period == 0 else major_tag}] {s}"
+        for i, s in enumerate(sentences)
+    ]
+    return "\n".join(lines)
+
+
 def split_transcript_halves(raw_text: str) -> tuple[str, str]:
     """Coupe un TRANSCRIPT (souvent un monologue [F] d'un seul bloc, issu du
     reverse-engineering vidéo) en 2 moitiés équilibrées par nombre de mots parlés
