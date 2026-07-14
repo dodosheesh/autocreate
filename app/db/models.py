@@ -176,6 +176,9 @@ class PromptTemplate(Base):
     # (reverse-eng en cours) n'est pas tiré à la composition.
     status: Mapped[str] = mapped_column(String(16), default="ready")
     source_video_url: Mapped[str | None] = mapped_column(Text)
+    # Paroles transcrites de la vidéo de référence (reverse-video parlant) —
+    # appariées à la scène pour le format long 30 s (scène + speech du même clip).
+    transcript: Mapped[str | None] = mapped_column(Text)
     error: Mapped[str | None] = mapped_column(Text)
 
 

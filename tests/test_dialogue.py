@@ -4,6 +4,7 @@ from app.services.dialogue import (
     DialogueParseError,
     parse_tagged_script,
     render_for_prompt,
+    split_script_halves,
 )
 
 SCRIPT = """
@@ -67,6 +68,20 @@ def test_render_multi_locuteurs_nomme_qui_parle():
 def test_tags_m_et_w_valides():
     segs = parse_tagged_script("[M] question\n[W] another woman replies")
     assert [s.tag for s in segs] == ["M", "W"]
+
+
+def test_split_script_halves_equilibre():
+    # 4 répliques de longueur égale → 2 + 2 (moitié / moitié)
+    a, b = split_script_halves("[F] one two\n[H] three four\n[F] five six\n[H] seven eight")
+    assert a == "[F] one two\n[H] three four"
+    assert b == "[F] five six\n[H] seven eight"
+
+
+def test_split_script_halves_ne_coupe_pas_une_replique():
+    # découpe entre répliques, jamais au milieu ; les 2 moitiés couvrent tout
+    a, b = split_script_halves("[F] a b c\n[H] d\n[F] e f g h")
+    assert a and b
+    assert (a + "\n" + b).split() == "[F] a b c [H] d [F] e f g h".split()
 
 
 def test_action_rendue_comme_action_pas_parlee():

@@ -149,6 +149,33 @@ def build_assemble_command(
     return cmd
 
 
+def build_concat_command(clip_paths: list[str], output_path: str) -> list[str]:
+    """Assemble N clips bout à bout (concat re-encodé, robuste aux petites
+    différences d'encodage entre deux générations Seedance). Sert au format 30 s
+    (2 clips de 15 s enchaînés)."""
+    if len(clip_paths) < 2:
+        raise ValueError("build_concat_command : au moins 2 clips requis")
+    cmd = [get_settings().ffmpeg_bin, "-y"]
+    for p in clip_paths:
+        cmd += ["-i", p]
+    n = len(clip_paths)
+    streams = "".join(f"[{i}:v][{i}:a]" for i in range(n))
+    cmd += [
+        "-filter_complex", f"{streams}concat=n={n}:v=1:a=1[v][a]",
+        "-map", "[v]", "-map", "[a]",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "medium",
+        "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
+        output_path,
+    ]
+    return cmd
+
+
+def concat_clips(clip_paths: list[str], output_path: str) -> None:
+    proc = subprocess.run(build_concat_command(clip_paths, output_path), capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"FFmpeg concat a échoué ({proc.returncode}) : {proc.stderr[-2000:]}")
+
+
 def assemble(
     input_path: str,
     output_path: str,

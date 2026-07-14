@@ -168,9 +168,11 @@ def reverse_engineer_video(self, template_id: str) -> None:
                 return  # supprimé ou déjà traité pendant le traitement
             tmpl.template_text = template_text
             tmpl.status = "ready"
-            # La parole transcrite devient une ligne de dialogue réutilisable
-            # (taggée [F] par défaut ; re-tague [M]/[H]/[W] à la main si besoin).
             if transcript:
+                # Paroles appariées à la scène (format long 30 s : scène + speech
+                # du même clip de référence).
+                tmpl.transcript = f"[F] {transcript}"
+                # + ligne de dialogue réutilisable (taggée [F] ; re-tague au besoin).
                 db.add(DialogueLine(
                     tenant_id=tenant_id, category=category,
                     raw_text=f"[F] {transcript}", weight=1.0,

@@ -82,6 +82,34 @@ def parse_tagged_script(raw_text: str, valid_tags: set[str] | None = None) -> li
     return segments
 
 
+def _line_word_count(line: str) -> int:
+    """Nb de mots PARLÉS d'une ligne (0 pour [beat] / [action] — non parlés)."""
+    m = TAG_PATTERN.match(line)
+    if not m:
+        return 0
+    tag = m.group("tag")
+    if tag == BEAT_TAG or tag in ACTION_TAGS:
+        return 0
+    return len(m.group("text").split())
+
+
+def split_script_halves(raw_text: str) -> tuple[str, str]:
+    """Découpe un script taggé en 2 moitiés équilibrées par nombre de mots
+    parlés (pour 2 clips, ex. 2×15 s). Ne coupe jamais au milieu d'une réplique.
+    Renvoie (première_moitié, seconde_moitié) en texte taggé."""
+    lines = [ln.strip() for ln in _normalize_lines(raw_text).splitlines() if ln.strip()]
+    total = sum(_line_word_count(ln) for ln in lines)
+    if total == 0 or len(lines) <= 1:
+        return "\n".join(lines), ""
+    acc, split_idx = 0, len(lines)
+    for i, ln in enumerate(lines):
+        acc += _line_word_count(ln)
+        if acc >= total / 2 and i + 1 < len(lines):
+            split_idx = i + 1
+            break
+    return "\n".join(lines[:split_idx]), "\n".join(lines[split_idx:])
+
+
 def render_for_prompt(raw_text: str) -> str:
     """Déroulé naturel pour le prompt Seedance.
 

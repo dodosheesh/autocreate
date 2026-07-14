@@ -48,6 +48,7 @@ SEED_PRICING = [
 _ADDITIVE_COLUMNS = [
     ("prompt_templates", "status", "VARCHAR(16) DEFAULT 'ready'"),
     ("prompt_templates", "source_video_url", "TEXT"),
+    ("prompt_templates", "transcript", "TEXT"),
     ("prompt_templates", "error", "TEXT"),
     ("outfits", "status", "VARCHAR(16) DEFAULT 'ready'"),
     ("outfits", "error", "TEXT"),
