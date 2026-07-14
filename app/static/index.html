@@ -472,13 +472,11 @@
     </div>
 
     <div class="card">
-      <h2>Répliquer une vidéo (reverse-engineering)</h2>
+      <h2>Répliquer une vidéo — clips courts (15 s)</h2>
       <div class="hint">Uploade une vidéo à répliquer : elle devient un <b>template</b> réutilisable
         (action, rythme, ambiance) — ta model et tes assets remplacent l'original. Sert dans l'onglet <b>Vidéos</b>.
-        <br><b>Format long 30 s</b> : choisis la catégorie <code>storytelling_long</code> — la scène ET les paroles
-        sont reprises de la vidéo (jamais des dialogues manuels), le décor reste celui de la vidéo (pas de banque de
-        backgrounds). À la génération, 2 clips de 15 s sont enchaînés (le 2e démarre sur la dernière frame du 1er) ;
-        seuls la model et l'outfit changent. La parole est coupée en deux : moitié sur le clip 1, moitié sur le clip 2.</div>
+        <br><span class="muted">Pour les vidéos de 30 s, utilise la section dédiée juste en dessous — ces deux
+        pools ne se mélangent jamais.</span></div>
       <div class="row" style="margin-top:0">
         <div><label>Vidéo(s) de référence <span class="muted">— sélection multiple OK</span></label><input type="file" id="rv-file" accept="video/*" multiple></div>
         <div><label>Catégorie du template</label><select id="rv-cat"></select></div>
@@ -486,6 +484,24 @@
       <label style="margin-top:8px"><input type="checkbox" id="rv-speaking" style="width:auto"> la model parle (slot dialogue + <b>transcrit la parole</b> de la vidéo → ligne de dialogue [F] à re-taguer)</label>
       <button class="btn small" id="rv-go" style="margin-top:10px">Uploader &amp; analyser</button>
       <div id="rv-templates" style="margin-top:12px; font-size:12px"></div>
+    </div>
+
+    <div class="card" style="border-color:#7c5cff">
+      <h2>Vidéos longues 30 s (storytelling long)</h2>
+      <div class="hint">Section <b>dédiée</b> au format 30 s : uploade ici <b>uniquement</b> les vidéos
+        réservées à cette fonction. Elles forment un pool <b>séparé</b> (catégorie <code>storytelling_long</code>)
+        qui ne se mélange <b>jamais</b> avec les clips courts ci-dessus, et inversement.
+        <ul style="margin:6px 0 0 16px; padding:0">
+          <li>La <b>scène</b> ET les <b>paroles</b> sont reprises de chaque vidéo (jamais des dialogues manuels).</li>
+          <li>Le <b>décor</b> reste celui de la vidéo (aucune banque de backgrounds n'est piochée).</li>
+          <li>À la génération : <b>2 clips de 15 s enchaînés</b> (le 2<sup>e</sup> démarre sur la dernière frame du 1<sup>er</sup>), la parole coupée en deux (moitié/moitié).</li>
+          <li>Seuls la <b>model</b> et l'<b>outfit</b> changent d'une vidéo à l'autre.</li>
+        </ul></div>
+      <div class="row" style="margin-top:0">
+        <div><label>Vidéo(s) de référence 30 s <span class="muted">— sélection multiple OK</span></label><input type="file" id="rvl-file" accept="video/*" multiple></div>
+      </div>
+      <button class="btn small" id="rvl-go" style="margin-top:10px">Uploader &amp; analyser (30 s)</button>
+      <div id="rvl-templates" style="margin-top:12px; font-size:12px"></div>
     </div>
   </section>
 
@@ -833,7 +849,12 @@ $("#dim-btn").addEventListener("click", scanDimensions);
 $("#cats").innerHTML = CATEGORIES.map(c =>
   `<div class="cat"><b>${c}</b><input type="number" min="0" value="0" data-cat="${c}"></div>`).join("");
 const CAT_OPTIONS = CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join("");
-["#t-cat", "#d-cat", "#cap-cat", "#rv-cat"].forEach(s => { $(s).innerHTML = CAT_OPTIONS; });
+["#t-cat", "#d-cat", "#cap-cat"].forEach(s => { $(s).innerHTML = CAT_OPTIONS; });
+// La catégorie 30 s a sa propre section d'upload dédiée → on l'exclut du
+// reverse-engineering « clips courts » pour que les deux pools ne se mélangent pas.
+const LONG_FORM_CAT = "storytelling_long";
+$("#rv-cat").innerHTML = CATEGORIES.filter(c => c !== LONG_FORM_CAT)
+  .map(c => `<option value="${c}">${c}</option>`).join("");
 // Changer la catégorie filtre la liste des templates affichés en dessous.
 $("#t-cat").addEventListener("change", () => loadTemplatesList().catch(() => {}));
 
@@ -1034,13 +1055,40 @@ $("#rv-go").addEventListener("click", async () => {
   } catch (err) { toast("Répliquer : " + err.message); }
   btn.disabled = false; btn.textContent = "Uploader & analyser";
 });
+// --- répliquer une vidéo 30 s (section dédiée, pool séparé) ---
+$("#rvl-go").addEventListener("click", async () => {
+  const btn = $("#rvl-go"), n = ($("#rvl-file").files || []).length;
+  if (!n) return toast("Sélectionne au moins une vidéo 30 s");
+  btn.disabled = true;
+  try {
+    const urls = await uploadAll($("#rvl-file"),
+      (i, t) => { btn.textContent = `Upload ${i + 1}/${t}…`; });
+    // Catégorie forcée storytelling_long + parlant (les paroles alimentent les 2 clips).
+    await api("/banks/templates/reverse-video/bulk", {method: "POST", body: JSON.stringify({
+      source_video_urls: urls, category: LONG_FORM_CAT, speaking: true})});
+    $("#rvl-file").value = "";
+    toast(`${urls.length} vidéo(s) 30 s uploadée(s) — analyse en cours`);
+    loadTemplates();
+  } catch (err) { toast("Répliquer 30 s : " + err.message); }
+  btn.disabled = false; btn.textContent = "Uploader & analyser (30 s)";
+});
+
+function rvTemplateRow(t) {
+  return `<div class="est-line"><span class="muted">${badge(t.status)} [${esc(t.category)}] ${esc((t.template_text || "").slice(0, 70))}</span>
+    <button class="btn small ghost" onclick="delRvTemplate('${t.id}')" title="supprimer">✕</button></div>`;
+}
 async function loadTemplates() {
   const tmpls = await api("/banks/templates");
   const rv = tmpls.filter(t => t.source_video_url);
-  $("#rv-templates").innerHTML = rv.length
-    ? rv.map(t => `<div class="est-line"><span class="muted">${badge(t.status)} [${esc(t.category)}] ${esc((t.template_text || "").slice(0, 70))}</span>
-        <button class="btn small ghost" onclick="delRvTemplate('${t.id}')" title="supprimer">✕</button></div>`).join("")
+  // Deux pools SÉPARÉS : clips courts (toutes catégories sauf 30 s) vs 30 s.
+  const short = rv.filter(t => t.category !== LONG_FORM_CAT);
+  const long = rv.filter(t => t.category === LONG_FORM_CAT);
+  $("#rv-templates").innerHTML = short.length
+    ? short.map(rvTemplateRow).join("")
     : '<span class="muted">aucune vidéo répliquée</span>';
+  $("#rvl-templates").innerHTML = long.length
+    ? long.map(rvTemplateRow).join("")
+    : '<span class="muted">aucune vidéo 30 s répliquée</span>';
 }
 window.delRvTemplate = async (id) => {
   try { await api("/banks/templates/" + id, {method: "DELETE"}); toast("Template supprimé"); loadTemplates(); }
