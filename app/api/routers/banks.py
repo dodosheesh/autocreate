@@ -120,12 +120,18 @@ def reverse_video_bulk(
 
 
 @router.delete("/templates")
-def delete_all_templates(db: Session = Depends(get_db), user: User = Depends(current_user)):
-    """Supprime TOUS les templates de scène du tenant (pour repartir de zéro,
-    ex. avant de recharger la bibliothèque par défaut)."""
-    ids = db.scalars(
-        select(PromptTemplate.id).where(PromptTemplate.tenant_id == user.tenant_id)
-    ).all()
+def delete_all_templates(
+    category: str | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """Supprime les templates de scène du tenant. Sans `category` : tous.
+    Avec `category` (ex. podcast) : uniquement ceux de cette catégorie — utile
+    pour nettoyer d'anciens templates d'un style sans toucher aux autres."""
+    q = select(PromptTemplate.id).where(PromptTemplate.tenant_id == user.tenant_id)
+    if category:
+        q = q.where(PromptTemplate.category == category)
+    ids = db.scalars(q).all()
     if not ids:
         return {"deleted": 0}
     _detach_bank_refs(db, "templates", list(ids))

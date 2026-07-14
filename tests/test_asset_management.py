@@ -206,8 +206,14 @@ def test_delete_all_templates(client):
     client.post("/api/banks/templates", json={
         "category": "podcast", "template_text": "She {outfit} at a mic in {background}. {dialogue}"})
     assert len(client.get("/api/banks/templates").json()) >= 2
+    # suppression ciblée par catégorie : ne touche QUE la catégorie demandée
+    r = client.delete("/api/banks/templates?category=podcast")
+    assert r.status_code == 200 and r.json()["deleted"] == 1
+    cats = {t["category"] for t in client.get("/api/banks/templates").json()}
+    assert "podcast" not in cats and "skit" in cats
+    # puis tout supprimer
     r = client.delete("/api/banks/templates")
-    assert r.status_code == 200 and r.json()["deleted"] >= 2
+    assert r.status_code == 200 and r.json()["deleted"] >= 1
     assert client.get("/api/banks/templates").json() == []
 
 

@@ -264,6 +264,7 @@
         Charge la bibliothèque prête à l'emploi, ou ajoute les tiens. Slots :
         <code>{outfit} {background} {characteristics} {dialogue} {caption}</code>.</div>
       <button class="btn small" id="load-templates">📚 Charger les templates par défaut</button>
+      <button class="btn small ghost" id="del-cat-templates">🗑️ Supprimer la catégorie affichée</button>
       <button class="btn small ghost" id="del-all-templates">🗑️ Tout supprimer</button>
       <div class="row" style="margin-top:14px">
         <div><label>Catégorie <span class="muted">— filtre aussi la liste ci-dessous</span></label><select id="t-cat"></select></div>
@@ -876,6 +877,13 @@ $("#del-all-templates").addEventListener("click", async () => {
   if (!confirm("Supprimer TOUS les templates de scène ? (tu pourras recharger les templates par défaut ensuite)")) return;
   try { const r = await api("/banks/templates", {method: "DELETE"});
     toast(r.deleted + " template(s) supprimé(s)"); loadAllBanks(); }
+  catch (e) { toast("Templates : " + e.message); }
+});
+$("#del-cat-templates").addEventListener("click", async () => {
+  const cat = $("#t-cat").value;
+  if (!confirm(`Supprimer tous les templates « ${cat} » ? (les autres catégories ne sont pas touchées)`)) return;
+  try { const r = await api("/banks/templates?category=" + encodeURIComponent(cat), {method: "DELETE"});
+    toast(r.deleted + ` template(s) « ${cat} » supprimé(s)`); loadAllBanks(); }
   catch (e) { toast("Templates : " + e.message); }
 });
 $("#t-add").addEventListener("click", async () => {
