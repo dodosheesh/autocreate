@@ -14,7 +14,9 @@ PHOTO_STYLES: dict[str, tuple[str, str]] = {
         "Amateur",
         "Casual amateur smartphone snapshot, natural available light, candid and "
         "unposed, authentic everyday look, no professional retouching, no studio "
-        "lighting, not a glossy magazine photo.",
+        "lighting, not a glossy magazine photo. Everything is in sharp focus with a "
+        "deep depth of field — the background stays sharp and detailed like a real "
+        "phone photo: NO background blur, NO bokeh, NO shallow depth of field.",
     ),
     "professional": (
         "Professionnel",
@@ -23,8 +25,9 @@ PHOTO_STYLES: dict[str, tuple[str, str]] = {
     ),
     "amateur_blurry": (
         "Amateur flou",
-        "Casual amateur phone snapshot that is slightly blurry and soft, with motion "
-        "blur, low-light grain and an imperfect out-of-focus candid feel.",
+        "Casual amateur phone snapshot with an overall soft, slightly grainy low-light "
+        "feel and a little motion blur, imperfect and candid — but the background stays "
+        "in focus (NO bokeh, NO shallow depth of field, no blurred-out background).",
     ),
 }
 
