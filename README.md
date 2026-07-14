@@ -294,6 +294,30 @@ Upload d'une vidéo à répliquer → `POST /api/banks/templates/reverse-video`
 Modèles configurés : **Seedance 2.0 Fast** (720p, moins cher, `bytedance/seedance-2-fast`)
 et **Nano Banana Pro** (`google/nano-banana-pro`, meilleure consistance personnage).
 
+## Format long 30 s (`storytelling_long`)
+
+Seedance 2.0 Fast plafonne à 15 s par génération. Pour des vidéos de **30 s**,
+reverse-engineer une vidéo dans la catégorie **`storytelling_long`** : la scène ET
+les paroles sont reprises de la vidéo de référence (jamais des dialogues manuels),
+et le décor reste celui de la vidéo (aucune banque de backgrounds n'est piochée —
+`ensure_slots(..., with_background=False)`).
+
+À la génération, `generate_long_form_item` enchaîne **2 clips de 15 s** :
+
+1. Le transcript (voix de la vidéo, transcrit par ElevenLabs Scribe) est **coupé en
+   deux** (`split_transcript_halves`, équilibré par mots, de préférence entre phrases) :
+   moitié 1 sur le clip 1, moitié 2 sur le clip 2.
+2. **Clip 1** est généré (moitié 1 des paroles), puis sa **dernière frame** est
+   extraite (`extract_last_frame`) et uploadée sur R2.
+3. **Clip 2** démarre depuis cette dernière frame (référence prioritaire) avec la
+   moitié 2 des paroles → **même décor, même tenue, enchaînement continu**.
+4. Voice-swap par clip (best-effort), `concat_clips` (2×15 s → 30 s), assemblage,
+   upload R2.
+
+Seuls la **model** (fixe par job) et l'**outfit** (tiré par item) varient d'une vidéo
+long-format à l'autre. La chaîne est **synchrone** (poll `kie.ai/recordInfo` entre les
+étapes) car le clip 2 dépend du clip 1.
+
 ## Pictures — nano banana (génération de photos)
 
 Même logique que la vidéo, appliquée à l'image fixe :

@@ -14,12 +14,20 @@ import re
 from dataclasses import dataclass, field
 
 from app.services import composer
-from app.services.dialogue import render_for_prompt
+from app.services.dialogue import render_for_prompt, split_transcript_halves
 from app.services.scene_style import apply_scene_style
 
 SLOT_PATTERN = re.compile(r"\{(\w+)\}")
 CAPTION_SLOT = "caption"
 DIALOGUE_SLOT = "dialogue"
+
+# Format long 30 s : catégorie dédiée. La scène ET les paroles viennent d'un
+# template reverse-engineeré (transcript apparié), jamais des banques
+# background/dialogue. Seuls la model et l'outfit varient d'une vidéo à l'autre.
+LONG_FORM_CATEGORY = "storytelling_long"
+# 2 clips de 15 s enchaînés = 30 s (Seedance 2.0 Fast plafonne à 15 s/génération).
+LONG_FORM_CLIP_S = 15
+LONG_FORM_TOTAL_S = LONG_FORM_CLIP_S * 2
 
 MAX_DRAW_ATTEMPTS = 25
 
@@ -45,6 +53,9 @@ class TemplateOption:
     template_text: str
     speaking: bool
     weight: float = 1.0
+    # Paroles transcrites de la vidéo de référence (format long 30 s). None pour
+    # un template classique dont les dialogues viennent de la banque.
+    transcript: str | None = None
 
 
 @dataclass(frozen=True)
@@ -71,6 +82,9 @@ class ComposedItem:
     combo_hash: str
     speaking: bool
     characteristic_ids: list[str]  # caractéristiques réellement appliquées à CET item
+    # Format long 30 s : prompt + paroles du 2e clip de 15 s (None pour 1 clip).
+    filled_prompt_2: str | None = None
+    dialogue_script_2: str | None = None
 
 
 @dataclass(frozen=True)
@@ -109,6 +123,11 @@ def _compose_one(
     custom_prompt: str = "",
     omit_background: bool = False,
 ) -> ComposedItem:
+    if category == LONG_FORM_CATEGORY:
+        return _compose_long_form(
+            category, pools, characteristics, face_reference_url, max_refs, rng,
+            custom_prompt=custom_prompt,
+        )
     template = weighted_draw(pools.templates, rng)
     outfit = weighted_draw(pools.outfits, rng)
     # On ne tire un décor QUE si le template a le slot {background} (un template
@@ -184,6 +203,81 @@ def _compose_one(
             }
         ),
         speaking=template.speaking,
+        characteristic_ids=active_ids,
+    )
+
+
+def _compose_long_form(
+    category: str,
+    pools: CategoryPools,
+    characteristics: list[composer.CharacteristicInput],
+    face_reference_url: str,
+    max_refs: int,
+    rng: random.Random,
+    custom_prompt: str = "",
+) -> ComposedItem:
+    """Compose UN item long 30 s (2 clips de 15 s).
+
+    Scène + paroles proviennent d'un template reverse-engineeré (avec transcript) :
+    même décor, même tenue sur les 2 clips ; seuls model + outfit varient. Le
+    transcript est coupé en 2 → moitié 1 sur le clip 1, moitié 2 sur le clip 2.
+    Aucune banque background/dialogue/caption n'est piochée.
+    """
+    # Seuls les templates PORTEURS de transcript sont éligibles (les paroles
+    # viennent d'eux, jamais des dialogues manuels).
+    usable = [t for t in pools.templates if (t.transcript or "").strip()]
+    template = weighted_draw(usable, rng)
+    if template is None:
+        raise ComposeError(
+            "storytelling_long : aucun template avec transcript (reverse-engineer "
+            "d'abord des vidéos de référence dans cette catégorie)."
+        )
+    outfit = weighted_draw(pools.outfits, rng)
+    active = composer.select_active_characteristics(characteristics, rng)
+    active_ids = sorted(c.id for c in active)
+
+    first_half, second_half = split_transcript_halves(template.transcript)
+
+    def build_prompt(dialogue_raw: str) -> str:
+        values = {
+            "outfit": outfit.text if outfit else "",
+            # Décor déjà écrit dans la scène reverse-engineerée → slot vidé.
+            "background": "",
+            DIALOGUE_SLOT: render_for_prompt(dialogue_raw) if dialogue_raw else "",
+            CAPTION_SLOT: "",
+        }
+        p = fill_template(template.template_text, values)
+        p = composer.inject_characteristics(p, active)
+        # speaking=True : c'est un format parlé (paroles issues du transcript).
+        return apply_scene_style(p, category, True, custom_prompt)
+
+    extra_refs = [outfit.image_url] if outfit and outfit.image_url else []
+    refs = composer.select_reference_images(
+        face_reference_url, active, extra_refs=extra_refs, max_refs=max_refs
+    )
+
+    return ComposedItem(
+        category=category,
+        template_id=template.id,
+        outfit_id=outfit.id if outfit else None,
+        background_id=None,
+        dialogue_id=None,
+        caption_id=None,
+        caption_text=None,
+        filled_prompt=build_prompt(first_half),
+        dialogue_script=first_half or None,
+        filled_prompt_2=build_prompt(second_half),
+        dialogue_script_2=second_half or None,
+        reference_image_urls=refs,
+        combo_hash=composer.combo_hash(
+            {
+                "category": category,
+                "template": template.id,
+                "outfit": outfit.id if outfit else None,
+                "characteristics": active_ids,
+            }
+        ),
+        speaking=True,
         characteristic_ids=active_ids,
     )
 

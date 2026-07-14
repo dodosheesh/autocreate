@@ -55,6 +55,8 @@ _ADDITIVE_COLUMNS = [
     ("backgrounds", "status", "VARCHAR(16) DEFAULT 'ready'"),
     ("backgrounds", "error", "TEXT"),
     ("job_items", "review_status", "VARCHAR(16) DEFAULT 'pending'"),
+    ("job_items", "filled_prompt_2", "TEXT"),
+    ("job_items", "dialogue_script_2", "TEXT"),
     ("generation_jobs", "music_url", "TEXT"),
     ("generation_jobs", "compose_shortfall", "JSON DEFAULT '{}'"),
     ("generation_jobs", "error", "TEXT"),

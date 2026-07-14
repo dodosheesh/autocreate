@@ -37,6 +37,13 @@ def test_ensure_slots_preserve_les_slots_presents():
     assert out.count("{outfit}") == 1  # pas de duplication
 
 
+def test_ensure_slots_sans_background_pour_format_long():
+    # format long 30 s : le décor est celui de la vidéo → PAS de slot {background}
+    out = ensure_slots("A woman talks in a cozy bedroom.", speaking=True, with_background=False)
+    assert "{outfit}" in out and "{characteristics}" in out and "{dialogue}" in out
+    assert "{background}" not in out
+
+
 # ---------- endpoint + tâche ----------
 
 
@@ -100,6 +107,38 @@ def test_reverse_video_transcrit_la_parole_en_dialogue(client):
     # la parole transcrite est stockée comme ligne de dialogue [F] dans la catégorie
     dialogues = client.get("/api/banks/dialogues?category=micro_trottoir").json()
     assert any(d["raw_text"] == "[F] yo bro let me know man to man" for d in dialogues)
+
+
+def test_reverse_video_long_form_stocke_le_transcript_sans_polluer_la_banque(client):
+    # storytelling_long : la scène garde son décor (pas de slot {background}),
+    # le transcript est stocké SUR le template, et AUCUNE ligne n'est ajoutée à
+    # la banque de dialogues (paroles = reverse uniquement).
+    from app.db.models import DialogueLine, PromptTemplate
+
+    with patch("app.api.routers.banks.reverse_engineer_video"):
+        tid = client.post("/api/banks/templates/reverse-video", json={
+            "source_video_url": "https://r2.example/long.mp4",
+            "category": "storytelling_long", "speaking": False}).json()["id"]
+    with patch("app.workers.picture_tasks._download"), \
+         patch("app.workers.picture_tasks.extract_keyframes", return_value=["f0.jpg"]), \
+         patch("app.workers.picture_tasks._vision_reverse_video",
+               return_value="A woman tells a story in a warm cozy bedroom at night."), \
+         patch("app.workers.picture_tasks._transcribe_video",
+               return_value="so this happened to me last week and honestly I could not believe it"):
+        pt.reverse_engineer_video(tid)
+
+    with SessionLocal() as db:
+        tmpl = db.get(PromptTemplate, uuid.UUID(tid))
+        assert tmpl.status == "ready"
+        assert tmpl.speaking is True  # forcé (le format long est parlant)
+        assert tmpl.transcript.startswith("[F] so this happened")
+        assert "{background}" not in tmpl.template_text  # décor baked
+        # aucune ligne de dialogue ajoutée à la banque pour ce format
+        lines = db.scalars(
+            __import__("sqlalchemy").select(DialogueLine).where(
+                DialogueLine.category == "storytelling_long")
+        ).all()
+        assert lines == []
 
 
 def test_transcribe_audio_appelle_scribe(tmp_path):

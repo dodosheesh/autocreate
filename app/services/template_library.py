@@ -171,15 +171,19 @@ DEFAULT_TEMPLATES: list[tuple[str, str, bool]] = [
 ]
 
 
-def ensure_slots(template_text: str, speaking: bool) -> str:
+def ensure_slots(template_text: str, speaking: bool, with_background: bool = True) -> str:
     """Garantit que le template issu du reverse-engineering vidéo porte bien les
     slots nécessaires pour que les assets/caractéristiques/dialogue se mélangent,
-    même si le LLM les a oubliés."""
+    même si le LLM les a oubliés.
+
+    `with_background=False` (format long 30 s) : le décor est celui de la vidéo
+    reverse-engineerée (déjà écrit dans la scène) → on n'ajoute PAS de slot
+    {background}, sinon un décor aléatoire viendrait parasiter la scène."""
     text = template_text.strip()
     if "{outfit}" not in text:
         sep = "" if text.endswith((".", "!", "?")) else "."
         text = f"{text}{sep} She is {{outfit}}."
-    if "{background}" not in text:
+    if with_background and "{background}" not in text:
         text = f"{text} Background: {{background}}."
     if "{characteristics}" not in text:
         text = f"{text} {{characteristics}}."

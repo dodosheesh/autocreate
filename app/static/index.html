@@ -474,7 +474,11 @@
     <div class="card">
       <h2>Répliquer une vidéo (reverse-engineering)</h2>
       <div class="hint">Uploade une vidéo à répliquer : elle devient un <b>template</b> réutilisable
-        (action, rythme, ambiance) — ta model et tes assets remplacent l'original. Sert dans l'onglet <b>Vidéos</b>.</div>
+        (action, rythme, ambiance) — ta model et tes assets remplacent l'original. Sert dans l'onglet <b>Vidéos</b>.
+        <br><b>Format long 30 s</b> : choisis la catégorie <code>storytelling_long</code> — la scène ET les paroles
+        sont reprises de la vidéo (jamais des dialogues manuels), le décor reste celui de la vidéo (pas de banque de
+        backgrounds). À la génération, 2 clips de 15 s sont enchaînés (le 2e démarre sur la dernière frame du 1er) ;
+        seuls la model et l'outfit changent. La parole est coupée en deux : moitié sur le clip 1, moitié sur le clip 2.</div>
       <div class="row" style="margin-top:0">
         <div><label>Vidéo(s) de référence <span class="muted">— sélection multiple OK</span></label><input type="file" id="rv-file" accept="video/*" multiple></div>
         <div><label>Catégorie du template</label><select id="rv-cat"></select></div>
@@ -489,7 +493,7 @@
 <div id="toast"></div>
 
 <script>
-const CATEGORIES = ["skit","storytelling","showing_body","micro_trottoir","podcast","snapchat"];
+const CATEGORIES = ["skit","storytelling","storytelling_long","showing_body","micro_trottoir","podcast","snapchat"];
 const $ = (s) => document.querySelector(s);
 const state = { resolution: "720p", bitrate: "standard" };
 

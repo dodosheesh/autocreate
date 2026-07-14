@@ -110,6 +110,58 @@ def split_script_halves(raw_text: str) -> tuple[str, str]:
     return "\n".join(lines[:split_idx]), "\n".join(lines[split_idx:])
 
 
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?…])\s+")
+
+
+def _split_sentences(text: str) -> list[str]:
+    """Découpe un texte en phrases (frontières . ! ? …). Renvoie [texte] si aucune."""
+    parts = [p.strip() for p in _SENTENCE_SPLIT_RE.split(text.strip()) if p.strip()]
+    if parts:
+        return parts
+    return [text.strip()] if text.strip() else []
+
+
+def split_transcript_halves(raw_text: str) -> tuple[str, str]:
+    """Coupe un TRANSCRIPT (souvent un monologue [F] d'un seul bloc, issu du
+    reverse-engineering vidéo) en 2 moitiés équilibrées par nombre de mots parlés
+    — de préférence à une frontière de phrase, sinon au mot le plus proche du
+    milieu si le transcript tient en une seule phrase. Format long 30 s : moitié 1
+    sur le clip 1, moitié 2 sur le clip 2. Renvoie 2 textes taggés."""
+    units: list[tuple[str, str]] = []  # (tag, phrase) dans l'ordre
+    for line in _normalize_lines(raw_text).splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        m = TAG_PATTERN.match(line)
+        if not m:
+            continue
+        tag, text = m.group("tag"), m.group("text").strip()
+        if tag == BEAT_TAG or tag in ACTION_TAGS or not text:
+            continue
+        for sentence in _split_sentences(text):
+            units.append((tag, sentence))
+    if not units:
+        return raw_text.strip(), ""
+    # Une seule phrase → on ne peut pas couper entre phrases : on coupe les MOTS.
+    if len(units) == 1:
+        tag, text = units[0]
+        words = text.split()
+        if len(words) < 2:
+            return f"[{tag}] {text}", ""
+        mid = (len(words) + 1) // 2
+        return f"[{tag}] {' '.join(words[:mid])}", f"[{tag}] {' '.join(words[mid:])}"
+    total = sum(len(t.split()) for _, t in units)
+    acc, split_idx = 0, len(units)
+    for i, (_, t) in enumerate(units):
+        acc += len(t.split())
+        if acc >= total / 2 and i + 1 < len(units):
+            split_idx = i + 1
+            break
+    first = "\n".join(f"[{tag}] {t}" for tag, t in units[:split_idx])
+    second = "\n".join(f"[{tag}] {t}" for tag, t in units[split_idx:])
+    return first, second
+
+
 def render_for_prompt(raw_text: str) -> str:
     """Déroulé naturel pour le prompt Seedance.
 

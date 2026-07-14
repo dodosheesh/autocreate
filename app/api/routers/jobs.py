@@ -21,7 +21,7 @@ from app.db.models import (
     ReviewStatus,
     User,
 )
-from app.services import composer
+from app.services import composer, variation
 from app.services.calibration import get_calibrated_qc_rate
 from app.services.estimator import ItemSpec, estimate_batch, max_videos_for_budget
 from app.services.export_zip import build_media_zip
@@ -227,10 +227,18 @@ def estimate_batch_endpoint(
             category,
             ItemSpec(
                 count=count,
-                duration_s=payload.duration_s,
+                # Format long 30 s = 2 clips de 15 s → facturé sur 30 s.
+                duration_s=(
+                    variation.LONG_FORM_TOTAL_S
+                    if category == variation.LONG_FORM_CATEGORY
+                    else payload.duration_s
+                ),
                 resolution=payload.resolution,
                 model=payload.model_variant,
-                speaking=category in speaking_categories,
+                speaking=(
+                    category == variation.LONG_FORM_CATEGORY
+                    or category in speaking_categories
+                ),
             ),
         )
         for category, count in payload.counts_per_category.items()

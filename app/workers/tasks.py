@@ -14,6 +14,7 @@ en attendant qc_status reste `skipped`.
 """
 
 import tempfile
+import time
 import uuid
 from pathlib import Path
 
@@ -36,13 +37,19 @@ from app.db.models import (
     QcStatus,
 )
 from app.integrations import kie, r2
-from app.media.assemble import AssembleParams, assemble
+from app.media.assemble import AssembleParams, assemble, concat_clips
+from app.media.frames import extract_last_frame
 from app.services import calibration, variation
 from app.services.composer import CharacteristicInput
 from app.services.estimator import ItemSpec, estimate_item
 from app.services.pricing import load_rates
-from app.services.voice_swap import swap_voices
+from app.services.voice_swap import VoiceSwapError, swap_voices
 from app.workers.celery_app import celery_app
+
+# Format long 30 s : 2 clips de 15 s enchaînés (le clip 2 démarre sur la dernière
+# frame du clip 1). Constantes définies dans le moteur de variation.
+LONG_FORM_CLIP_S = variation.LONG_FORM_CLIP_S
+LONG_FORM_TOTAL_S = variation.LONG_FORM_TOTAL_S
 
 
 def _pk(value: str | uuid.UUID) -> uuid.UUID:
@@ -99,6 +106,7 @@ def _build_pools(db, categories: list[str], tenant_id: str) -> dict[str, variati
                 template_text=t.template_text,
                 speaking=t.speaking,
                 weight=t.weight,
+                transcript=t.transcript,
             )
             for t in db.scalars(
                 select(PromptTemplate).where(
@@ -188,6 +196,8 @@ def compose_job(job_id: str) -> None:
                         combo_hash=composed.combo_hash,
                         filled_prompt=composed.filled_prompt,
                         dialogue_script=composed.dialogue_script,
+                        filled_prompt_2=composed.filled_prompt_2,
+                        dialogue_script_2=composed.dialogue_script_2,
                         reference_image_urls=composed.reference_image_urls,
                     )
                 )
@@ -229,10 +239,12 @@ def estimate_and_gate(job_id: str) -> None:
             ).all()
             gross = 0.0
             for item in items:
+                # Format long 30 s = 2 clips de 15 s → facturé sur 30 s.
+                is_long = item.category == variation.LONG_FORM_CATEGORY
                 cost = estimate_item(
                     ItemSpec(
                         count=1,
-                        duration_s=job.duration_s,
+                        duration_s=LONG_FORM_TOTAL_S if is_long else job.duration_s,
                         resolution=job.resolution,
                         model=job.model_variant,
                         speaking=item.dialogue_script is not None,
@@ -246,9 +258,12 @@ def estimate_and_gate(job_id: str) -> None:
                 job.status = JobStatus.BLOCKED_BUDGET
                 return
             job.status = JobStatus.DISPATCHED
-            item_ids = [str(i.id) for i in items]
-        for item_id in item_ids:
+            long_ids = [str(i.id) for i in items if i.category == variation.LONG_FORM_CATEGORY]
+            short_ids = [str(i.id) for i in items if i.category != variation.LONG_FORM_CATEGORY]
+        for item_id in short_ids:
             dispatch_seedance.delay(item_id)
+        for item_id in long_ids:
+            generate_long_form_item.delay(item_id)
     except Exception as exc:
         _fail_job(job_id, f"estimate_and_gate: {exc}")
         raise
@@ -392,6 +407,154 @@ def process_generated(self, item_id: str) -> None:
                     _finalize_job_if_done(db, item.job)
             raise
         raise self.retry(exc=exc)
+
+
+# ---------------- Format long 30 s (chaîne synchrone) ----------------
+#
+# À la différence du flux standard (webhook + poll asynchrone), le 30 s enchaîne
+# 2 générations DÉPENDANTES : le clip 2 démarre sur la dernière frame du clip 1.
+# On exécute donc la chaîne de bout en bout dans UNE tâche Celery qui poll kie.ai
+# (get_task) entre chaque étape — plus simple et sans état intermédiaire fragile.
+
+
+def _poll_kie_until_done(task_id: str, timeout_s: int = 1800, interval_s: int = 15) -> kie.KieTaskResult:
+    """Attend qu'une tâche kie.ai atteigne success/fail (poll bloquant)."""
+    waited = 0
+    while True:
+        result = kie.get_task(task_id)
+        if result.state in ("success", "fail"):
+            return result
+        if waited >= timeout_s:
+            raise TimeoutError(f"kie.ai n'a pas terminé la tâche {task_id} en {timeout_s}s")
+        time.sleep(interval_s)
+        waited += interval_s
+
+
+def _generate_long_clip(prompt: str, refs: list[str], resolution: str, aspect: str,
+                        dest: Path) -> tuple[str, float | None]:
+    """Lance un clip Seedance de 15 s, attend, télécharge → chemin local brut.
+    Renvoie (chemin, coût_usd). Lève RuntimeError si la génération échoue."""
+    payload = kie.build_seedance_input(
+        prompt=prompt,
+        reference_image_urls=refs,
+        resolution=resolution,
+        duration_s=LONG_FORM_CLIP_S,
+        aspect_ratio=aspect,
+    )
+    task_id = kie.create_seedance_task(payload)
+    result = _poll_kie_until_done(task_id)
+    if result.state != "success" or not result.result_urls:
+        raise RuntimeError(result.fail_msg or "génération échouée")
+    _download(result.result_urls[0], dest)
+    return str(dest), result.cost_usd
+
+
+def _maybe_swap_long(clip_path: str, dialogue_script: str | None,
+                     voices: dict[str, str], tmp: str, name: str) -> str:
+    """Voice-swap best-effort d'un clip long : garde l'audio Seedance d'origine si
+    aucun profil de voix ne couvre les tags (ou si le swap échoue)."""
+    if not (dialogue_script and get_settings().voice_swap_enabled and voices):
+        return clip_path
+    try:
+        out = str(Path(tmp) / f"{name}_voiced.mp4")
+        swap_voices(clip_path, out, dialogue_script, voices, tmp)
+        return out
+    except VoiceSwapError:
+        return clip_path  # pas de profil pour ce tag → on garde la voix générée
+
+
+@celery_app.task(bind=True, max_retries=1)
+def generate_long_form_item(self, item_id: str) -> None:
+    """Génère UNE vidéo 30 s : clip 1 (moitié 1 des paroles) → dernière frame →
+    clip 2 (moitié 2, démarré depuis cette frame) → concat → assemblage → R2.
+
+    Chaîne synchrone (poll kie.ai) car le clip 2 dépend du clip 1."""
+    try:
+        with db_session() as db:
+            item = db.get(JobItem, _pk(item_id))
+            if item is None or item.status != ItemStatus.COMPOSED:
+                return
+            job = item.job
+            prompt1 = item.filled_prompt
+            prompt2 = item.filled_prompt_2 or item.filled_prompt
+            dialogue1 = item.dialogue_script
+            dialogue2 = item.dialogue_script_2
+            refs = list(item.reference_image_urls or [])
+            resolution, bitrate, aspect = job.resolution, job.bitrate, job.aspect
+            music_url = job.music_url
+            voices = _voice_map(db) if (dialogue1 or dialogue2) else {}
+            job_id = str(job.id)
+            item.status = ItemStatus.DISPATCHED
+            item.qc_status = QcStatus.SKIPPED
+
+        max_refs = get_settings().seedance_max_refs
+        total_cost = 0.0
+        with tempfile.TemporaryDirectory() as tmp:
+            # --- Clip 1 (moitié 1 des paroles) ---
+            clip1_raw, c1 = _generate_long_clip(
+                prompt1, refs, resolution, aspect, Path(tmp) / "clip1.mp4"
+            )
+            total_cost += c1 or 0.0
+
+            # --- Dernière frame du clip 1 → R2 → référence PRIORITAIRE du clip 2 ---
+            frame_path = extract_last_frame(clip1_raw, str(Path(tmp) / "last_frame.jpg"))
+            frame_url = r2.upload_file(
+                frame_path, f"longform/{job_id}/{item_id}/frame.jpg",
+                content_type="image/jpeg",
+            )
+            refs2 = ([frame_url] + refs)[:max_refs]
+
+            # --- Clip 2 (moitié 2, enchaîné depuis la frame) ---
+            clip2_raw, c2 = _generate_long_clip(
+                prompt2, refs2, resolution, aspect, Path(tmp) / "clip2.mp4"
+            )
+            total_cost += c2 or 0.0
+
+            # --- Voice-swap par clip (best-effort) ---
+            clip1 = _maybe_swap_long(clip1_raw, dialogue1, voices, tmp, "clip1")
+            clip2 = _maybe_swap_long(clip2_raw, dialogue2, voices, tmp, "clip2")
+
+            # --- Concat 2×15 s → 30 s, puis normalisation format de livraison ---
+            joined = str(Path(tmp) / "joined.mp4")
+            concat_clips([clip1, clip2], joined)
+
+            music_path = None
+            if music_url:
+                music_path = str(Path(tmp) / "music_input")
+                _download(music_url, Path(music_path))
+            final_path = str(Path(tmp) / "final.mp4")
+            assemble(
+                joined, final_path,
+                AssembleParams(resolution=resolution, bitrate=bitrate, music_path=music_path),
+                workdir=tmp,
+            )
+            final_url = r2.upload_file(final_path, f"outputs/{job_id}/{item_id}.mp4")
+
+        with db_session() as db:
+            item = db.get(JobItem, _pk(item_id))
+            if item is None:
+                return
+            item.raw_video_url = None
+            item.final_video_url = final_url
+            if total_cost:
+                item.item_actual_cost = round(total_cost, 4)
+            item.status = ItemStatus.DONE
+            _finalize_job_if_done(db, item.job)
+    except Exception as exc:
+        if self.request.retries < self.max_retries:
+            # Remet l'item en COMPOSED pour un ré-essai propre (les clips déjà
+            # générés sont perdus, mais la chaîne 30 s doit repartir de zéro).
+            with db_session() as db:
+                item = db.get(JobItem, _pk(item_id))
+                if item is not None:
+                    item.status = ItemStatus.COMPOSED
+            raise self.retry(exc=exc, countdown=20)
+        _fail_item(item_id, f"long_form: {exc}")
+        with db_session() as db:
+            item = db.get(JobItem, _pk(item_id))
+            if item:
+                _finalize_job_if_done(db, item.job)
+        raise
 
 
 @celery_app.task

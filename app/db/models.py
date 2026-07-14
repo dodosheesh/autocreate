@@ -40,6 +40,9 @@ class Category(StrEnum):
     MICRO_TROTTOIR = "micro_trottoir"
     PODCAST = "podcast"
     SNAPCHAT = "snapchat"
+    # Format long 30 s (2 clips de 15 s enchaînés) — scène + paroles reprises
+    # UNIQUEMENT d'une vidéo reverse-engineerée dédiée (jamais des dialogues manuels).
+    STORYTELLING_LONG = "storytelling_long"
 
 
 class JobStatus(StrEnum):
@@ -266,6 +269,10 @@ class JobItem(Base):
     combo_hash: Mapped[str] = mapped_column(String(64), index=True)
     filled_prompt: Mapped[str] = mapped_column(Text)
     dialogue_script: Mapped[str | None] = mapped_column(Text)  # taggé [H]/[F]
+    # Format long 30 s : prompt + paroles du DEUXIÈME clip de 15 s (le 1er tient
+    # dans filled_prompt/dialogue_script). None pour un item standard (1 clip).
+    filled_prompt_2: Mapped[str | None] = mapped_column(Text)
+    dialogue_script_2: Mapped[str | None] = mapped_column(Text)
     reference_image_urls: Mapped[list] = mapped_column(JSON, default=list)
     seedance_task_id: Mapped[str | None] = mapped_column(String(128), index=True)
     raw_video_url: Mapped[str | None] = mapped_column(Text)

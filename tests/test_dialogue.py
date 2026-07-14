@@ -5,6 +5,7 @@ from app.services.dialogue import (
     parse_tagged_script,
     render_for_prompt,
     split_script_halves,
+    split_transcript_halves,
 )
 
 SCRIPT = """
@@ -102,6 +103,31 @@ def test_action_ne_cree_pas_de_segment_audio():
     # [action] n'est PAS une ligne parlée → pas de segment (pas de voice-swap dessus)
     segs = parse_tagged_script("[action] winks\n[F] hi")
     assert [(s.tag, s.text) for s in segs] == [("F", "hi")]
+
+
+def test_split_transcript_plusieurs_phrases_coupe_entre_phrases():
+    # transcript monologue [F] de 4 phrases (mêmes longueurs) → 2 phrases / 2 phrases
+    a, b = split_transcript_halves("[F] one two. three four. five six. seven eight.")
+    assert a == "[F] one two.\n[F] three four."
+    assert b == "[F] five six.\n[F] seven eight."
+
+
+def test_split_transcript_une_seule_phrase_coupe_les_mots():
+    # une seule phrase, pas de ponctuation → on coupe les MOTS en deux (sinon le
+    # clip 2 serait muet). Les 2 moitiés couvrent tout, sous le même tag.
+    a, b = split_transcript_halves("[F] alpha beta gamma delta")
+    assert a == "[F] alpha beta"
+    assert b == "[F] gamma delta"
+
+
+def test_split_transcript_un_seul_mot_pas_de_deuxieme_moitie():
+    a, b = split_transcript_halves("[F] hey")
+    assert a == "[F] hey"
+    assert b == ""
+
+
+def test_split_transcript_vide():
+    assert split_transcript_halves("") == ("", "")
 
 
 def test_tags_a_la_suite_meme_ligne():

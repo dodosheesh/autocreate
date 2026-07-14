@@ -11,7 +11,9 @@ Règle caméra demandée :
 """
 
 # Catégories où la caméra ne bouge JAMAIS.
-STATIC_CATEGORIES = {"skit", "storytelling", "showing_body", "micro_trottoir", "podcast"}
+STATIC_CATEGORIES = {
+    "skit", "storytelling", "storytelling_long", "showing_body", "micro_trottoir", "podcast",
+}
 
 
 # Continuité : garde le MÊME outfit et une seule prise du début à la fin. Empêche

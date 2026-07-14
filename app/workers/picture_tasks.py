@@ -152,15 +152,21 @@ def reverse_engineer_video(self, template_id: str) -> None:
             category = tmpl.category
             tenant_id = tmpl.tenant_id
 
+        # Format long 30 s : les paroles sont OBLIGATOIRES (elles alimentent les
+        # 2 clips) → on transcrit toujours, et la scène garde son propre décor
+        # (pas de slot {background} qui piocherait un décor aléatoire).
+        long_form = category == "storytelling_long"
+        want_speech = speaking or long_form
+
         transcript = ""
         with tempfile.TemporaryDirectory() as tmp:
             video_path = Path(tmp) / "ref.mp4"
             _download(source_url, video_path)
             frames = extract_keyframes(str(video_path), tmp, n=6)
-            raw = _vision_reverse_video(frames, model_description=None, speaking=speaking)
-            if speaking:  # récupère aussi ce qui est DIT dans la vidéo de référence
+            raw = _vision_reverse_video(frames, model_description=None, speaking=want_speech)
+            if want_speech:  # récupère aussi ce qui est DIT dans la vidéo de référence
                 transcript = _transcribe_video(str(video_path), tmp)
-        template_text = ensure_slots(raw, speaking)
+        template_text = ensure_slots(raw, want_speech, with_background=not long_form)
 
         with db_session() as db:
             tmpl = db.get(PromptTemplate, _pk(template_id))
@@ -168,15 +174,23 @@ def reverse_engineer_video(self, template_id: str) -> None:
                 return  # supprimé ou déjà traité pendant le traitement
             tmpl.template_text = template_text
             tmpl.status = "ready"
+            if long_form:
+                # Format long 30 s : le template EST parlant (ses paroles alimentent
+                # les 2 clips). On stocke le transcript sur le template et on
+                # n'alimente PAS la banque de dialogues (les paroles viennent
+                # uniquement du reverse-engineering, jamais des dialogues manuels).
+                tmpl.speaking = True
             if transcript:
                 # Paroles appariées à la scène (format long 30 s : scène + speech
                 # du même clip de référence).
                 tmpl.transcript = f"[F] {transcript}"
-                # + ligne de dialogue réutilisable (taggée [F] ; re-tague au besoin).
-                db.add(DialogueLine(
-                    tenant_id=tenant_id, category=category,
-                    raw_text=f"[F] {transcript}", weight=1.0,
-                ))
+                if not long_form:
+                    # Reverse « court » : ligne de dialogue réutilisable dans la
+                    # banque (taggée [F] ; re-tague au besoin).
+                    db.add(DialogueLine(
+                        tenant_id=tenant_id, category=category,
+                        raw_text=f"[F] {transcript}", weight=1.0,
+                    ))
     except Exception as exc:
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)
