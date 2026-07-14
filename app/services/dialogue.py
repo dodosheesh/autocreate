@@ -30,7 +30,11 @@ VOICE_PROMPT_STYLES = {tag: style for tag, (_subject, style) in SPEAKERS.items()
 
 # Normalisation : accepte les tags « à la suite » sur une même ligne (ex.
 # « [F] salut [H] bro ») en remettant chaque tag CONNU en début de ligne.
-_KNOWN_TAGS_ALT = "|".join(list(SPEAKERS) + [BEAT_TAG])
+# [action]/[do] = ce que la model FAIT (mise en scène), PAS ce qu'elle dit :
+# rendu comme une action dans le prompt, jamais parlé ni voice-swappé.
+ACTION_TAGS = {"action", "do"}
+
+_KNOWN_TAGS_ALT = "|".join(list(SPEAKERS) + [BEAT_TAG] + sorted(ACTION_TAGS))
 _NORMALIZE_RE = re.compile(rf"\s*(\[(?:{_KNOWN_TAGS_ALT})\])")
 
 
@@ -61,10 +65,12 @@ def parse_tagged_script(raw_text: str, valid_tags: set[str] | None = None) -> li
         match = TAG_PATTERN.match(line)
         if not match:
             raise DialogueParseError(
-                f"Ligne {lineno} sans tag [H]/[F]/[M]/[W]/[beat] : {line[:60]!r}"
+                f"Ligne {lineno} sans tag [H]/[F]/[M]/[W]/[action]/[beat] : {line[:60]!r}"
             )
         tag, text = match.group("tag"), match.group("text").strip()
-        if tag == BEAT_TAG:
+        # [beat] (pause) et [action]/[do] (mise en scène) ne créent pas de segment
+        # audio : ils ne sont ni parlés ni voice-swappés.
+        if tag == BEAT_TAG or tag in ACTION_TAGS:
             continue
         if tag not in valid:
             raise DialogueParseError(f"Ligne {lineno} : tag inconnu [{tag}]")
@@ -77,13 +83,14 @@ def parse_tagged_script(raw_text: str, valid_tags: set[str] | None = None) -> li
 
 
 def render_for_prompt(raw_text: str) -> str:
-    """Déroulé naturel pour le prompt Seedance, avec micro-pause aux [beat].
+    """Déroulé naturel pour le prompt Seedance.
 
-    Attribue explicitement chaque réplique à son locuteur : la model (« she »,
-    tags H/F) vs une autre personne (« a man off-camera », tags M/W). Quand le
-    locuteur ne change pas, on n'répète pas le sujet (lecture fluide)."""
-    parts: list[str] = []
-    first = True
+    - [H]/[F]/[M]/[W] : PAROLE, attribuée à son locuteur (la model « she » vs une
+      autre personne). Locuteur inchangé → on ne répète pas le sujet.
+    - [action]/[do] : ce qu'elle FAIT (mise en scène) — décrit comme une action,
+      jamais entre guillemets, jamais parlé.
+    - [beat] : micro-pause avant la réplique suivante."""
+    frags: list[str] = []
     pending_beat = False
     prev_subject = None
     for line in _normalize_lines(raw_text).splitlines():
@@ -91,19 +98,27 @@ def render_for_prompt(raw_text: str) -> str:
         if not line:
             continue
         match = TAG_PATTERN.match(line)
-        if match and match.group("tag") == BEAT_TAG:
+        if not match:
+            continue
+        tag, text = match.group("tag"), match.group("text").strip()
+        if tag == BEAT_TAG:
             pending_beat = True
             continue
-        segment = parse_tagged_script(line)[0]
-        subject, style = SPEAKERS[segment.tag]
         transition = "after a brief pause, " if pending_beat else ""
-        if first:
-            parts.append(f'{subject.capitalize()} says {style}: "{segment.text}"')
-        elif subject == prev_subject:  # même locuteur → pas de répétition du sujet
-            parts.append(f'then {transition}{style}: "{segment.text}"')
-        else:  # changement de personne → on le nomme (qui dit quoi)
-            parts.append(f'then {subject} says {transition}{style}: "{segment.text}"')
-        first = False
-        prev_subject = subject
         pending_beat = False
-    return ", ".join(parts) + "."
+        if tag in ACTION_TAGS:  # une ACTION (non parlée)
+            frags.append(f"{transition}she {text}".strip())
+            prev_subject = None  # une action re-attribuera la parole suivante
+            continue
+        subject, style = SPEAKERS.get(tag, ("she", ""))
+        if not frags:
+            frags.append(f'{subject} says {style}: "{text}"')
+        elif subject == prev_subject:  # même locuteur → pas de répétition du sujet
+            frags.append(f'{transition}{style}: "{text}"')
+        else:  # changement de personne (ou après une action) → on nomme qui parle
+            frags.append(f'{subject} says {transition}{style}: "{text}"')
+        prev_subject = subject
+    if not frags:
+        return ""
+    frags[0] = frags[0][0].upper() + frags[0][1:]
+    return ", then ".join(frags) + "."

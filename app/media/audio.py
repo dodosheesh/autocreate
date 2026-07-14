@@ -98,16 +98,22 @@ def detect_speech_segments(
 def match_segments_to_lines(segments: list[Segment], n_lines: int) -> list[Segment]:
     """Méthode « VAD + ordre » : le segment i correspond à la ligne i du script.
 
-    Plus de blocs que de lignes → fusion itérative des deux blocs séparés par
-    le plus petit silence (une respiration a coupé une ligne en deux).
-    Moins de blocs que de lignes → erreur explicite (mieux vaut rejeter l'item
-    que de swapper la mauvaise voix sur la mauvaise ligne)."""
-    if len(segments) < n_lines:
-        raise VoiceSegmentationError(
-            f"{len(segments)} bloc(s) de parole détecté(s) pour {n_lines} ligne(s) "
-            "de script — segmentation impossible en méthode VAD + ordre."
-        )
+    - Plus de blocs que de lignes → fusion itérative des deux blocs séparés par
+      le plus petit silence (une respiration a coupé une ligne en deux).
+    - Moins de blocs que de lignes (parole continue, peu de pauses — fréquent
+      quand la model enchaîne des répliques courtes) → au lieu d'échouer, on
+      découpe la zone de parole en n_lines tranches ÉGALES (fallback approximatif
+      qui évite de rater TOUT le voice-swap de la vidéo)."""
+    if n_lines <= 0:
+        return []
+    if not segments:
+        raise VoiceSegmentationError("Aucune parole détectée dans l'audio généré.")
     segments = list(segments)
+    if len(segments) < n_lines:
+        start, end = segments[0].start_s, segments[-1].end_s
+        span = max(end - start, 1e-3)
+        step = span / n_lines
+        return [Segment(start + i * step, start + (i + 1) * step) for i in range(n_lines)]
     while len(segments) > n_lines:
         gaps = [
             (segments[i + 1].start_s - segments[i].end_s, i) for i in range(len(segments) - 1)

@@ -69,6 +69,26 @@ def test_tags_m_et_w_valides():
     assert [s.tag for s in segs] == ["M", "W"]
 
 
+def test_action_rendue_comme_action_pas_parlee():
+    # [action] = ce qu'elle FAIT (jamais entre guillemets), [F] = ce qu'elle DIT.
+    rendered = render_for_prompt(
+        "[action] sniffs her fingers one by one\n[F] my own personal pheromone\n"
+        "[action] rolls her eyes back\n[H] like a drug"
+    )
+    assert rendered == (
+        'She sniffs her fingers one by one, '
+        'then she says in a soft high-pitched feminine voice: "my own personal pheromone", '
+        'then she rolls her eyes back, '
+        'then she says in a deep masculine voice: "like a drug".'
+    )
+
+
+def test_action_ne_cree_pas_de_segment_audio():
+    # [action] n'est PAS une ligne parlée → pas de segment (pas de voice-swap dessus)
+    segs = parse_tagged_script("[action] winks\n[F] hi")
+    assert [(s.tag, s.text) for s in segs] == [("F", "hi")]
+
+
 def test_tags_a_la_suite_meme_ligne():
     # tags « à la suite » sur une seule ligne = même résultat qu'à la ligne
     segs = parse_tagged_script("[M] tu viens d'où ? [F] de Paris [beat] [F] et toi ?")

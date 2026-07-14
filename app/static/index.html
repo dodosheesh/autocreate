@@ -192,11 +192,18 @@
 
     <div class="card">
       <h2><span class="step">3</span>Voix ElevenLabs</h2>
-      <div class="hint">Clone tes 2 voix une fois dans ElevenLabs, colle ici leurs <code>voice_id</code>.
-        Tag <b>H</b> = voix grave masculine, <b>F</b> = voix féminine. Ces voix restent 100 % consistantes sur tous les reels.</div>
+      <div class="hint">Clone tes voix dans ElevenLabs, colle ici leurs <code>voice_id</code>.
+        Tags de <b>la model</b> : <b>H</b> = voix grave masculine, <b>F</b> = voix féminine.
+        Tags d'<b>autres personnes</b> : <b>M</b> = un autre homme (ex. intervieweur), <b>W</b> = une autre femme.
+        Crée un voice profile par tag que tu utilises dans tes dialogues.</div>
       <div class="row" style="margin-top:0">
         <div><label>Tag</label>
-          <select id="v-tag"><option value="H">H (grave masculin)</option><option value="F">F (féminin)</option></select></div>
+          <select id="v-tag">
+            <option value="H">H — model, voix grave masculine</option>
+            <option value="F">F — model, voix féminine</option>
+            <option value="M">M — autre homme (intervieweur…)</option>
+            <option value="W">W — autre femme</option>
+          </select></div>
         <div><label>Genre</label>
           <select id="v-gender"><option value="male">male</option><option value="female">female</option></select></div>
       </div>
@@ -271,11 +278,13 @@
 
     <div class="card">
       <h2><span class="step">6</span>Textes fournis (dialogues &amp; captions)</h2>
-      <div class="hint">C'est <b>toi</b> qui déposes ici le texte parlé et les légendes. Une ligne = une réplique.
+      <div class="hint">C'est <b>toi</b> qui déposes ici le texte parlé et les légendes.
         Tags : <code>[H]</code>/<code>[F]</code> = <b>la model</b> (voix grave / voix féminine),
-        <code>[M]</code> = <b>un autre homme</b> (ex. l'intervieweur en micro-trottoir),
-        <code>[W]</code> = <b>une autre femme</b>, <code>[beat]</code> = pause.
-        Crée un <b>voice profile</b> (étape voix) par tag utilisé.</div>
+        <code>[M]</code> = <b>un autre homme</b> (intervieweur…), <code>[W]</code> = <b>une autre femme</b>,
+        <code>[action]</code> = ce qu'elle <b>FAIT</b> (mise en scène, jamais parlé),
+        <code>[beat]</code> = pause.
+        Crée un <b>voice profile</b> par tag parlé utilisé. Ex :
+        <code>[action] renifle ses doigts</code> puis <code>[F] mon parfum perso</code>.</div>
       <div class="row" style="margin-top:0">
         <div><label>Dialogue — catégorie</label><select id="d-cat"></select></div>
         <div><label>Caption — catégorie</label><select id="cap-cat"></select></div>

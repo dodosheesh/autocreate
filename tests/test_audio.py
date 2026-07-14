@@ -57,9 +57,16 @@ def test_match_fusionne_le_plus_petit_gap():
     assert result == [Segment(0.0, 2.0), Segment(4.0, 5.0)]
 
 
-def test_match_pas_assez_de_blocs():
-    with pytest.raises(VoiceSegmentationError, match="1 bloc"):
-        match_segments_to_lines([Segment(0.0, 1.0)], 2)
+def test_match_moins_de_blocs_decoupe_proportionnellement():
+    # parole continue (1 bloc) pour 2 lignes → 2 tranches égales (au lieu d'échouer)
+    assert match_segments_to_lines([Segment(0.0, 2.0)], 2) == [
+        Segment(0.0, 1.0), Segment(1.0, 2.0)
+    ]
+
+
+def test_match_aucun_bloc_leve_erreur():
+    with pytest.raises(VoiceSegmentationError, match="Aucune parole"):
+        match_segments_to_lines([], 2)
 
 
 def test_timeline_command_structure():
