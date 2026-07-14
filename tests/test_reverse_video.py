@@ -75,7 +75,7 @@ def test_reverse_video_flow(client):
     # 2. exécuter la tâche inline : download + keyframes + vision + transcription mockés
     with patch("app.workers.picture_tasks._download"), \
          patch("app.workers.picture_tasks.extract_keyframes", return_value=["f0.jpg", "f1.jpg"]), \
-         patch("app.workers.picture_tasks._transcribe_video", return_value=""), \
+         patch("app.workers.picture_tasks._transcribe_video", return_value=("", "")), \
          patch(
              "app.workers.picture_tasks._vision_reverse_video",
              return_value="A woman dances energetically down a street, handheld tracking shot, neon night mood.",
@@ -102,7 +102,7 @@ def test_reverse_video_transcrit_la_parole_en_dialogue(client):
          patch("app.workers.picture_tasks._vision_reverse_video",
                return_value="A woman answers on the street. {outfit} {background} {characteristics} {dialogue}"), \
          patch("app.workers.picture_tasks._transcribe_video",
-               return_value="yo bro let me know man to man"):
+               return_value=("yo bro let me know man to man", "")):
         pt.reverse_engineer_video(tid)
     # la parole transcrite est stockée comme ligne de dialogue [F] dans la catégorie
     dialogues = client.get("/api/banks/dialogues?category=micro_trottoir").json()
@@ -124,8 +124,8 @@ def test_reverse_video_long_form_stocke_le_transcript_sans_polluer_la_banque(cli
          patch("app.workers.picture_tasks._vision_reverse_video",
                return_value="A woman tells a story in a warm cozy bedroom at night."), \
          patch("app.workers.picture_tasks._transcribe_video",
-               return_value="So this happened last week. I could not believe it. "
-                             "It was wild. Then he showed up. Everything changed."):
+               return_value=("So this happened last week. I could not believe it. "
+                             "It was wild. Then he showed up. Everything changed.", "")):
         pt.reverse_engineer_video(tid)
 
     with SessionLocal() as db:
@@ -144,6 +144,30 @@ def test_reverse_video_long_form_stocke_le_transcript_sans_polluer_la_banque(cli
                 DialogueLine.category == "storytelling_long")
         ).all()
         assert lines == []
+
+
+def test_reverse_video_long_form_echoue_si_pas_de_paroles(client):
+    # storytelling_long sans transcript (transcription échouée) → le template est
+    # marqué FAILED avec la raison, pas laissé « ready » mais inutilisable.
+    from app.db.models import PromptTemplate
+
+    with patch("app.api.routers.banks.reverse_engineer_video"):
+        tid = client.post("/api/banks/templates/reverse-video", json={
+            "source_video_url": "https://r2.example/silent.mp4",
+            "category": "storytelling_long", "speaking": True}).json()["id"]
+    with patch("app.workers.picture_tasks._download"), \
+         patch("app.workers.picture_tasks.extract_keyframes", return_value=["f0.jpg"]), \
+         patch("app.workers.picture_tasks._vision_reverse_video",
+               return_value="A woman tells a story in a cozy bedroom."), \
+         patch("app.workers.picture_tasks._transcribe_video",
+               return_value=("", "transcription ElevenLabs échouée : HTTP 401")):
+        pt.reverse_engineer_video(tid)
+
+    with SessionLocal() as db:
+        tmpl = db.get(PromptTemplate, uuid.UUID(tid))
+        assert tmpl.status == "failed"
+        assert tmpl.transcript is None
+        assert "paroles" in tmpl.error and "HTTP 401" in tmpl.error
 
 
 def test_transcribe_audio_appelle_scribe(tmp_path):

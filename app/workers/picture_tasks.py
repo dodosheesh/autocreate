@@ -122,20 +122,28 @@ def describe_asset(self, kind: str, asset_id: str, suffix: str = "") -> None:
                 row.status = "failed"
 
 
-def _transcribe_video(video_path: str, workdir: str) -> str:
+def _transcribe_video(video_path: str, workdir: str) -> tuple[str, str]:
     """Extrait l'audio de la vidéo puis le transcrit (ElevenLabs Scribe).
-    Best-effort : renvoie "" si pas d'audio / échec (ne bloque pas le template)."""
+
+    Renvoie `(transcript, error)` : `error=""` si OK, sinon la RAISON précise
+    (extraction FFmpeg, pas d'audio, échec API, transcription vide) — pour ne
+    plus masquer silencieusement pourquoi un template long n'a pas de paroles."""
+    wav = str(Path(workdir) / "ref_audio.wav")
+    proc = subprocess.run(
+        media_audio.build_extract_audio_command(video_path, wav),
+        capture_output=True, text=True,
+    )
+    if proc.returncode != 0:
+        return "", f"extraction audio FFmpeg échouée ({(proc.stderr or '')[-300:]})"
+    if not Path(wav).exists() or Path(wav).stat().st_size < 1024:
+        return "", "aucune piste audio exploitable dans la vidéo"
     try:
-        wav = str(Path(workdir) / "ref_audio.wav")
-        subprocess.run(
-            media_audio.build_extract_audio_command(video_path, wav),
-            capture_output=True,
-        )
-        if not Path(wav).exists() or Path(wav).stat().st_size < 1024:
-            return ""  # pas de piste audio exploitable
-        return " ".join(transcribe_audio(wav).split())  # 1 ligne, espaces normalisés
-    except Exception:
-        return ""
+        text = " ".join(transcribe_audio(wav).split())  # 1 ligne, espaces normalisés
+    except Exception as exc:
+        return "", f"transcription ElevenLabs échouée : {exc}"
+    if not text:
+        return "", "transcription vide (aucune parole reconnue dans l'audio)"
+    return text, ""
 
 
 @celery_app.task(bind=True, max_retries=2)
@@ -159,14 +167,14 @@ def reverse_engineer_video(self, template_id: str) -> None:
         long_form = category == "storytelling_long"
         want_speech = speaking or long_form
 
-        transcript = ""
+        transcript, tr_error = "", ""
         with tempfile.TemporaryDirectory() as tmp:
             video_path = Path(tmp) / "ref.mp4"
             _download(source_url, video_path)
             frames = extract_keyframes(str(video_path), tmp, n=6)
             raw = _vision_reverse_video(frames, model_description=None, speaking=want_speech)
             if want_speech:  # récupère aussi ce qui est DIT dans la vidéo de référence
-                transcript = _transcribe_video(str(video_path), tmp)
+                transcript, tr_error = _transcribe_video(str(video_path), tmp)
         template_text = ensure_slots(raw, want_speech, with_background=not long_form)
 
         with db_session() as db:
@@ -174,21 +182,30 @@ def reverse_engineer_video(self, template_id: str) -> None:
             if tmpl is None or tmpl.status != "pending":
                 return  # supprimé ou déjà traité pendant le traitement
             tmpl.template_text = template_text
-            tmpl.status = "ready"
             if long_form:
                 # Format long 30 s : le template EST parlant (ses paroles alimentent
-                # les 2 clips). On stocke le transcript sur le template et on
-                # n'alimente PAS la banque de dialogues (les paroles viennent
-                # uniquement du reverse-engineering, jamais des dialogues manuels).
+                # les 2 clips). Les paroles viennent UNIQUEMENT du reverse-engineering
+                # (jamais des dialogues manuels) → sans transcript, le template est
+                # INUTILISABLE : on l'échoue avec la raison précise plutôt que de le
+                # laisser « ready » mais muet.
                 tmpl.speaking = True
-            if transcript:
-                if long_form:
+                if transcript:
                     # Voix de la model : MAJORITAIREMENT sa voix masculine profonde
                     # [H], DE TEMPS EN TEMPS sa voix féminine [F] (le « twist »).
                     tmpl.transcript = tag_transcript_voices(transcript)
+                    tmpl.status = "ready"
                 else:
+                    tmpl.status = "failed"
+                    tmpl.error = (
+                        "Format 30 s : impossible de récupérer les paroles — "
+                        f"{tr_error or 'raison inconnue'}. Vérifie que ELEVENLABS_API_KEY "
+                        "est configurée côté worker et que la vidéo contient bien de la "
+                        "voix, puis re-uploade."
+                    )
+            else:
+                tmpl.status = "ready"
+                if transcript:
                     tmpl.transcript = f"[F] {transcript}"
-                if not long_form:
                     # Reverse « court » : ligne de dialogue réutilisable dans la
                     # banque (taggée [F] ; re-tague au besoin).
                     db.add(DialogueLine(
