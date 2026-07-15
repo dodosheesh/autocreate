@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 
 from app.api.routers import (
+    admin,
     auth,
     banks,
     costs,
@@ -23,6 +24,7 @@ get_settings().assert_secure_config()
 app = FastAPI(title="autocreate", version="0.6.0")
 
 app.include_router(auth.router)
+app.include_router(admin.router)
 app.include_router(models.router)
 app.include_router(banks.router)
 app.include_router(jobs.router)

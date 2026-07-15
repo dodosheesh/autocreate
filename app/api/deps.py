@@ -27,3 +27,10 @@ def current_user(request: Request, db: Session = Depends(get_db)) -> User:
     if payload.get("ver", 0) != user.token_version:
         raise HTTPException(401, "Session expirée")
     return user
+
+
+def require_owner(user: User = Depends(current_user)) -> User:
+    """403 si l'utilisateur n'est pas propriétaire (gestion d'équipe réservée)."""
+    if user.role != "owner":
+        raise HTTPException(403, "Action réservée au propriétaire du compte")
+    return user

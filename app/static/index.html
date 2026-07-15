@@ -168,6 +168,22 @@
     <div class="hint">Configure ici, une seule fois : ta model, ses caractéristiques, tes voix, tes banques d'assets
       et tes textes. Une fois prêt → onglet <b>Vidéos</b> ou <b>Photos</b> pour générer.</div>
 
+    <!-- Équipe : visible UNIQUEMENT pour le propriétaire -->
+    <div class="card" id="admin-card" style="display:none; border-color:#7c5cff">
+      <h2>👥 Équipe (accès au tool)</h2>
+      <div class="hint">Ajoute les membres de ton équipe : eux seuls (et toi) peuvent se connecter.
+        Il n'y a <b>aucune inscription publique</b> — un inconnu ne peut pas accéder au tool.
+        Les membres partagent ton espace de travail (models, banques, jobs, coûts).</div>
+      <div class="row" style="margin-top:0">
+        <div><label>E-mail du membre</label><input type="email" id="mb-email" placeholder="collegue@exemple.com"></div>
+        <div><label>Mot de passe <span class="muted">— vide = généré automatiquement</span></label>
+          <input type="text" id="mb-pass" placeholder="(généré si vide)" autocomplete="new-password"></div>
+      </div>
+      <button class="btn small" id="mb-add" style="margin-top:10px">Ajouter le membre</button>
+      <div id="mb-secret" style="margin-top:10px; font-size:12px"></div>
+      <div class="list-wrap" id="list-members" style="margin-top:12px"></div>
+    </div>
+
     <div class="card">
       <h2><span class="step">1</span>Model active</h2>
       <label>Model utilisée pour générer &amp; pour les caractéristiques ci-dessous</label>
@@ -701,7 +717,58 @@ $("#cost-refresh").addEventListener("click", () => loadCosts().catch(e => toast(
 async function requireAuth() {
   const me = await api("/auth/me");
   $("#whoami").textContent = me.email;
+  // Gestion d'équipe visible uniquement pour le propriétaire.
+  if (me.role === "owner") { $("#admin-card").style.display = ""; loadMembers().catch(() => {}); }
 }
+
+// --- gestion d'équipe (propriétaire) ---
+async function loadMembers() {
+  const rows = await api("/admin/members");
+  $("#list-members").innerHTML = rows.map(m => {
+    const isOwner = m.role === "owner";
+    const actions = isOwner ? '<span class="muted">toi</span>' : `
+      ${m.is_active
+        ? `<button class="btn small ghost" onclick="memberAction('${m.id}','deactivate')">Suspendre</button>`
+        : `<button class="btn small ghost" onclick="memberAction('${m.id}','activate')">Réactiver</button>`}
+      <button class="btn small ghost" onclick="memberReset('${m.id}')">Nouveau mot de passe</button>
+      <button class="btn small ghost" onclick="memberDelete('${m.id}')" title="supprimer">✕</button>`;
+    const tag = isOwner ? badge("owner") : (m.is_active ? badge("done") : badge("failed"));
+    return `<div class="est-line"><span>${tag} ${esc(m.email)}</span><span>${actions}</span></div>`;
+  }).join("") || '<span class="muted">aucun membre</span>';
+}
+function showSecret(email, pw) {
+  $("#mb-secret").innerHTML = `<div class="card" style="background:#241; border-color:#4ade80; padding:10px">
+    🔑 Mot de passe de <b>${esc(email)}</b> (copie-le maintenant, il ne sera plus affiché) :
+    <code style="font-size:14px">${esc(pw)}</code></div>`;
+}
+$("#mb-add").addEventListener("click", async () => {
+  const email = $("#mb-email").value.trim();
+  if (!email) return toast("E-mail manquant");
+  const body = {email};
+  const pw = $("#mb-pass").value.trim(); if (pw) body.password = pw;
+  try {
+    const r = await api("/admin/members", {method: "POST", body: JSON.stringify(body)});
+    $("#mb-email").value = ""; $("#mb-pass").value = "";
+    if (r.generated_password) showSecret(r.member.email, r.generated_password);
+    else { $("#mb-secret").innerHTML = ""; toast("Membre ajouté"); }
+    loadMembers();
+  } catch (e) { toast("Ajout membre : " + e.message); }
+});
+window.memberAction = async (id, action) => {
+  try { await api(`/admin/members/${id}/${action}`, {method: "POST"}); loadMembers(); }
+  catch (e) { toast("Membre : " + e.message); }
+};
+window.memberReset = async (id) => {
+  try {
+    const r = await api(`/admin/members/${id}/reset-password`, {method: "POST"});
+    showSecret(r.member.email, r.generated_password); loadMembers();
+  } catch (e) { toast("Mot de passe : " + e.message); }
+};
+window.memberDelete = async (id) => {
+  if (!confirm("Supprimer définitivement ce membre ?")) return;
+  try { await api(`/admin/members/${id}`, {method: "DELETE"}); loadMembers(); }
+  catch (e) { toast("Suppression : " + e.message); }
+};
 $("#logout").addEventListener("click", async () => {
   await fetch("/api/auth/logout", {method: "POST"});
   location.href = "/login";
