@@ -131,20 +131,33 @@ def test_split_transcript_vide():
     assert split_transcript_halves("") == ("", "")
 
 
-def test_tag_transcript_majorite_masculine_occasionnelle_feminine():
-    # 6 phrases → voix masculine [H] majoritaire, [F] une fois sur 3 (3e, 6e).
+def test_tag_transcript_ecrasante_majorite_masculine_une_seule_feminine():
+    # 6 phrases → 1 SEULE phrase féminine (le reste masculin), bloc contigu.
     out = tag_transcript_voices("one. two. three. four. five. six.")
     lines = out.splitlines()
     assert len(lines) == 6
-    assert lines[0].startswith("[H]") and lines[1].startswith("[H]")
-    assert lines[2].startswith("[F]")  # 3e phrase = voix féminine
-    assert lines[5].startswith("[F]")  # 6e phrase = voix féminine
-    assert out.count("[H]") == 4 and out.count("[F]") == 2  # majorité masculine
+    assert out.count("[F]") == 1  # une seule bascule féminine
+    assert out.count("[H]") == 5  # écrasante majorité masculine
+    assert lines[0].startswith("[H]")  # commence en masculin
+
+
+def test_tag_transcript_long_max_deux_feminines_contigues():
+    # transcript long (≥ 8 phrases) → au plus 2 féminines, CONTIGUËS (transitions min.)
+    out = tag_transcript_voices(". ".join(f"s{i}" for i in range(10)) + ".")
+    tags = [ln[:3] for ln in out.splitlines()]
+    assert tags.count("[F]") == 2
+    fem = [i for i, t in enumerate(tags) if t == "[F]"]
+    assert fem[1] - fem[0] == 1  # les 2 féminines sont adjacentes (bloc contigu)
 
 
 def test_tag_transcript_une_phrase_reste_masculine():
-    # transcript court (1 phrase) → tout en voix masculine (majoritaire)
+    # transcript court (1 phrase) → tout en voix masculine (aucune bascule)
     assert tag_transcript_voices("just one sentence here") == "[H] just one sentence here"
+
+
+def test_tag_transcript_deux_phrases_une_seule_feminine():
+    out = tag_transcript_voices("first one. second one.")
+    assert out.count("[F]") == 1 and out.count("[H]") == 1
 
 
 def test_tag_transcript_vide():

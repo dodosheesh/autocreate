@@ -153,6 +153,7 @@ _PERMANENT_MARKERS = (
     "unsupported",
     "policy",
     "prohibited",
+    "copyright",  # ex. « output video may be related to copyright restrictions »
 )
 
 

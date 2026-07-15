@@ -122,22 +122,34 @@ def _split_sentences(text: str) -> list[str]:
 
 
 def tag_transcript_voices(
-    text: str, major_tag: str = "H", minor_tag: str = "F", minor_period: int = 3
+    text: str, major_tag: str = "H", minor_tag: str = "F", minor_sentences: int | None = None
 ) -> str:
-    """Tague un transcript brut (monologue, texte non taggé) en alternant les
-    voix de la model : MAJORITAIREMENT `major_tag` (voix masculine profonde [H])
-    et DE TEMPS EN TEMPS `minor_tag` (voix féminine [F]) — une phrase sur
-    `minor_period` prend la voix mineure.
+    """Tague un transcript brut (monologue, texte non taggé) avec les deux voix
+    de la model : ÉCRASANTE MAJORITÉ en `major_tag` (voix trans-masculine [H]) et
+    SEULEMENT 1 ou 2 phrases en `minor_tag` (voix féminine [F]).
 
-    Format long 30 s : la voix reste celle de LA MODEL (toujours « she »), on
-    fait juste basculer le timbre entre ses deux voix. Découpé par phrase pour
-    que le basculement tombe sur une frontière naturelle."""
+    Peu de bascules = meilleurs enchaînements (Seedance rend mal les changements
+    de timbre trop fréquents). Le bloc féminin est CONTIGU et centré → au plus
+    deux transitions (H… F(F) …H) sur toute la vidéo.
+
+    Format long 30 s : la voix reste celle de LA MODEL (toujours « she »), seul
+    le timbre bascule. Découpé par phrase pour tomber sur une frontière naturelle."""
     sentences = _split_sentences(text)
     if not sentences:
         return ""
-    period = max(2, minor_period)
+    n = len(sentences)
+    if n == 1:
+        # Une seule phrase → tout en masculin (le twist féminin viendrait sinon
+        # au milieu d'un mot lors du découpage en 2 clips).
+        return f"[{major_tag}] {sentences[0]}"
+    # 1 phrase féminine par défaut, 2 seulement si le transcript est long (≥ 8
+    # phrases). Jamais plus : on garde une écrasante majorité masculine.
+    k = minor_sentences if minor_sentences is not None else (2 if n >= 8 else 1)
+    k = max(0, min(k, n - 1))
+    start = max(1, (n - k) // 2)  # bloc féminin contigu, centré
+    minor_idx = set(range(start, start + k))
     lines = [
-        f"[{minor_tag if (i + 1) % period == 0 else major_tag}] {s}"
+        f"[{minor_tag if i in minor_idx else major_tag}] {s}"
         for i, s in enumerate(sentences)
     ]
     return "\n".join(lines)
