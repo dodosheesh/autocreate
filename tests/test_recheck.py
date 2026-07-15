@@ -97,6 +97,10 @@ def test_is_transient_failure():
     assert is_transient_failure("The input was flagged as sensitive") is False
     assert is_transient_failure("model name not supported") is False
     assert is_transient_failure(None) is False
+    # course interne kie.ai sur l'ingestion d'un asset de référence → re-essai utile
+    assert is_transient_failure("The specified asset asset-20260716020939-6fq47 is not found.") is True
+    # un refus copyright reste définitif même si le mot « asset » apparaissait
+    assert is_transient_failure("output video may be related to copyright restrictions") is False
 
 
 def test_recheck_cross_tenant_refuse(client):

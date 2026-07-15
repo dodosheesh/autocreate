@@ -144,6 +144,11 @@ _TRANSIENT_MARKERS = (
     "service unavailable",
     "503",
     "500",
+    # kie.ai ingère nos images de référence dans son propre store d'assets ; il
+    # arrive qu'il ne retrouve pas l'asset qu'il vient de créer (course interne).
+    # Ex. « The specified asset asset-2026...-xxxx is not found. » → re-essai utile.
+    "asset",
+    "not found",
 )
 _PERMANENT_MARKERS = (
     "sensitive",
