@@ -134,6 +134,69 @@ def test_compose_long_form_sans_transcript_message_explicite():
         assert "ELEVENLABS_API_KEY" in job.error
 
 
+def test_long_form_dedoublonne_wearing_wearing():
+    # template reverse qui écrit « wearing {outfit} » + outfit « wearing … » →
+    # le prompt final ne doit PAS contenir « wearing wearing ».
+    tmpl = TemplateOption(
+        id="t1",
+        template_text="A woman sits on a bed, wearing {outfit}. {characteristics}. {dialogue}",
+        speaking=True, transcript="[H] hi there. [F] bye now.",
+    )
+    outfit = Option(id="o1", text="wearing a red superhero-style bodysuit", image_url="https://r2/o.jpg")
+    pools = {variation.LONG_FORM_CATEGORY: CategoryPools(
+        templates=[tmpl], outfits=[outfit], backgrounds=[], dialogues=[], captions=[])}
+    item = compose_batch(
+        counts_per_category={variation.LONG_FORM_CATEGORY: 1}, pools_by_category=pools,
+        characteristics=[], face_reference_url="https://r2/f.jpg", rng=random.Random(0),
+    ).items[0]
+    assert "wearing wearing" not in item.filled_prompt.lower()
+    assert "wearing wearing" not in item.filled_prompt_2.lower()
+    assert "wearing a red superhero" in item.filled_prompt
+
+
+def test_long_form_refus_copyright_ne_retente_pas(monkeypatch):
+    # Un refus DÉFINITIF (copyright) ne doit PAS déclencher de re-essai (sinon on
+    # régénère et re-facture un clip). L'item finit failed du 1er coup.
+    import uuid as _uuid
+
+    from app.db.base import Base, SessionLocal, engine
+    from app.db.models import GenerationJob, JobItem, Model
+    from app.workers import tasks
+
+    Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
+    with SessionLocal() as db:
+        m = Model(name="m", face_reference_url="https://r2/f.jpg", tenant_id="t")
+        db.add(m)
+        db.flush()
+        job = GenerationJob(model_id=m.id, tenant_id="t", resolution="720p",
+                            aspect="9:16", bitrate="standard",
+                            counts_per_category={variation.LONG_FORM_CATEGORY: 1})
+        db.add(job)
+        db.flush()
+        item = JobItem(job_id=job.id, category=variation.LONG_FORM_CATEGORY,
+                       combo_hash="h1", filled_prompt="P1", filled_prompt_2="P2",
+                       reference_image_urls=["https://r2/f.jpg"], status="composed")
+        db.add(item)
+        db.commit()
+        item_id = str(item.id)
+
+    fail = MagicMock(state="fail",
+                     fail_msg="The request failed because the output video may be related to copyright restrictions.",
+                     result_urls=[], cost_usd=None)
+    created = []
+    with patch.object(tasks.kie, "create_seedance_task", side_effect=lambda *a, **k: created.append(1) or "task"), \
+         patch.object(tasks.kie, "get_task", return_value=fail), \
+         patch.object(tasks, "_download"):
+        tasks.generate_long_form_item(item_id)
+
+    assert len(created) == 1  # UNE seule génération tentée (pas de re-essai)
+    with SessionLocal() as db:
+        it = db.get(JobItem, _uuid.UUID(item_id))
+        assert it.status == "failed"
+        assert "copyright" in (it.error or "")
+
+
 def test_last_frame_command():
     cmd = build_last_frame_command("clip.mp4", "frame.jpg")
     joined = " ".join(cmd)

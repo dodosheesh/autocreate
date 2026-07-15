@@ -131,6 +131,15 @@ def test_split_transcript_vide():
     assert split_transcript_halves("") == ("", "")
 
 
+def test_split_transcript_derniere_phrase_dominante_ne_vide_pas_le_clip2():
+    # la 2e phrase pèse plus que la moitié des mots → sans filet, clip2 serait
+    # vide (tout le speech tassé sur clip1). Le filet met la phrase longue en clip2.
+    a, b = split_transcript_halves("[H] short. [F] this second sentence is clearly much much longer here.")
+    assert a and b  # aucune moitié vide
+    assert a.startswith("[H]") and b.startswith("[F]")
+    assert "second sentence" in b
+
+
 def test_tag_transcript_ecrasante_majorite_masculine_une_seule_feminine():
     # 6 phrases → 1 SEULE phrase féminine (le reste masculin), bloc contigu.
     out = tag_transcript_voices("one. two. three. four. five. six.")

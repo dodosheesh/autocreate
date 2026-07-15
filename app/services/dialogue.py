@@ -107,6 +107,8 @@ def split_script_halves(raw_text: str) -> tuple[str, str]:
         if acc >= total / 2 and i + 1 < len(lines):
             split_idx = i + 1
             break
+    if split_idx >= len(lines):  # dernière réplique dominante → elle passe en 2e moitié
+        split_idx = len(lines) - 1
     return "\n".join(lines[:split_idx]), "\n".join(lines[split_idx:])
 
 
@@ -191,6 +193,12 @@ def split_transcript_halves(raw_text: str) -> tuple[str, str]:
         if acc >= total / 2 and i + 1 < len(units):
             split_idx = i + 1
             break
+    # Filet : si la DERNIÈRE phrase dépasse à elle seule la moitié des mots, la
+    # boucle ne trouve aucun point de coupe (garde i+1<len) et split_idx reste
+    # len(units) → clip 2 vide, tout le speech (dont le twist [F]) tassé sur le
+    # clip 1. On coupe alors juste avant la dernière phrase (elle va sur le clip 2).
+    if split_idx >= len(units):
+        split_idx = len(units) - 1
     first = "\n".join(f"[{tag}] {t}" for tag, t in units[:split_idx])
     second = "\n".join(f"[{tag}] {t}" for tag, t in units[split_idx:])
     return first, second

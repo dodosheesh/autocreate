@@ -103,14 +103,22 @@ def weighted_draw(options: list, rng: random.Random):
     return rng.choices(options, weights=weights, k=1)[0]
 
 
+_DOUBLE_WEARING_RE = re.compile(r"\bwearing\s+wearing\b", re.IGNORECASE)
+
+
 def fill_template(template_text: str, values: dict[str, str]) -> str:
     """Remplit les slots connus, laisse les inconnus intacts (le designer de
-    template voit immédiatement ce qui n'est pas résolu)."""
+    template voit immédiatement ce qui n'est pas résolu).
+
+    Corrige le doublon « wearing wearing » : un template reverse-engineeré peut
+    écrire « wearing {outfit} » alors que le texte d'outfit commence DÉJÀ par
+    « wearing » → on réduit à un seul « wearing »."""
 
     def replace(match: re.Match) -> str:
         return values.get(match.group(1), match.group(0))
 
-    return SLOT_PATTERN.sub(replace, template_text)
+    filled = SLOT_PATTERN.sub(replace, template_text)
+    return _DOUBLE_WEARING_RE.sub("wearing", filled)
 
 
 def _compose_one(

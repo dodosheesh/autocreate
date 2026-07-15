@@ -462,10 +462,16 @@ def _poll_kie_until_done(task_id: str, timeout_s: int = 1800, interval_s: int = 
         waited += interval_s
 
 
+class _PermanentGenerationError(RuntimeError):
+    """Refus DÉFINITIF de kie.ai (copyright, policy, contenu sensible…) : re-tenter
+    ne passera pas et RE-FACTURE une génération → on échoue tout de suite."""
+
+
 def _generate_long_clip(prompt: str, refs: list[str], resolution: str, aspect: str,
                         dest: Path) -> tuple[str, float | None]:
     """Lance un clip Seedance de 15 s, attend, télécharge → chemin local brut.
-    Renvoie (chemin, coût_usd). Lève RuntimeError si la génération échoue."""
+    Renvoie (chemin, coût_usd). Lève _PermanentGenerationError sur un refus
+    définitif (pas de re-essai), RuntimeError sinon (re-essai possible)."""
     payload = kie.build_seedance_input(
         prompt=prompt,
         reference_image_urls=refs,
@@ -476,7 +482,12 @@ def _generate_long_clip(prompt: str, refs: list[str], resolution: str, aspect: s
     task_id = kie.create_seedance_task(payload)
     result = _poll_kie_until_done(task_id)
     if result.state != "success" or not result.result_urls:
-        raise RuntimeError(result.fail_msg or "génération échouée")
+        msg = result.fail_msg or "génération échouée"
+        # Refus définitif (copyright/policy…) → surtout PAS de re-essai (chaque
+        # re-essai régénère et re-facture un clip pour rien).
+        if not kie.is_transient_failure(msg):
+            raise _PermanentGenerationError(msg)
+        raise RuntimeError(msg)
     _download(result.result_urls[0], dest)
     return str(dest), result.cost_usd
 
@@ -573,7 +584,10 @@ def generate_long_form_item(self, item_id: str) -> None:
             item.status = ItemStatus.DONE
             _finalize_job_if_done(db, item.job)
     except Exception as exc:
-        if self.request.retries < self.max_retries:
+        # Refus DÉFINITIF (copyright/policy…) → échec immédiat, JAMAIS de re-essai
+        # (chaque re-essai régénère et re-facture 2 clips pour rien).
+        permanent = isinstance(exc, _PermanentGenerationError)
+        if not permanent and self.request.retries < self.max_retries:
             # Remet l'item en COMPOSED pour un ré-essai propre (les clips déjà
             # générés sont perdus, mais la chaîne 30 s doit repartir de zéro).
             with db_session() as db:
@@ -586,6 +600,8 @@ def generate_long_form_item(self, item_id: str) -> None:
             item = db.get(JobItem, _pk(item_id))
             if item:
                 _finalize_job_if_done(db, item.job)
+        if permanent:
+            return  # échec propre géré, pas la peine de re-lever pour Celery
         raise
 
 

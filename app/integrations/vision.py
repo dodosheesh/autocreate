@@ -196,7 +196,12 @@ _DESCRIBE_SYSTEM = {
     "outfit": (
         "Describe ONLY the clothing/outfit worn in this photo, as one short English "
         "phrase usable after 'wearing' (e.g. 'a red silk mini dress and black heels'). "
-        "Do NOT describe the person's face, body or the background. Output only the phrase."
+        "Do NOT describe the person's face, body or the background. "
+        "Describe garments GENERICALLY by their shape, color, material and pattern — "
+        "NEVER name a brand, franchise, character, superhero, movie, logo or trademark. "
+        "For a licensed/character costume, describe it plainly instead, e.g. write "
+        "'a red and blue superhero-style bodysuit with a black web pattern' rather than "
+        "naming the character. Output only the phrase."
     ),
     "background": (
         "Describe ONLY the location/setting/background of this photo, as one short "
