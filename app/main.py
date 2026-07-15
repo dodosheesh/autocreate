@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 from app.api.routers import (
     auth,
     banks,
+    costs,
     diagnostics,
     jobs,
     models,
@@ -27,6 +28,7 @@ app.include_router(banks.router)
 app.include_router(jobs.router)
 app.include_router(pictures.router)
 app.include_router(pricing.router)
+app.include_router(costs.router)
 app.include_router(uploads.router)
 app.include_router(webhooks.router)
 app.include_router(diagnostics.router)

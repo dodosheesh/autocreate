@@ -26,6 +26,16 @@
   .nav .who { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 10px; }
   .wrap { max-width: 1180px; margin: 0 auto; padding: 22px 16px 90px; }
   .page { display: none; } .page.active { display: block; }
+  .cost-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .cost-card { background: var(--panel2, #1a1a24); border: 1px solid var(--line, #2a2a38);
+       border-radius: 10px; padding: 14px 16px; }
+  .cost-card .lab { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .cost-card .big { font-size: 26px; font-weight: 700; margin: 6px 0 2px; }
+  .cost-card .brk { font-size: 11px; color: var(--muted); }
+  table.cost { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.cost th, table.cost td { text-align: right; padding: 7px 10px; border-bottom: 1px solid var(--line, #2a2a38); }
+  table.cost th:first-child, table.cost td:first-child { text-align: left; }
+  table.cost td.tot { font-weight: 700; }
   h1 { font-size: 20px; margin: 0 0 2px; }
   .sub, .hint { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
   h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .08em;
@@ -144,6 +154,7 @@
     <button data-page="video" class="on">🎬 Vidéos</button>
     <button data-page="photo">🖼 Photos</button>
     <button data-page="reverse">🔁 Reverse engineer</button>
+    <button data-page="costs">💰 Coûts</button>
   </div>
   <div class="who"><span id="whoami"></span>
     <button class="btn small ghost" id="logout">Déconnexion</button></div>
@@ -505,6 +516,25 @@
     </div>
   </section>
 
+  <!-- ================= COÛTS ================= -->
+  <section class="page" id="page-costs">
+    <h1>Coûts</h1>
+    <div class="sub">Ce que t'a coûté (kie.ai + ElevenLabs) tout le contenu généré, par période.
+      Coût <b>réel</b> quand kie.ai l'a remonté, sinon estimé pour les jobs encore en cours.</div>
+
+    <div class="card">
+      <div class="list-head"><span>Par période</span>
+        <button class="btn small ghost" id="cost-refresh">↻ Rafraîchir</button></div>
+      <div id="cost-windows" class="cost-grid"></div>
+    </div>
+
+    <div class="card">
+      <h2>Par mois</h2>
+      <div class="hint">Ta facture mensuelle réelle — combien de contenu te coûte chaque mois.</div>
+      <div id="cost-months"></div>
+    </div>
+  </section>
+
 </div>
 <div id="toast"></div>
 
@@ -642,8 +672,30 @@ async function uploadAll(inputEl, onProgress) {
 function showPage(p) {
   document.querySelectorAll(".page").forEach(el => el.classList.toggle("active", el.id === "page-" + p));
   document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.page === p));
+  if (p === "costs") loadCosts().catch(() => {});
 }
 document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => showPage(b.dataset.page)));
+
+// --- coûts ---
+const usd = (n) => "$" + (Number(n) || 0).toFixed(2);
+async function loadCosts() {
+  const data = await api("/costs/summary");
+  $("#cost-windows").innerHTML = (data.windows || []).map(w => `
+    <div class="cost-card">
+      <div class="lab">${esc(w.label)}</div>
+      <div class="big">${usd(w.total_usd)}</div>
+      <div class="brk">🎬 ${usd(w.video_usd)} · 🖼 ${usd(w.photo_usd)}</div>
+      <div class="brk">${w.video_jobs + w.photo_jobs} job(s)</div>
+    </div>`).join("") || '<span class="muted">aucune donnée</span>';
+  const months = data.by_month || [];
+  $("#cost-months").innerHTML = months.length ? `
+    <table class="cost"><thead><tr><th>Mois</th><th>Vidéos</th><th>Photos</th><th>Total</th></tr></thead>
+    <tbody>${months.map(m => `<tr>
+      <td>${esc(m.month)}</td><td>${usd(m.video_usd)}</td><td>${usd(m.photo_usd)}</td>
+      <td class="tot">${usd(m.total_usd)}</td></tr>`).join("")}</tbody></table>`
+    : '<span class="muted">aucune dépense enregistrée</span>';
+}
+$("#cost-refresh").addEventListener("click", () => loadCosts().catch(e => toast("Coûts : " + e.message)));
 
 // --- auth ---
 async function requireAuth() {
