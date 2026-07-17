@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     # Seedance 2.0 Fast : 480p/720p, ~4 min/génération, moins cher. 720p suffit
     # pour des Reels. (Standard = bytedance/seedance-2, ajoute le 1080p.)
     kie_seedance_model: str = "bytedance/seedance-2-fast"
+    # Copypaste (vidéo → vidéo) : nom du champ input kie.ai qui porte les vidéos
+    # de référence Seedance. Configurable pour coller à la doc sans redéployer.
+    kie_seedance_video_ref_field: str = "reference_video_urls"
     # --- Modèle image (génération photo) ---
     # Seedream (ByteDance) EDIT : image-to-image multi-références (jusqu'à 10
     # images : visage + caractéristiques), meilleure qualité/consistance.

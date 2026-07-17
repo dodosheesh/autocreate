@@ -7,6 +7,7 @@ from app.api.routers import (
     admin,
     auth,
     banks,
+    copypaste,
     costs,
     diagnostics,
     jobs,
@@ -28,6 +29,7 @@ app.include_router(admin.router)
 app.include_router(models.router)
 app.include_router(banks.router)
 app.include_router(jobs.router)
+app.include_router(copypaste.router)
 app.include_router(pictures.router)
 app.include_router(pricing.router)
 app.include_router(costs.router)

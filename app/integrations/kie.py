@@ -49,8 +49,9 @@ def build_seedance_input(
     duration_s: int,
     aspect_ratio: str = "9:16",
     generate_audio: bool = True,
+    reference_video_urls: list[str] | None = None,
 ) -> dict[str, Any]:
-    return {
+    payload: dict[str, Any] = {
         "prompt": prompt,
         "reference_image_urls": reference_image_urls,
         "resolution": resolution,
@@ -58,6 +59,12 @@ def build_seedance_input(
         "aspect_ratio": aspect_ratio,
         "generate_audio": generate_audio,
     }
+    if reference_video_urls:
+        # Copypaste (vidéo → vidéo). Le nom exact du champ côté kie.ai est
+        # configurable (KIE_SEEDANCE_VIDEO_REF_FIELD) pour suivre la doc sans
+        # redéployer si elle change.
+        payload[get_settings().kie_seedance_video_ref_field] = reference_video_urls
+    return payload
 
 
 def create_task(model: str, input_payload: dict[str, Any], callback_path: str = "/api/webhooks/kie") -> str:

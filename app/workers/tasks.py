@@ -316,6 +316,10 @@ def dispatch_seedance(self, item_id: str) -> None:
                 resolution=job.resolution,
                 duration_s=job.duration_s,
                 aspect_ratio=job.aspect,
+                # Copypaste : la vidéo de référence part avec la photo visage.
+                reference_video_urls=(
+                    [item.reference_video_url] if item.reference_video_url else None
+                ),
             )
             task_id = kie.create_seedance_task(payload)
             item.seedance_task_id = task_id

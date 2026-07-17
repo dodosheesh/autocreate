@@ -237,6 +237,36 @@ Le slot `{characteristics}` dans le prompt reçoit les `injection_hint` des cara
 Les images de référence envoyées à Seedance = visage + photos des caractéristiques + refs
 additionnelles, **plafonnées à 12** (contrainte Seedance 2.0), le visage n'étant jamais évincé.
 
+## Copypaste (vidéo → vidéo)
+
+Seedance 2 accepte des **vidéos de référence** : la feature copypaste remplace la fille
+d'une vidéo uploadée par la model (prompt fixe « Replace the girl in the video with the
+girl in the picture » + custom prompt optionnel, photo visage envoyée en référence image).
+Chaque vidéo uploadée rejoint la **banque vidéo** (dédup par URL) ; `use_bank=true` pioche
+au hasard une vidéo de la banque pour chaque item du batch.
+
+```bash
+# Banque : ajouter / lister / supprimer des vidéos de référence (URL d'un upload R2)
+curl -X POST localhost:8000/api/copypaste/videos -H 'Content-Type: application/json' \
+  -d '{"video_url": "https://<r2>/uploads/<tenant>/ref.mp4", "label": "ref outfit rouge"}'
+curl localhost:8000/api/copypaste/videos
+
+# Job : N vidéos depuis UNE vidéo (auto-ajoutée à la banque)…
+curl -X POST localhost:8000/api/copypaste/jobs -H 'Content-Type: application/json' -d '{
+  "model_id": "<model_id>", "count": 3,
+  "reference_video_url": "https://<r2>/uploads/<tenant>/ref.mp4",
+  "custom_prompt": "keep the exact same outfit and camera movement"
+}'
+# …ou en piochant au hasard dans la banque
+curl -X POST localhost:8000/api/copypaste/jobs -H 'Content-Type: application/json' \
+  -d '{"model_id": "<model_id>", "count": 10, "use_bank": true}'
+# → GenerationJob standard (catégorie copypaste) : suivi/review/export via /api/jobs
+```
+
+Le nom du champ input kie.ai portant les vidéos de référence est configurable via
+`KIE_SEEDANCE_VIDEO_REF_FIELD` (défaut `reference_video_urls`) — à ajuster si la doc
+Seedance change sans avoir à redéployer le code.
+
 ## Pipeline voix (Phase 3)
 
 1. Deux `voice_profiles` fixes à créer une fois (`tag` `H` = masculin grave, `F` = féminin) —

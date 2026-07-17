@@ -43,6 +43,9 @@ class Category(StrEnum):
     # Format long 30 s (2 clips de 15 s enchaînés) — scène + paroles reprises
     # UNIQUEMENT d'une vidéo reverse-engineerée dédiée (jamais des dialogues manuels).
     STORYTELLING_LONG = "storytelling_long"
+    # Copypaste (vidéo → vidéo) : Seedance remplace la fille de la vidéo de
+    # référence par la model (prompt fixe + photo visage en référence).
+    COPYPASTE = "copypaste"
 
 
 class JobStatus(StrEnum):
@@ -274,6 +277,9 @@ class JobItem(Base):
     filled_prompt_2: Mapped[str | None] = mapped_column(Text)
     dialogue_script_2: Mapped[str | None] = mapped_column(Text)
     reference_image_urls: Mapped[list] = mapped_column(JSON, default=list)
+    # Copypaste : vidéo de référence envoyée à Seedance (URL simple, pas de FK —
+    # supprimer la vidéo de la banque ne casse jamais un item déjà généré).
+    reference_video_url: Mapped[str | None] = mapped_column(Text)
     seedance_task_id: Mapped[str | None] = mapped_column(String(128), index=True)
     raw_video_url: Mapped[str | None] = mapped_column(Text)
     qc_status: Mapped[str] = mapped_column(String(16), default=QcStatus.PENDING)
@@ -293,6 +299,20 @@ class JobItem(Base):
     job: Mapped[GenerationJob] = relationship(back_populates="items")
 
     __table_args__ = (UniqueConstraint("job_id", "combo_hash", name="uq_combo_per_job"),)
+
+
+class ReferenceVideo(Base):
+    """Banque de vidéos de référence (feature copypaste). Chaque vidéo uploadée
+    est conservée à vie ; use_bank=true pioche au hasard dedans."""
+
+    __tablename__ = "reference_videos"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(64), default=DEFAULT_TENANT, index=True)
+    video_url: Mapped[str] = mapped_column(Text)  # R2 (upload) — URL publique
+    label: Mapped[str] = mapped_column(String(255), default="")
+    weight: Mapped[float] = mapped_column(Float, default=1.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
 class PromptStatus(StrEnum):

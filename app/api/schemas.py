@@ -259,6 +259,7 @@ class ItemOut(BaseModel):
     filled_prompt: str
     caption_text: str | None = None
     face_match_score: float | None = None
+    reference_video_url: str | None = None  # copypaste : vidéo de référence
     seedance_task_id: str | None
     raw_video_url: str | None
     final_video_url: str | None
@@ -309,6 +310,45 @@ class ExportOut(BaseModel):
     job_id: uuid.UUID
     approved_count: int
     videos: list[dict]
+
+
+# --- Copypaste (vidéo → vidéo) ---
+
+
+class ReferenceVideoCreate(BaseModel):
+    video_url: HttpUrlStr = Field(description="Vidéo de référence uploadée (R2)")
+    label: str = ""
+    weight: float = Field(default=1.0, ge=0)
+
+
+class ReferenceVideoOut(BaseModel):
+    id: uuid.UUID
+    video_url: str
+    label: str = ""
+    weight: float
+    created_at: object = None
+
+    model_config = {"from_attributes": True}
+
+
+class CopypasteJobCreate(BaseModel):
+    """Job copypaste : N vidéos générées depuis une vidéo de référence (ou la
+    banque vidéo, piochée au hasard) + la photo visage de la model."""
+
+    model_id: uuid.UUID
+    count: int = Field(default=1, ge=1, le=100)
+    # Vidéo uploadée pour ce job (auto-ajoutée à la banque). Optionnelle si
+    # use_bank=true (la banque suffit alors).
+    reference_video_url: HttpUrlStr | None = None
+    # Pioche AU HASARD une vidéo de la banque pour chaque item du batch.
+    use_bank: bool = False
+    # Ajouté au prompt fixe « Replace the girl in the video… ».
+    custom_prompt: str = ""
+    resolution: Resolution = "720p"
+    duration_s: int = Field(default=10, ge=4, le=15)  # Seedance 2.0 : 4–15 s/clip
+    bitrate: Bitrate = "standard"
+    model_variant: str = "seedance_2.0"
+    budget_cap_usd: float | None = None
 
 
 # --- Pictures (nano banana) ---

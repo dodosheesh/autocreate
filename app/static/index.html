@@ -409,6 +409,31 @@
           <button class="btn" id="generate" style="margin-top:10px">⚡ Generate</button>
         </div>
 
+        <div class="card" style="border-color:#f472b6">
+          <h2>🎭 Copypaste (vidéo → vidéo)</h2>
+          <div class="hint">Uploade une vidéo de référence : Seedance <b>remplace la fille de la vidéo par ta
+            model</b> (prompt fixe « Replace the girl in the video with the girl in the picture », photo visage
+            envoyée en référence). Chaque vidéo uploadée rejoint la <b>banque vidéo</b> ci-dessous.
+            <br><span class="muted">Résolution, bitrate et durée : ceux du panneau de génération ci-dessus.
+            Les jobs copypaste apparaissent dans « Jobs vidéo » (review / export ZIP comme les autres).</span></div>
+          <div class="row" style="margin-top:0">
+            <div><label>Vidéo de référence</label><input type="file" id="cp-file" accept="video/*"></div>
+            <div><label>Vidéos à générer</label><input type="number" id="cp-count" min="1" value="1"></div>
+          </div>
+          <label class="chk" style="margin-top:8px"><input type="checkbox" id="cp-use-bank">
+            Piocher au hasard dans la banque vidéo (une vidéo différente par génération — l'upload devient optionnel)</label>
+          <div style="margin-top:8px"><label>Custom prompt (optionnel, ajouté au prompt fixe)</label>
+            <textarea id="cp-custom" rows="2" placeholder="Ex : keep the exact same outfit, lighting and camera movement…"></textarea></div>
+          <div class="row">
+            <div><label>Budget max (USD, optionnel)</label>
+              <input type="number" id="cp-budget" min="0" step="1" placeholder="—"></div>
+            <div style="display:flex; align-items:flex-end">
+              <button class="btn" id="cp-generate" style="margin-top:0">🎭 Copypaste</button></div>
+          </div>
+          <div style="margin-top:12px"><label>Banque vidéo (<span id="cp-bank-count">0</span>)</label>
+            <div id="cp-bank" class="list-wrap"></div></div>
+        </div>
+
         <div class="card">
           <h2>Jobs vidéo</h2>
           <table>
@@ -1159,6 +1184,44 @@ $("#generate").addEventListener("click", async () => {
   $("#generate").disabled = false;
 });
 
+// --- copypaste (vidéo → vidéo) ---
+async function loadCpBank() {
+  const vids = await api("/copypaste/videos");
+  $("#cp-bank-count").textContent = vids.length;
+  $("#cp-bank").innerHTML = vids.map(v => `
+    <div class="list-row"><span class="lbl">
+      <a href="${esc(safeUrl(v.video_url))}" target="_blank" style="color:inherit">${esc(v.label || decodeURIComponent(v.video_url.split("/").pop() || v.video_url))}</a></span>
+      <button class="x" onclick="delCpVideo('${v.id}')" title="retirer de la banque">✕</button></div>`).join("");
+}
+window.delCpVideo = async (id) => {
+  try { await api("/copypaste/videos/" + id, {method: "DELETE"}); toast("Vidéo retirée de la banque"); loadCpBank(); }
+  catch (e) { toast("Suppression : " + e.message); }
+};
+$("#cp-generate").addEventListener("click", async () => {
+  if (!getModel()) return toast("Aucune model — configure-la dans Réglages");
+  const useBank = $("#cp-use-bank").checked;
+  const hasFile = ($("#cp-file").files || []).length > 0;
+  if (!useBank && !hasFile) return toast("Uploade une vidéo ou coche « Piocher dans la banque »");
+  const btn = $("#cp-generate"); btn.disabled = true;
+  try {
+    const body = { model_id: getModel(), count: +$("#cp-count").value || 1,
+                   custom_prompt: $("#cp-custom").value.trim(), use_bank: useBank,
+                   resolution: state.resolution, bitrate: state.bitrate,
+                   duration_s: +$("#duration").value, model_variant: $("#variant").value };
+    const budget = parseFloat($("#cp-budget").value);
+    if (!isNaN(budget)) body.budget_cap_usd = budget;
+    if (hasFile) { btn.textContent = "Upload de la vidéo…"; body.reference_video_url = await uploadFile($("#cp-file")); }
+    const job = await api("/copypaste/jobs", {method: "POST", body: JSON.stringify(body)});
+    $("#cp-file").value = "";
+    toast(job.status === "blocked_budget"
+      ? `⚠ Bloqué par le budget (estimé $${(job.estimated_cost_usd || 0).toFixed(2)})`
+      : "Copypaste lancé");
+    loadCpBank().catch(() => {});
+    await loadJobs(); await openJob(job.id);
+  } catch (err) { toast("Copypaste : " + err.message); }
+  btn.disabled = false; btn.textContent = "🎭 Copypaste";
+});
+
 // --- répliquer une vidéo ---
 $("#rv-go").addEventListener("click", async () => {
   const btn = $("#rv-go"), n = ($("#rv-file").files || []).length;
@@ -1454,6 +1517,7 @@ requireAuth().then(() => {
   loadModels().then(() => { loadModelsList().catch(() => {}); loadCharacteristics().catch(() => {}); }).catch(e => toast(e.message));
   loadAllBanks();
   loadJobs().catch(() => {});
+  loadCpBank().catch(() => {});
   loadPrompts().catch(() => {});
   loadPicJobs().catch(() => {});
   loadPricing().catch(() => {});
