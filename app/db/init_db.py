@@ -71,6 +71,7 @@ _ADDITIVE_COLUMNS = [
     ("picture_jobs", "styles", "JSON DEFAULT '[]'"),
     ("job_items", "reference_video_url", "TEXT"),
     ("reference_videos", "duration_s", "FLOAT"),
+    ("generation_jobs", "kie_model", "VARCHAR(128)"),
 ]
 
 

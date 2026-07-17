@@ -321,7 +321,9 @@ def dispatch_seedance(self, item_id: str) -> None:
                     [item.reference_video_url] if item.reference_video_url else None
                 ),
             )
-            task_id = kie.create_seedance_task(payload)
+            # Slug par job (copypaste : Fast vs Standard), sinon modèle global.
+            model_slug = job.kie_model or get_settings().kie_seedance_model
+            task_id = kie.create_task(model_slug, payload)
             item.seedance_task_id = task_id
             item.status = ItemStatus.DISPATCHED
             if job.status == JobStatus.PENDING:

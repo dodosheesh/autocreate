@@ -356,6 +356,9 @@ class CopypasteJobCreate(BaseModel):
     duration_s: int = Field(default=10, ge=4, le=15)  # Seedance 2.0 : 4–15 s/clip
     bitrate: Bitrate = "standard"
     model_variant: str = "seedance_2.0"
+    # Qualité Seedance : « standard » (bytedance/seedance-2, meilleure qualité,
+    # 1080p dispo — défaut de la feature) ou « fast » (moins cher, 480p/720p).
+    seedance_quality: Literal["standard", "fast"] = "standard"
     budget_cap_usd: float | None = None
 
 

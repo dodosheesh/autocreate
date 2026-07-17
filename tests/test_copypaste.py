@@ -155,9 +155,11 @@ def test_dispatch_envoie_la_video_a_seedance(client, model_id):
             },
         ).json()
     item_id = job["items"][0]["id"]
-    with patch.object(wt.kie, "create_seedance_task", return_value="task-cp-1") as create:
+    with patch.object(wt.kie, "create_task", return_value="task-cp-1") as create:
         wt.dispatch_seedance(item_id)
-    payload = create.call_args.args[0]
+    model_slug, payload = create.call_args.args
+    # copypaste par défaut = Seedance STANDARD (meilleure qualité)
+    assert model_slug == "bytedance/seedance-2"
     assert payload["reference_video_urls"] == ["https://r2.example/videos/ref4.mp4"]
     assert payload["reference_image_urls"] == ["https://r2.example/face.jpg"]
     assert payload["prompt"] == HARD_PROMPT
@@ -268,18 +270,34 @@ def test_job_assets_aleatoires_injecte_caracteristique_et_outfit(client, model_i
 
 
 def test_resolution_1080p_rejetee_sur_seedance_fast(client, model_id):
-    # KIE_SEEDANCE_MODEL par défaut = bytedance/seedance-2-fast → pas de 1080p.
+    # Qualité « fast » (bytedance/seedance-2-fast) → pas de 1080p.
     r = client.post(
         "/api/copypaste/jobs",
         json={
             "model_id": model_id,
             "count": 1,
             "resolution": "1080p",
+            "seedance_quality": "fast",
             "reference_video_url": "https://r2.example/videos/ref8.mp4",
         },
     )
     assert r.status_code == 422
     assert "1080p" in r.json()["detail"]
+
+
+def test_resolution_1080p_acceptee_en_standard(client, model_id):
+    # Qualité « standard » (défaut de la feature) → 1080p OK.
+    with patch("app.api.routers.copypaste.dispatch_seedance"):
+        r = client.post(
+            "/api/copypaste/jobs",
+            json={
+                "model_id": model_id,
+                "count": 1,
+                "resolution": "1080p",
+                "reference_video_url": "https://r2.example/videos/ref9.mp4",
+            },
+        )
+    assert r.status_code == 200, r.text
 
 
 def test_batch_1080p_rejete_sur_seedance_fast(client, model_id):

@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     # Copypaste (vidéo → vidéo) : nom du champ input kie.ai qui porte les vidéos
     # de référence Seedance. Configurable pour coller à la doc sans redéployer.
     kie_seedance_video_ref_field: str = "reference_video_urls"
+    # Modèle Seedance STANDARD (meilleure qualité, 1080p dispo) — choisi par job
+    # copypaste (défaut de la feature). Le flux vidéo classique reste sur
+    # kie_seedance_model (Fast).
+    kie_seedance_standard_model: str = "bytedance/seedance-2"
     # --- Modèle image (génération photo) ---
     # Seedream (ByteDance) EDIT : image-to-image multi-références (jusqu'à 10
     # images : visage + caractéristiques), meilleure qualité/consistance.

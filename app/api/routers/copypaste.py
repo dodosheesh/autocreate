@@ -103,15 +103,21 @@ def create_job(
     piochée au hasard dans la banque) + photo visage + prompt fixe. Estimation
     et gate budget AVANT toute dépense, puis dispatch Seedance."""
     model = owned(db, Model, payload.model_id, user)
+    settings = get_settings()
 
+    # Qualité par job : Standard (meilleure qualité, défaut de la feature) ou Fast.
+    kie_model = (
+        settings.kie_seedance_standard_model
+        if payload.seedance_quality == "standard"
+        else settings.kie_seedance_model
+    )
     # Garde résolution AVANT dépense : Seedance FAST n'a pas de 1080p — kie.ai
     # renvoie sinon une 422 « Invalid resolution » opaque sur chaque item.
-    if payload.resolution == "1080p" and "fast" in get_settings().kie_seedance_model:
+    if payload.resolution == "1080p" and "fast" in kie_model:
         raise HTTPException(
             422,
-            "1080p indisponible sur Seedance Fast (KIE_SEEDANCE_MODEL="
-            f"{get_settings().kie_seedance_model}) : choisis 480p ou 720p, ou "
-            "configure le modèle Standard (bytedance/seedance-2) qui supporte le 1080p.",
+            f"1080p indisponible sur Seedance Fast ({kie_model}) : choisis 480p ou "
+            "720p, ou passe la qualité du job sur Standard.",
         )
 
     # La vidéo uploadée pour ce job rejoint la banque (dédup par URL) — sauf si
@@ -209,6 +215,7 @@ def create_job(
         duration_s=payload.duration_s,
         bitrate=payload.bitrate,
         model_variant=payload.model_variant,
+        kie_model=kie_model,
         custom_prompt=payload.custom_prompt or None,
         budget_cap_usd=payload.budget_cap_usd,
         estimated_cost_usd=est.gross_usd,

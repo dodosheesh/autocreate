@@ -238,6 +238,9 @@ class GenerationJob(Base):
     bitrate: Mapped[str] = mapped_column(String(16), default="standard")  # standard / high
     aspect: Mapped[str] = mapped_column(String(8), default="9:16")
     model_variant: Mapped[str] = mapped_column(String(64), default="seedance_2.0")
+    # Slug kie.ai à utiliser pour CE job (copypaste : Fast vs Standard).
+    # None = kie_seedance_model global (flux vidéo classique).
+    kie_model: Mapped[str | None] = mapped_column(String(128))
     music_url: Mapped[str | None] = mapped_column(Text)  # piste mixée à l'assemblage
     # Demande custom (one-shot) fusionnée au prompt de chaque item du job.
     custom_prompt: Mapped[str | None] = mapped_column(Text)
