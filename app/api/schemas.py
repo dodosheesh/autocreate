@@ -164,7 +164,8 @@ class DialogueLineCreate(BaseModel):
     raw_text: str = Field(
         description="Lignes taggées, ordre chrono. [H]/[F] = la model (voix grave / "
         "voix féminine), [M] = un autre homme (ex. intervieweur), [W] = une autre femme, "
-        "[beat] = pause. Un voice_profile par tag utilisé."
+        "[beat] = pause. Voice_profiles requis pour [H]/[F] seulement : [M]/[W] "
+        "gardent la voix générée par Seedance."
     )
     weight: float = Field(default=1.0, ge=0)
 

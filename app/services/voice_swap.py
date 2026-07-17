@@ -6,14 +6,19 @@
 
 Conversions same-gender uniquement : Seedance voice déjà chaque ligne dans
 le bon genre, le tag ne fait que choisir le timbre cible fixe.
+
+Seule LA MODEL ([H]/[F]) est swappée : l'interlocuteur ([M]/[W]) garde la
+voix générée par Seedance — ses lignes comptent quand même dans
+l'appariement segment↔ligne (elles sont bien parlées dans la vidéo).
 """
 
+import shutil
 import subprocess
 from pathlib import Path
 
 from app.integrations.elevenlabs import speech_to_speech
 from app.media import audio
-from app.services.dialogue import parse_tagged_script
+from app.services.dialogue import MODEL_TAGS, parse_tagged_script
 
 
 class VoiceSwapError(RuntimeError):
@@ -33,17 +38,22 @@ def swap_voices(
     voice_map: dict[str, str],
     workdir: str,
 ) -> str:
-    """Remplace le timbre de chaque ligne parlée selon son tag.
+    """Remplace le timbre des lignes de LA MODEL ([H]/[F]) selon leur tag ;
+    les lignes [M]/[W] (interlocuteur) gardent l'audio Seedance d'origine.
 
     voice_map : tag → elevenlabs_voice_id (depuis la table voice_profiles).
     """
     lines = parse_tagged_script(dialogue_script)
-    missing = {line.tag for line in lines} - set(voice_map)
+    missing = {line.tag for line in lines if line.tag in MODEL_TAGS} - set(voice_map)
     if missing:
         raise VoiceSwapError(
             f"Aucun voice_profile pour le(s) tag(s) {sorted(missing)} — "
             "créer les profils via /api/banks/voices."
         )
+    if not any(line.tag in MODEL_TAGS for line in lines):
+        # Script 100 % interlocuteur : rien à swapper, la vidéo passe telle quelle.
+        shutil.copyfile(video_in, video_out)
+        return video_out
 
     work = Path(workdir)
     full_wav = str(work / "audio_full.wav")
@@ -56,6 +66,8 @@ def swap_voices(
 
     replacements: list[tuple[audio.Segment, str]] = []
     for i, (segment, line) in enumerate(zip(segments, lines)):
+        if line.tag not in MODEL_TAGS:
+            continue  # l'interlocuteur garde sa voix Seedance
         raw_seg = str(work / f"seg_{i}.wav")
         converted = str(work / f"seg_{i}_converted.mp3")
         fitted = str(work / f"seg_{i}_fitted.wav")

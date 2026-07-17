@@ -25,6 +25,10 @@ SPEAKERS: dict[str, tuple[str, str]] = {
     "W": ("another woman", "in a natural female voice"),
 }
 
+# Tags de LA MODEL elle-même : les SEULS voice-swappés (ElevenLabs). Les autres
+# personnes ([M]/[W], ex. l'intervieweur) gardent la voix générée par Seedance.
+MODEL_TAGS = {"H", "F"}
+
 # Rétro-compat : timbre seul par tag (dérivé de SPEAKERS).
 VOICE_PROMPT_STYLES = {tag: style for tag, (_subject, style) in SPEAKERS.items()}
 

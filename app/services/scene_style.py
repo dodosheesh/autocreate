@@ -32,13 +32,17 @@ _NO_DEVICE = (
 )
 
 # ANTI-STATIQUE : elle FAIT toujours quelque chose, jamais figée comme un poteau.
-_LIVELINESS = (
-    "She is ALWAYS doing something natural, cute and lively and NEVER just stands still "
-    "like a statue or a pole: continuous subtle movement and playful gestures — shifting "
-    "her weight, a little hip sway, a hand on her hip, tilting her head, playing with her "
-    "hair, a cute playful expression, lifting a leg slightly, blowing a bubble with gum, a "
-    "small pose change. The clip must feel alive and engaging for social media, never frozen."
-)
+# La bulle de chewing-gum est réservée au showing_body (outfit check, non parlé) :
+# partout ailleurs elle parle face caméra et la bulle rendait mal.
+def _liveliness(category: str) -> str:
+    gum = ", blowing a bubble with gum" if category == "showing_body" else ""
+    return (
+        "She is ALWAYS doing something natural, cute and lively and NEVER just stands still "
+        "like a statue or a pole: continuous subtle movement and playful gestures — shifting "
+        "her weight, a little hip sway, a hand on her hip, tilting her head, playing with her "
+        f"hair, a cute playful expression, lifting a leg slightly{gum}, a "
+        "small pose change. The clip must feel alive and engaging for social media, never frozen."
+    )
 
 
 def camera_directive(category: str, speaking: bool) -> str:
@@ -74,7 +78,7 @@ def camera_directive(category: str, speaking: bool) -> str:
             "video for social media (TikTok/Reels), candid and realistic, not cinematic, not "
             "AI-looking. No music."
         )
-    directive = f"{cam} {_NO_DEVICE} {_LIVELINESS} {_CONTINUITY}"
+    directive = f"{cam} {_NO_DEVICE} {_liveliness(category)} {_CONTINUITY}"
     if speaking:
         directive += _SPEAKING_CLAUSE
     return directive

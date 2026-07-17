@@ -75,6 +75,14 @@ def test_camera_fixe_hors_snapchat():
     assert "Single continuous take" in prompt and "SAME outfit" in prompt
 
 
+def test_bulle_de_gum_reservee_au_showing_body():
+    from app.services.scene_style import camera_directive
+
+    assert "blowing a bubble with gum" in camera_directive("showing_body", speaking=False)
+    for cat in ("skit", "storytelling", "micro_trottoir", "podcast"):
+        assert "blowing a bubble with gum" not in camera_directive(cat, speaking=True)
+
+
 def test_dialogue_sans_silence_entre_les_lignes():
     result = compose_batch({"skit": 1}, {"skit": pools(speaking=True)}, CHARACS, FACE,
                            rng=random.Random(7))
