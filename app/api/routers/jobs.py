@@ -45,6 +45,14 @@ def create_batch_job(
     owned(db, Model, payload.model_id, user)
     if any(count < 0 for count in payload.counts_per_category.values()):
         raise HTTPException(422, "counts_per_category : valeurs négatives interdites")
+    # Seedance FAST n'a pas de 1080p — refus clair AVANT dépense plutôt qu'une
+    # 422 « Invalid resolution » kie.ai sur chaque item.
+    if payload.resolution == "1080p" and "fast" in get_settings().kie_seedance_model:
+        raise HTTPException(
+            422,
+            "1080p indisponible sur Seedance Fast : choisis 480p ou 720p, ou configure "
+            "KIE_SEEDANCE_MODEL sur le modèle Standard (bytedance/seedance-2).",
+        )
 
     job = GenerationJob(
         tenant_id=user.tenant_id,

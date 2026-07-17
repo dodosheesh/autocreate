@@ -31,7 +31,9 @@ from app.db.models import (
     ReferenceVideo,
     User,
 )
+from app.media.probe import probe_video_duration
 from app.services import composer, copypaste
+from app.services.copypaste import MAX_REF_VIDEO_S
 from app.services.estimator import ItemSpec, estimate_batch
 from app.services.pricing import load_rates
 from app.services.variation import Option, outfit_option, weighted_draw
@@ -52,7 +54,8 @@ def _add_to_bank(db: Session, user: User, video_url: str, label: str = "",
     if existing is not None:
         return existing
     row = ReferenceVideo(
-        tenant_id=user.tenant_id, video_url=video_url, label=label, weight=weight
+        tenant_id=user.tenant_id, video_url=video_url, label=label, weight=weight,
+        duration_s=probe_video_duration(video_url),
     )
     db.add(row)
     db.commit()
@@ -101,22 +104,58 @@ def create_job(
     et gate budget AVANT toute dépense, puis dispatch Seedance."""
     model = owned(db, Model, payload.model_id, user)
 
+    # Garde résolution AVANT dépense : Seedance FAST n'a pas de 1080p — kie.ai
+    # renvoie sinon une 422 « Invalid resolution » opaque sur chaque item.
+    if payload.resolution == "1080p" and "fast" in get_settings().kie_seedance_model:
+        raise HTTPException(
+            422,
+            "1080p indisponible sur Seedance Fast (KIE_SEEDANCE_MODEL="
+            f"{get_settings().kie_seedance_model}) : choisis 480p ou 720p, ou "
+            "configure le modèle Standard (bytedance/seedance-2) qui supporte le 1080p.",
+        )
+
     # La vidéo uploadée pour ce job rejoint la banque (dédup par URL) — sauf si
     # save_to_bank est décoché (test d'une vidéo sans polluer la banque).
     if payload.reference_video_url and payload.save_to_bank:
         _add_to_bank(db, user, payload.reference_video_url)
 
     if payload.use_bank:
-        bank = [
-            Option(id=str(v.id), weight=v.weight, text=v.video_url)
-            for v in db.scalars(tenant_query(ReferenceVideo, user)).all()
+        rows = db.scalars(tenant_query(ReferenceVideo, user)).all()
+        # Seedance limite la vidéo de référence à 15 s : les trop longues sont
+        # exclues du tirage (durée inconnue = laissée passer, kie tranchera).
+        usable = [
+            v for v in rows
+            if v.duration_s is None or v.duration_s <= MAX_REF_VIDEO_S + 0.1
         ]
-        videos = copypaste.pick_bank_videos(bank, payload.count, random.Random())
-        if not videos:
+        if not usable:
             raise HTTPException(
-                409, "Banque vidéo vide : uploade au moins une vidéo de référence"
+                409,
+                "Banque vidéo vide : uploade au moins une vidéo de référence"
+                if not rows
+                else f"Toutes les vidéos de la banque dépassent {MAX_REF_VIDEO_S:.0f} s "
+                     "(limite Seedance) — coupe-les puis re-uploade.",
             )
+        bank = [Option(id=str(v.id), weight=v.weight, text=v.video_url) for v in usable]
+        videos = copypaste.pick_bank_videos(bank, payload.count, random.Random())
     elif payload.reference_video_url:
+        # Durée : valeur sondée en banque si dispo, sinon probe direct (vidéo
+        # non sauvegardée). > 15 s → refus clair AVANT d'envoyer à kie.ai.
+        row = db.scalar(
+            tenant_query(ReferenceVideo, user).where(
+                ReferenceVideo.video_url == payload.reference_video_url
+            )
+        )
+        duration = (
+            row.duration_s
+            if row is not None and row.duration_s is not None
+            else probe_video_duration(payload.reference_video_url)
+        )
+        if duration is not None and duration > MAX_REF_VIDEO_S + 0.1:
+            raise HTTPException(
+                422,
+                f"La vidéo de référence fait {duration:.1f} s — Seedance limite à "
+                f"{MAX_REF_VIDEO_S:.0f} s. Coupe-la avant de relancer.",
+            )
         videos = [payload.reference_video_url] * payload.count
     else:
         raise HTTPException(

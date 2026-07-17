@@ -326,6 +326,7 @@ class ReferenceVideoOut(BaseModel):
     video_url: str
     label: str = ""
     weight: float
+    duration_s: float | None = None  # sondée à l'ajout ; > 15 s = inutilisable
     created_at: object = None
 
     model_config = {"from_attributes": True}

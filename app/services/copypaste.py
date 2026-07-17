@@ -17,6 +17,10 @@ from app.services.variation import Option, weighted_draw
 # (la photo visage part en référence image à côté de la vidéo).
 HARD_PROMPT = "Replace the girl in the video with the girl in the picture."
 
+# Limite Seedance 2 : la vidéo de référence ne peut pas dépasser 15 s
+# (« The total duration of the video cannot exceed 15 seconds »).
+MAX_REF_VIDEO_S = 15.0
+
 
 def build_copypaste_prompt(custom_prompt: str = "") -> str:
     """Prompt final = hard prompt + demande custom optionnelle."""

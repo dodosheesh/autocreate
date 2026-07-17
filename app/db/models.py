@@ -312,6 +312,9 @@ class ReferenceVideo(Base):
     video_url: Mapped[str] = mapped_column(Text)  # R2 (upload) — URL publique
     label: Mapped[str] = mapped_column(String(255), default="")
     weight: Mapped[float] = mapped_column(Float, default=1.0)
+    # Durée sondée à l'ajout (ffprobe). Seedance limite la référence à 15 s :
+    # au-delà la vidéo est exclue des tirages use_bank. None = probe échoué.
+    duration_s: Mapped[float | None] = mapped_column(Float)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 

@@ -70,6 +70,7 @@ _ADDITIVE_COLUMNS = [
     ("picture_jobs", "image_resolution", "VARCHAR(8) NOT NULL DEFAULT '2K'"),
     ("picture_jobs", "styles", "JSON DEFAULT '[]'"),
     ("job_items", "reference_video_url", "TEXT"),
+    ("reference_videos", "duration_s", "FLOAT"),
 ]
 
 

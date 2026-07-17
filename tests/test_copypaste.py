@@ -20,7 +20,36 @@ ADMIN_EMAIL = "cp-owner@example.com"
 ADMIN_PASSWORD = "test-password-123"
 
 
+@pytest.fixture(autouse=True)
+def _no_probe(monkeypatch):
+    """Par défaut les tests ne sondent pas les URLs factices (pas de DNS/ffprobe) ;
+    les tests de durée re-patchent avec une valeur précise."""
+    monkeypatch.setattr(
+        "app.api.routers.copypaste.probe_video_duration", lambda url: None
+    )
+
+
 # ---------- unités ----------
+
+
+def test_probe_video_duration_parse(monkeypatch):
+    import app.media.probe as probe
+
+    class Proc:
+        returncode = 0
+        stdout = "12.48\n"
+        stderr = ""
+
+    monkeypatch.setattr(probe.subprocess, "run", lambda *a, **k: Proc())
+    assert probe.probe_video_duration("/tmp/x.mp4") == pytest.approx(12.48)
+
+    class Bad:
+        returncode = 1
+        stdout = ""
+        stderr = "boom"
+
+    monkeypatch.setattr(probe.subprocess, "run", lambda *a, **k: Bad())
+    assert probe.probe_video_duration("/tmp/x.mp4") is None
 
 
 def test_build_copypaste_prompt():
@@ -236,6 +265,61 @@ def test_job_assets_aleatoires_injecte_caracteristique_et_outfit(client, model_i
             assert "https://r2.example/outfit.jpg" in item.reference_image_urls
             assert item.outfit_id is not None
             assert item.characteristic_ids
+
+
+def test_resolution_1080p_rejetee_sur_seedance_fast(client, model_id):
+    # KIE_SEEDANCE_MODEL par défaut = bytedance/seedance-2-fast → pas de 1080p.
+    r = client.post(
+        "/api/copypaste/jobs",
+        json={
+            "model_id": model_id,
+            "count": 1,
+            "resolution": "1080p",
+            "reference_video_url": "https://r2.example/videos/ref8.mp4",
+        },
+    )
+    assert r.status_code == 422
+    assert "1080p" in r.json()["detail"]
+
+
+def test_batch_1080p_rejete_sur_seedance_fast(client, model_id):
+    r = client.post(
+        "/api/jobs/batch",
+        json={"model_id": model_id, "counts_per_category": {"skit": 1}, "resolution": "1080p"},
+    )
+    assert r.status_code == 422
+    assert "1080p" in r.json()["detail"]
+
+
+def test_video_trop_longue_rejetee_et_exclue_des_tirages(client, model_id, monkeypatch):
+    # banque vidée pour un scénario déterministe
+    for v in client.get("/api/copypaste/videos").json():
+        client.delete(f"/api/copypaste/videos/{v['id']}")
+    monkeypatch.setattr(
+        "app.api.routers.copypaste.probe_video_duration", lambda url: 22.0
+    )
+    # l'ajout en banque sonde et mémorise la durée
+    added = client.post(
+        "/api/copypaste/videos", json={"video_url": "https://r2.example/videos/long.mp4"}
+    ).json()
+    assert added["duration_s"] == 22.0
+    # vidéo directe > 15 s → refus clair AVANT kie.ai
+    r = client.post(
+        "/api/copypaste/jobs",
+        json={
+            "model_id": model_id,
+            "count": 1,
+            "reference_video_url": "https://r2.example/videos/long.mp4",
+        },
+    )
+    assert r.status_code == 422
+    assert "15" in r.json()["detail"]
+    # use_bank : la seule vidéo de la banque est trop longue → 409 explicite
+    r = client.post(
+        "/api/copypaste/jobs", json={"model_id": model_id, "count": 1, "use_bank": True}
+    )
+    assert r.status_code == 409
+    assert "dépassent" in r.json()["detail"]
 
 
 def test_job_sans_assets_aleatoires(client, model_id):

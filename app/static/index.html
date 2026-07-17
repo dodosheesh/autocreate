@@ -444,7 +444,9 @@
       <h2>🎭 Lancer un copypaste</h2>
       <div class="hint">Uploade une vidéo de référence : Seedance <b>remplace la fille de la vidéo par ta
         model</b> (prompt fixe « Replace the girl in the video with the girl in the picture », photo visage
-        envoyée en référence). Chaque vidéo uploadée rejoint la <b>banque vidéo</b> ci-dessous.</div>
+        envoyée en référence). Chaque vidéo uploadée rejoint la <b>banque vidéo</b> ci-dessous.
+        <br><b>⚠ 15 s max</b> : Seedance refuse toute vidéo de référence de plus de 15 secondes —
+        coupe-les avant d'uploader (les trop longues sont marquées en rouge et exclues des tirages).</div>
       <label>Model</label>
       <select class="js-model"></select>
       <div class="row">
@@ -1228,10 +1230,16 @@ $("#generate").addEventListener("click", async () => {
 async function loadCpBank() {
   const vids = await api("/copypaste/videos");
   $("#cp-bank-count").textContent = vids.length;
-  $("#cp-bank").innerHTML = vids.map(v => `
+  $("#cp-bank").innerHTML = vids.map(v => {
+    const dur = v.duration_s == null ? ""
+      : v.duration_s > 15.1
+        ? ` <span style="color:var(--err)">${v.duration_s.toFixed(0)}s — trop longue (max 15 s), exclue des tirages</span>`
+        : ` <span class="muted">${v.duration_s.toFixed(0)}s</span>`;
+    return `
     <div class="list-row"><span class="lbl">
-      <a href="${esc(safeUrl(v.video_url))}" target="_blank" style="color:inherit">${esc(v.label || decodeURIComponent(v.video_url.split("/").pop() || v.video_url))}</a></span>
-      <button class="x" onclick="delCpVideo('${v.id}')" title="retirer de la banque">✕</button></div>`).join("");
+      <a href="${esc(safeUrl(v.video_url))}" target="_blank" style="color:inherit">${esc(v.label || decodeURIComponent(v.video_url.split("/").pop() || v.video_url))}</a>${dur}</span>
+      <button class="x" onclick="delCpVideo('${v.id}')" title="retirer de la banque">✕</button></div>`;
+  }).join("");
 }
 window.delCpVideo = async (id) => {
   try { await api("/copypaste/videos/" + id, {method: "DELETE"}); toast("Vidéo retirée de la banque"); loadCpBank(); }
