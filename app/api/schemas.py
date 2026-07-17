@@ -337,9 +337,12 @@ class CopypasteJobCreate(BaseModel):
 
     model_id: uuid.UUID
     count: int = Field(default=1, ge=1, le=100)
-    # Vidéo uploadée pour ce job (auto-ajoutée à la banque). Optionnelle si
-    # use_bank=true (la banque suffit alors).
+    # Vidéo uploadée pour ce job. Optionnelle si use_bank=true (la banque
+    # suffit alors).
     reference_video_url: HttpUrlStr | None = None
+    # Ajoute la vidéo uploadée à la banque (décocher pour tester une vidéo
+    # sans polluer la banque si elle est de mauvaise qualité).
+    save_to_bank: bool = True
     # Pioche AU HASARD une vidéo de la banque pour chaque item du batch.
     use_bank: bool = False
     # Ajouté au prompt fixe « Replace the girl in the video… ».

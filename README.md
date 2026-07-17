@@ -242,7 +242,8 @@ additionnelles, **plafonnées à 12** (contrainte Seedance 2.0), le visage n'ét
 Seedance 2 accepte des **vidéos de référence** : la feature copypaste remplace la fille
 d'une vidéo uploadée par la model (prompt fixe « Replace the girl in the video with the
 girl in the picture » + custom prompt optionnel, photo visage envoyée en référence image).
-Chaque vidéo uploadée rejoint la **banque vidéo** (dédup par URL) ; `use_bank=true` pioche
+Chaque vidéo uploadée rejoint la **banque vidéo** (dédup par URL) sauf si
+`save_to_bank=false` (tester une vidéo sans polluer la banque) ; `use_bank=true` pioche
 au hasard une vidéo de la banque pour chaque item du batch.
 
 ```bash

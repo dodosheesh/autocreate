@@ -159,6 +159,28 @@ def test_job_use_bank_banque_vide_rejette(client, model_id):
     assert r.status_code == 409
 
 
+def test_job_save_to_bank_false_ne_pollue_pas_la_banque(client, model_id):
+    # (la banque vient d'être vidée par le test précédent)
+    with patch("app.api.routers.copypaste.dispatch_seedance"):
+        r = client.post(
+            "/api/copypaste/jobs",
+            json={
+                "model_id": model_id,
+                "count": 2,
+                "reference_video_url": "https://r2.example/videos/test-quality.mp4",
+                "save_to_bank": False,
+            },
+        )
+    assert r.status_code == 200, r.text
+    # les items utilisent bien la vidéo…
+    assert all(
+        it["reference_video_url"] == "https://r2.example/videos/test-quality.mp4"
+        for it in r.json()["items"]
+    )
+    # …mais elle n'entre PAS dans la banque
+    assert client.get("/api/copypaste/videos").json() == []
+
+
 def test_job_budget_cap_bloque(client, model_id):
     with patch("app.api.routers.copypaste.dispatch_seedance") as disp:
         r = client.post(

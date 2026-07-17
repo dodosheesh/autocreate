@@ -420,6 +420,8 @@
             <div><label>Vidéo de référence</label><input type="file" id="cp-file" accept="video/*"></div>
             <div><label>Vidéos à générer</label><input type="number" id="cp-count" min="1" value="1"></div>
           </div>
+          <label class="chk" style="margin-top:8px"><input type="checkbox" id="cp-save-bank" checked>
+            Ajouter la vidéo uploadée à la banque <span class="muted">(décoche pour tester une vidéo sans polluer la banque)</span></label>
           <label class="chk" style="margin-top:8px"><input type="checkbox" id="cp-use-bank">
             Piocher au hasard dans la banque vidéo (une vidéo différente par génération — l'upload devient optionnel)</label>
           <div style="margin-top:8px"><label>Custom prompt (optionnel, ajouté au prompt fixe)</label>
@@ -1206,6 +1208,7 @@ $("#cp-generate").addEventListener("click", async () => {
   try {
     const body = { model_id: getModel(), count: +$("#cp-count").value || 1,
                    custom_prompt: $("#cp-custom").value.trim(), use_bank: useBank,
+                   save_to_bank: $("#cp-save-bank").checked,
                    resolution: state.resolution, bitrate: state.bitrate,
                    duration_s: +$("#duration").value, model_variant: $("#variant").value };
     const budget = parseFloat($("#cp-budget").value);

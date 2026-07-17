@@ -100,8 +100,9 @@ def create_job(
     et gate budget AVANT toute dépense, puis dispatch Seedance."""
     model = owned(db, Model, payload.model_id, user)
 
-    # La vidéo uploadée pour ce job rejoint la banque (dédup par URL).
-    if payload.reference_video_url:
+    # La vidéo uploadée pour ce job rejoint la banque (dédup par URL) — sauf si
+    # save_to_bank est décoché (test d'une vidéo sans polluer la banque).
+    if payload.reference_video_url and payload.save_to_bank:
         _add_to_bank(db, user, payload.reference_video_url)
 
     if payload.use_bank:
