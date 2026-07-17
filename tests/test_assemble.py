@@ -42,6 +42,9 @@ def test_overlay_caption_snapchat_multiligne():
     assert "drawtext=textfile='l0.txt'" in vf and "drawtext=textfile='l1.txt'" in vf
     assert vf.count("drawtext=") == 2
     assert "fontcolor=white" in vf
+    # police réduite (2,6 % de la hauteur) → bande plus discrète, moins de retours
+    # à la ligne ; 720p → hauteur 1280 → fontsize 33
+    assert "fontsize=33" in vf
 
 
 def test_concat_deux_clips():

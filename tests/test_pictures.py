@@ -129,6 +129,20 @@ def test_compose_injecte_caracteristiques_et_outfit():
     assert "https://r2.example/tattoo.jpg" in item.reference_image_urls
 
 
+def test_compose_pictures_injecte_une_variante_de_pose():
+    from app.services.picture_composer import PHOTO_POSES
+
+    result = compose_pictures(
+        8, prompts_pool(8), [], CHARACS, FACE, rng=random.Random(5)
+    )
+    used_poses = set()
+    for item in result.items:
+        matching = [p.id for p in PHOTO_POSES if p.text in item.filled_prompt]
+        assert len(matching) == 1  # exactement une variante de pose par photo
+        used_poses.update(matching)
+    assert len(used_poses) >= 3  # vraie variété sur le lot
+
+
 def test_compose_sans_prompt_leve_erreur():
     with pytest.raises(PictureComposeError, match="Aucun prompt"):
         compose_pictures(1, [], outfits_pool(1), CHARACS, FACE)

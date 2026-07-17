@@ -33,7 +33,7 @@ def _clean_caption(text: str) -> str:
     return " ".join(_EMOJI_RE.sub("", text).split())
 
 
-def _wrap_caption(text: str, max_chars: int = 26, max_lines: int = 4) -> list[str]:
+def _wrap_caption(text: str, max_chars: int = 36, max_lines: int = 4) -> list[str]:
     """Découpe le caption en lignes (par mots) pour qu'il ne déborde pas de l'écran."""
     words = text.split()
     lines: list[str] = []
@@ -79,9 +79,11 @@ def _snapchat_overlay(caption_files: tuple[str, ...], height: int) -> str:
     LARGEUR (collée aux deux bords), texte blanc centré qui passe à la ligne.
     Placée dans la partie INFÉRIEURE de la vidéo (pour ne pas masquer le visage)."""
     n = max(1, len(caption_files))
-    font_size = round(height * 0.033)
-    line_h = round(font_size * 1.4)
-    pad = round(font_size * 0.6)
+    # Police volontairement discrète : moins de retours à la ligne et une bande
+    # sombre la plus fine possible (la bande reste pleine largeur, collée aux bords).
+    font_size = round(height * 0.026)
+    line_h = round(font_size * 1.35)
+    pad = round(font_size * 0.5)
     bar_h = n * line_h + 2 * pad
     bar_y = round(height * 0.70)
     # drawbox pleine largeur (x=0, w=iw) → collée aux deux côtés comme Snapchat.
