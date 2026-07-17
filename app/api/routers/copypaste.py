@@ -4,7 +4,7 @@ Flow : uploader une vidéo de référence (/api/uploads) → POST /jobs avec cet
 vidéo (elle rejoint automatiquement la banque vidéo) OU use_bank=true pour
 piocher au hasard dans la banque déjà constituée. Chaque item envoie à Seedance
 la vidéo de référence + la photo visage de la model avec le prompt fixe
-« Replace the girl in the video with the girl in the picture » (+ custom).
+« Replace the girl in the video for the girl in the picture » (+ custom).
 
 Les jobs créés sont des GenerationJob standard (catégorie `copypaste`) : suivi,
 recheck, review et export passent par les endpoints /api/jobs existants.
