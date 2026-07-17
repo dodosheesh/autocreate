@@ -125,7 +125,33 @@ def create_job(
     if payload.reference_video_url and payload.save_to_bank:
         _add_to_bank(db, user, payload.reference_video_url)
 
-    if payload.use_bank:
+    if payload.reference_video_ids:
+        # Sélection précise : la génération est répartie UNIQUEMENT sur ces
+        # vidéos (round-robin sur un ordre mélangé → répartition équilibrée).
+        rows = db.scalars(
+            tenant_query(ReferenceVideo, user).where(
+                ReferenceVideo.id.in_(payload.reference_video_ids)
+            )
+        ).all()
+        if len(rows) != len(set(payload.reference_video_ids)):
+            raise HTTPException(404, "Vidéo(s) sélectionnée(s) introuvable(s) dans la banque")
+        too_long = [
+            v for v in rows
+            if v.duration_s is not None and v.duration_s > MAX_REF_VIDEO_S + 0.1
+        ]
+        if too_long:
+            names = ", ".join(
+                (v.label or v.video_url.rsplit("/", 1)[-1]) for v in too_long
+            )
+            raise HTTPException(
+                422,
+                f"Sélection invalide : {names} dépasse(nt) {MAX_REF_VIDEO_S:.0f} s "
+                "(limite Seedance) — retire-la(les) de la sélection.",
+            )
+        urls = [v.video_url for v in rows]
+        random.Random().shuffle(urls)
+        videos = [urls[i % len(urls)] for i in range(payload.count)]
+    elif payload.use_bank:
         rows = db.scalars(tenant_query(ReferenceVideo, user)).all()
         # Seedance limite la vidéo de référence à 15 s : les trop longues sont
         # exclues du tirage (durée inconnue = laissée passer, kie tranchera).

@@ -340,6 +340,50 @@ def test_video_trop_longue_rejetee_et_exclue_des_tirages(client, model_id, monke
     assert "dépassent" in r.json()["detail"]
 
 
+def test_job_selection_repartie_sur_les_videos_choisies(client, model_id):
+    a = client.post(
+        "/api/copypaste/videos", json={"video_url": "https://r2.example/videos/sel-a.mp4"}
+    ).json()
+    b = client.post(
+        "/api/copypaste/videos", json={"video_url": "https://r2.example/videos/sel-b.mp4"}
+    ).json()
+    with patch("app.api.routers.copypaste.dispatch_seedance"):
+        r = client.post(
+            "/api/copypaste/jobs",
+            json={
+                "model_id": model_id,
+                "count": 4,
+                "reference_video_ids": [a["id"], b["id"]],
+            },
+        )
+    assert r.status_code == 200, r.text
+    urls = [it["reference_video_url"] for it in r.json()["items"]]
+    # UNIQUEMENT les vidéos sélectionnées, réparties équitablement (2 + 2)
+    assert set(urls) == {a["video_url"], b["video_url"]}
+    assert urls.count(a["video_url"]) == 2
+    assert urls.count(b["video_url"]) == 2
+
+
+def test_job_selection_trop_longue_rejettee(client, model_id):
+    # long.mp4 (22 s, ajoutée plus haut) explicitement sélectionnée → refus clair
+    vids = client.get("/api/copypaste/videos").json()
+    long_id = next(v["id"] for v in vids if v["video_url"].endswith("long.mp4"))
+    r = client.post(
+        "/api/copypaste/jobs",
+        json={"model_id": model_id, "count": 1, "reference_video_ids": [long_id]},
+    )
+    assert r.status_code == 422
+    assert "15" in r.json()["detail"]
+
+
+def test_job_selection_inconnue_404(client, model_id):
+    r = client.post(
+        "/api/copypaste/jobs",
+        json={"model_id": model_id, "count": 1, "reference_video_ids": [str(uuid.uuid4())]},
+    )
+    assert r.status_code == 404
+
+
 def test_job_sans_assets_aleatoires(client, model_id):
     with patch("app.api.routers.copypaste.dispatch_seedance"):
         r = client.post(

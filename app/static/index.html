@@ -140,6 +140,8 @@
   .list-row .x { color: var(--err); cursor: pointer; background: none; border: 0;
                  font-size: 15px; padding: 0 4px; flex: none; }
   .list-row img { width: 34px; height: 34px; object-fit: cover; border-radius: 6px; flex: none; }
+  .list-row video { width: 38px; height: 64px; object-fit: cover; border-radius: 6px;
+                    flex: none; background: #000; }
   .list-row .grow { display: flex; align-items: center; gap: 8px; min-width: 0; }
   #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
            background: var(--panel2); border: 1px solid var(--accent); border-radius: 10px;
@@ -493,7 +495,10 @@
           <input type="number" id="cp-budget" min="0" step="1" placeholder="—"></div>
       </div>
       <button class="btn" id="cp-generate">🎭 Copypaste</button>
-      <div style="margin-top:12px"><label>Banque vidéo (<span id="cp-bank-count">0</span>)</label>
+      <div style="margin-top:12px">
+        <label>Banque vidéo (<span id="cp-bank-count">0</span>)
+          <span class="muted">— coche des vidéos pour générer UNIQUEMENT sur ta sélection</span></label>
+        <div class="hint" id="cp-sel-count" style="display:none; margin:4px 0"></div>
         <div id="cp-bank" class="list-wrap"></div></div>
     </div>
 
@@ -1243,12 +1248,27 @@ async function loadCpBank() {
       : v.duration_s > 15.1
         ? ` <span style="color:var(--err)">${v.duration_s.toFixed(0)}s — trop longue (max 15 s), exclue des tirages</span>`
         : ` <span class="muted">${v.duration_s.toFixed(0)}s</span>`;
+    const url = esc(safeUrl(v.video_url));
     return `
-    <div class="list-row"><span class="lbl">
-      <a href="${esc(safeUrl(v.video_url))}" target="_blank" style="color:inherit">${esc(v.label || decodeURIComponent(v.video_url.split("/").pop() || v.video_url))}</a>${dur}</span>
+    <div class="list-row">
+      <span class="grow">
+        <input type="checkbox" class="cp-sel" data-id="${v.id}" style="width:auto" onchange="cpSelChanged()">
+        <video src="${url}#t=0.5" preload="metadata" muted playsinline
+               onclick="window.open('${url}', '_blank')" title="ouvrir la vidéo"></video>
+        <span class="lbl"><a href="${url}" target="_blank" style="color:inherit">${esc(v.label || decodeURIComponent(v.video_url.split("/").pop() || v.video_url))}</a>${dur}</span>
+      </span>
       <button class="x" onclick="delCpVideo('${v.id}')" title="retirer de la banque">✕</button></div>`;
   }).join("");
+  cpSelChanged();
 }
+window.cpSelChanged = () => {
+  const n = document.querySelectorAll("#cp-bank .cp-sel:checked").length;
+  const box = $("#cp-sel-count");
+  box.style.display = n ? "block" : "none";
+  box.textContent = n
+    ? `${n} vidéo(s) sélectionnée(s) — la génération sera répartie UNIQUEMENT sur cette sélection (l'upload et la pioche aléatoire sont ignorés).`
+    : "";
+};
 window.delCpVideo = async (id) => {
   try { await api("/copypaste/videos/" + id, {method: "DELETE"}); toast("Vidéo retirée de la banque"); loadCpBank(); }
   catch (e) { toast("Suppression : " + e.message); }
@@ -1257,7 +1277,9 @@ $("#cp-generate").addEventListener("click", async () => {
   if (!getModel()) return toast("Aucune model — configure-la dans Réglages");
   const useBank = $("#cp-use-bank").checked;
   const hasFile = ($("#cp-file").files || []).length > 0;
-  if (!useBank && !hasFile) return toast("Uploade une vidéo ou coche « Piocher dans la banque »");
+  const selected = [...document.querySelectorAll("#cp-bank .cp-sel:checked")].map(i => i.dataset.id);
+  if (!selected.length && !useBank && !hasFile)
+    return toast("Uploade une vidéo, coche « Piocher dans la banque » ou sélectionne des vidéos de la banque");
   const btn = $("#cp-generate"); btn.disabled = true;
   try {
     const body = { model_id: getModel(), count: +$("#cp-count").value || 1,
@@ -1267,6 +1289,7 @@ $("#cp-generate").addEventListener("click", async () => {
                    seedance_quality: $("#cp-quality").value,
                    resolution: state.cp_resolution, bitrate: state.cp_bitrate,
                    duration_s: +$("#cp-duration").value };
+    if (selected.length) body.reference_video_ids = selected;
     const budget = parseFloat($("#cp-budget").value);
     if (!isNaN(budget)) body.budget_cap_usd = budget;
     if (hasFile) { btn.textContent = "Upload de la vidéo…"; body.reference_video_url = await uploadFile($("#cp-file")); }

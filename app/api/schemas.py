@@ -350,6 +350,10 @@ class CopypasteJobCreate(BaseModel):
     add_random_assets: bool = True
     # Pioche AU HASARD une vidéo de la banque pour chaque item du batch.
     use_bank: bool = False
+    # Sélection PRÉCISE de vidéos de la banque : la génération est répartie
+    # uniquement sur ces vidéos (round-robin mélangé). Prioritaire sur
+    # use_bank et reference_video_url.
+    reference_video_ids: list[uuid.UUID] = []
     # Ajouté au prompt fixe « Replace the girl in the video… ».
     custom_prompt: str = ""
     resolution: Resolution = "720p"
