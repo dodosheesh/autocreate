@@ -27,13 +27,14 @@ from app.db.models import (
     JobItem,
     JobStatus,
     Model,
+    Outfit,
     ReferenceVideo,
     User,
 )
 from app.services import composer, copypaste
 from app.services.estimator import ItemSpec, estimate_batch
 from app.services.pricing import load_rates
-from app.services.variation import Option
+from app.services.variation import Option, outfit_option, weighted_draw
 from app.workers.tasks import dispatch_seedance
 
 router = APIRouter(prefix="/api/copypaste", tags=["copypaste"])
@@ -122,8 +123,31 @@ def create_job(
             422, "reference_video_url requis (ou coche use_bank pour piocher la banque)"
         )
 
-    prompt = copypaste.build_copypaste_prompt(payload.custom_prompt)
-    refs = [model.face_reference_url]
+    base_prompt = copypaste.build_copypaste_prompt(payload.custom_prompt)
+
+    # Assets aléatoires (case précochée) : caractéristiques (récurrentes + 1 du
+    # pool, comme le moteur vidéo) et outfit tiré de la banque — par vidéo.
+    # JAMAIS de background : le décor reste celui de la vidéo de référence.
+    characteristics: list[composer.CharacteristicInput] = []
+    outfits: list[Option] = []
+    if payload.add_random_assets:
+        characteristics = [
+            composer.CharacteristicInput(
+                id=str(c.id),
+                label=c.label,
+                reference_image_url=c.reference_image_url,
+                injection_hint=c.injection_hint,
+                priority=c.priority,
+                recurring=c.recurring,
+            )
+            for c in model.characteristics
+        ]
+        outfits = [
+            outfit_option(str(o.id), o.tags, o.image_url, o.weight)
+            for o in db.scalars(
+                tenant_query(Outfit, user).where(Outfit.status == "ready")
+            ).all()
+        ]
 
     # Estimation + gate budget AVANT toute dépense (même flux que /api/jobs).
     rates = load_rates(db)
@@ -154,20 +178,47 @@ def create_job(
     db.flush()
 
     per_item_cost = est.gross_usd / payload.count if payload.count else 0
-    items = [
-        JobItem(
-            job_id=job.id,
-            category=Category.COPYPASTE,
-            combo_hash=composer.combo_hash(
-                {"prompt": prompt, "video": video, "variant_index": index}
-            ),
-            filled_prompt=prompt,
-            reference_image_urls=refs,
-            reference_video_url=video,
-            item_estimated_cost=round(per_item_cost, 4),
+    rng = random.Random()
+    max_refs = get_settings().seedance_max_refs
+    items = []
+    for index, video in enumerate(videos):
+        outfit = weighted_draw(outfits, rng) if outfits else None
+        active = (
+            composer.select_active_characteristics(characteristics, rng)
+            if characteristics
+            else []
         )
-        for index, video in enumerate(videos)
-    ]
+        prompt = base_prompt
+        if outfit:  # outfit.text = « wearing … »
+            prompt = f"{prompt} She is {outfit.text}."
+        prompt = composer.inject_characteristics(prompt, active)
+        refs = composer.select_reference_images(
+            model.face_reference_url,
+            active,
+            extra_refs=[outfit.image_url] if outfit and outfit.image_url else [],
+            max_refs=max_refs,
+        )
+        items.append(
+            JobItem(
+                job_id=job.id,
+                category=Category.COPYPASTE,
+                outfit_id=uuid.UUID(outfit.id) if outfit else None,
+                characteristic_ids=sorted(c.id for c in active),
+                combo_hash=composer.combo_hash(
+                    {
+                        "prompt": prompt,
+                        "video": video,
+                        "outfit": outfit.id if outfit else None,
+                        "characteristics": sorted(c.id for c in active),
+                        "variant_index": index,
+                    }
+                ),
+                filled_prompt=prompt,
+                reference_image_urls=refs,
+                reference_video_url=video,
+                item_estimated_cost=round(per_item_cost, 4),
+            )
+        )
     db.add_all(items)
 
     if payload.budget_cap_usd is not None and est.gross_usd > payload.budget_cap_usd:

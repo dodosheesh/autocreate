@@ -2,8 +2,11 @@
 
 Seedance 2 accepte des vidéos de référence : on lui envoie la vidéo source +
 la photo visage de la model avec un prompt fixe de remplacement (+ demande
-custom optionnelle). Pas de banques templates/outfits/backgrounds : la scène,
-l'action et le décor sont ceux de la vidéo de référence.
+custom optionnelle). Pas de banque de templates ni de backgrounds : la scène,
+l'action et le décor sont ceux de la vidéo de référence. En option
+(add_random_assets, coché par défaut), chaque vidéo reçoit les
+caractéristiques de la model (récurrentes + 1 aléatoire) et un outfit tiré
+de la banque.
 """
 
 import random

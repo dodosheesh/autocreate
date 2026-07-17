@@ -343,6 +343,10 @@ class CopypasteJobCreate(BaseModel):
     # Ajoute la vidéo uploadée à la banque (décocher pour tester une vidéo
     # sans polluer la banque si elle est de mauvaise qualité).
     save_to_bank: bool = True
+    # Ajoute à CHAQUE vidéo les caractéristiques (récurrentes + 1 aléatoire du
+    # pool, comme le moteur vidéo) et un outfit tiré de la banque — JAMAIS de
+    # background : le décor reste celui de la vidéo de référence.
+    add_random_assets: bool = True
     # Pioche AU HASARD une vidéo de la banque pour chaque item du batch.
     use_bank: bool = False
     # Ajouté au prompt fixe « Replace the girl in the video… ».

@@ -455,6 +455,9 @@
         Ajouter la vidéo uploadée à la banque <span class="muted">(décoche pour tester une vidéo sans polluer la banque)</span></label>
       <label class="chk" style="margin-top:8px"><input type="checkbox" id="cp-use-bank">
         Piocher au hasard dans la banque vidéo (une vidéo différente par génération — l'upload devient optionnel)</label>
+      <label class="chk" style="margin-top:8px"><input type="checkbox" id="cp-assets" checked>
+        Ajouter à chaque vidéo une caractéristique + un outfit aléatoires
+        <span class="muted">(jamais de background — le décor reste celui de la vidéo de référence)</span></label>
       <div style="margin-top:8px"><label>Custom prompt (optionnel, ajouté au prompt fixe)</label>
         <textarea id="cp-custom" rows="2" placeholder="Ex : keep the exact same outfit, lighting and camera movement…"></textarea></div>
       <div class="row">
@@ -1244,6 +1247,7 @@ $("#cp-generate").addEventListener("click", async () => {
     const body = { model_id: getModel(), count: +$("#cp-count").value || 1,
                    custom_prompt: $("#cp-custom").value.trim(), use_bank: useBank,
                    save_to_bank: $("#cp-save-bank").checked,
+                   add_random_assets: $("#cp-assets").checked,
                    resolution: state.cp_resolution, bitrate: state.cp_bitrate,
                    duration_s: +$("#cp-duration").value };
     const budget = parseFloat($("#cp-budget").value);

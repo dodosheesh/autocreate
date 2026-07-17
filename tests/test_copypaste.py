@@ -6,9 +6,11 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
+import uuid
+
 from app.db.base import Base, SessionLocal, engine
 from app.db.init_db import SEED_PRICING
-from app.db.models import Pricing, User
+from app.db.models import JobItem, Pricing, User
 from app.integrations.kie import build_seedance_input
 from app.main import app
 from app.services.copypaste import HARD_PROMPT, build_copypaste_prompt
@@ -195,3 +197,62 @@ def test_job_budget_cap_bloque(client, model_id):
     assert r.status_code == 200
     assert r.json()["status"] == "blocked_budget"
     disp.delay.assert_not_called()
+
+
+def test_job_assets_aleatoires_injecte_caracteristique_et_outfit(client, model_id):
+    client.post(
+        f"/api/models/{model_id}/characteristics",
+        json={
+            "label": "tattoo",
+            "reference_image_url": "https://r2.example/tattoo.jpg",
+            "injection_hint": "a floral tattoo on her forearm",
+        },
+    )
+    client.post(
+        "/api/banks/outfits",
+        json={"image_url": "https://r2.example/outfit.jpg", "tags": ["red dress"]},
+    )
+    with patch("app.api.routers.copypaste.dispatch_seedance"):
+        r = client.post(
+            "/api/copypaste/jobs",
+            json={
+                "model_id": model_id,
+                "count": 2,
+                "reference_video_url": "https://r2.example/videos/ref6.mp4",
+            },
+        )
+    assert r.status_code == 200, r.text
+    job = r.json()
+    for it in job["items"]:
+        assert "wearing red dress" in it["filled_prompt"]
+        assert "floral tattoo" in it["filled_prompt"]
+        assert "ackground" not in it["filled_prompt"]  # jamais de background
+    # refs : visage d'abord, puis photo du trait, puis photo outfit
+    with SessionLocal() as db:
+        items = db.query(JobItem).filter(JobItem.job_id == uuid.UUID(job["id"])).all()
+        for item in items:
+            assert item.reference_image_urls[0] == "https://r2.example/face.jpg"
+            assert "https://r2.example/tattoo.jpg" in item.reference_image_urls
+            assert "https://r2.example/outfit.jpg" in item.reference_image_urls
+            assert item.outfit_id is not None
+            assert item.characteristic_ids
+
+
+def test_job_sans_assets_aleatoires(client, model_id):
+    with patch("app.api.routers.copypaste.dispatch_seedance"):
+        r = client.post(
+            "/api/copypaste/jobs",
+            json={
+                "model_id": model_id,
+                "count": 1,
+                "reference_video_url": "https://r2.example/videos/ref7.mp4",
+                "add_random_assets": False,
+            },
+        )
+    assert r.status_code == 200, r.text
+    it = r.json()["items"][0]
+    assert "wearing" not in it["filled_prompt"]
+    assert "tattoo" not in it["filled_prompt"]
+    with SessionLocal() as db:
+        item = db.query(JobItem).filter(JobItem.job_id == uuid.UUID(r.json()["id"])).first()
+        assert item.reference_image_urls == ["https://r2.example/face.jpg"]
