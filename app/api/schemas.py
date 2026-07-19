@@ -4,7 +4,17 @@ from urllib.parse import urlparse
 
 from pydantic import AfterValidator, BaseModel, Field, field_validator
 
-from app.services.dialogue import DialogueParseError, parse_tagged_script
+from app.services.dialogue import (
+    MAX_VOICE_SWITCHES,
+    DialogueParseError,
+    count_model_voice_switches,
+    parse_tagged_script,
+)
+
+_VOICE_SWITCH_ERROR = (
+    "Jamais plus d'UN changement de voix de la model par vidéo : réécris le "
+    "script avec au plus une bascule [H]↔[F] (ex. tout en [H] puis la fin en [F])."
+)
 
 
 def _http_url(value: str) -> str:
@@ -176,6 +186,9 @@ class DialogueLineCreate(BaseModel):
             parse_tagged_script(value)
         except DialogueParseError as exc:
             raise ValueError(str(exc)) from exc
+        # Règle éditoriale (tous types de contenu) : au plus UNE bascule [H]↔[F].
+        if count_model_voice_switches(value) > MAX_VOICE_SWITCHES:
+            raise ValueError(_VOICE_SWITCH_ERROR)
         return value
 
 
@@ -220,6 +233,20 @@ class JobCreate(BaseModel):
     dialogue_script: str | None = Field(
         default=None, description="Script taggé [H]/[F] (utilisé en Phase 3 pour le voice-swap)"
     )
+
+    @field_validator("dialogue_script")
+    @classmethod
+    def _max_one_voice_switch(cls, value: str | None) -> str | None:
+        if not value:
+            return value
+        try:
+            switches = count_model_voice_switches(value)
+        except DialogueParseError:
+            return value  # script libre non taggé (Phase 1) : pas de contrainte ajoutée
+        if switches > MAX_VOICE_SWITCHES:
+            raise ValueError(_VOICE_SWITCH_ERROR)
+        return value
+
     count: int = Field(default=1, ge=1, le=100)
     resolution: Resolution = "720p"
     duration_s: int = Field(default=10, ge=4, le=15)  # Seedance 2.0 : 4–15 s/clip

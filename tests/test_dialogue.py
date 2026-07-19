@@ -173,6 +173,41 @@ def test_tag_transcript_vide():
     assert tag_transcript_voices("") == ""
 
 
+def test_count_model_voice_switches():
+    from app.services.dialogue import count_model_voice_switches
+
+    assert count_model_voice_switches("[H] a\n[F] b") == 1
+    assert count_model_voice_switches("[H] a\n[F] b\n[H] c") == 2
+    assert count_model_voice_switches("[H] a\n[H] b") == 0
+    # [M]/[W] (autres personnes) ne comptent pas : SA voix ne change pas
+    assert count_model_voice_switches("[M] q\n[F] a\n[M] q2\n[F] b") == 0
+
+
+def test_tag_transcript_jamais_plus_d_une_bascule():
+    # RÈGLE (tous formats) : au plus UNE bascule [H]↔[F] par vidéo.
+    from app.services.dialogue import count_model_voice_switches
+
+    for n in (2, 3, 6, 8, 10, 12):
+        out = tag_transcript_voices(". ".join(f"s{i}" for i in range(n)) + ".")
+        assert count_model_voice_switches(out) <= 1
+    # le bloc féminin CLÔT le script → une seule transition H→F
+    out = tag_transcript_voices("one. two. three. four. five. six.")
+    assert out.splitlines()[-1].startswith("[F]")
+
+
+def test_dialogue_banque_refuse_plus_d_une_bascule():
+    from pydantic import ValidationError
+
+    from app.api.schemas import DialogueLineCreate
+
+    with pytest.raises(ValidationError, match="changement de voix"):
+        DialogueLineCreate(category="skit", raw_text="[H] a\n[F] b\n[H] c")
+    # une seule bascule → accepté
+    DialogueLineCreate(category="skit", raw_text="[H] a\n[F] b")
+    # l'interlocuteur [M] entre deux lignes de la model ne compte pas
+    DialogueLineCreate(category="micro_trottoir", raw_text="[M] q\n[F] a\n[M] q2\n[F] b")
+
+
 def test_tags_a_la_suite_meme_ligne():
     # tags « à la suite » sur une seule ligne = même résultat qu'à la ligne
     segs = parse_tagged_script("[M] tu viens d'où ? [F] de Paris [beat] [F] et toi ?")

@@ -86,6 +86,19 @@ def parse_tagged_script(raw_text: str, valid_tags: set[str] | None = None) -> li
     return segments
 
 
+def count_model_voice_switches(raw_text: str) -> int:
+    """Nb de bascules de voix de LA MODEL ([H]↔[F]) dans un script. Les lignes
+    [M]/[W] (autres personnes) ne comptent pas : elles ne changent pas SA voix.
+
+    RÈGLE ÉDITORIALE (tous types de contenu) : jamais plus d'UNE bascule par
+    vidéo — validée à l'entrée des banques et respectée par l'auto-taggage."""
+    tags = [s.tag for s in parse_tagged_script(raw_text) if s.tag in MODEL_TAGS]
+    return sum(1 for a, b in zip(tags, tags[1:]) if a != b)
+
+
+MAX_VOICE_SWITCHES = 1
+
+
 def _line_word_count(line: str) -> int:
     """Nb de mots PARLÉS d'une ligne (0 pour [beat] / [action] — non parlés)."""
     m = TAG_PATTERN.match(line)
@@ -134,9 +147,10 @@ def tag_transcript_voices(
     de la model : ÉCRASANTE MAJORITÉ en `major_tag` (voix trans-masculine [H]) et
     SEULEMENT 1 ou 2 phrases en `minor_tag` (voix féminine [F]).
 
-    Peu de bascules = meilleurs enchaînements (Seedance rend mal les changements
-    de timbre trop fréquents). Le bloc féminin est CONTIGU et centré → au plus
-    deux transitions (H… F(F) …H) sur toute la vidéo.
+    RÈGLE : jamais plus d'UNE bascule de voix par vidéo. Le bloc féminin est
+    CONTIGU et EN FIN de script → une seule transition H→F sur toute la vidéo
+    (le twist féminin clôt le clip ; Seedance rend mal les changements de
+    timbre répétés).
 
     Format long 30 s : la voix reste celle de LA MODEL (toujours « she »), seul
     le timbre bascule. Découpé par phrase pour tomber sur une frontière naturelle."""
@@ -152,7 +166,7 @@ def tag_transcript_voices(
     # phrases). Jamais plus : on garde une écrasante majorité masculine.
     k = minor_sentences if minor_sentences is not None else (2 if n >= 8 else 1)
     k = max(0, min(k, n - 1))
-    start = max(1, (n - k) // 2)  # bloc féminin contigu, centré
+    start = n - k  # bloc féminin contigu EN FIN → une seule bascule H→F
     minor_idx = set(range(start, start + k))
     lines = [
         f"[{minor_tag if i in minor_idx else major_tag}] {s}"
