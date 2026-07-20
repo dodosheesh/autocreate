@@ -31,7 +31,13 @@ from app.db.models import (
     ReferenceVideo,
     User,
 )
-from app.media.probe import probe_video_duration
+from app.media.probe import (
+    SEEDANCE_MAX_FPS,
+    SEEDANCE_MIN_FPS,
+    fps_out_of_range,
+    normalize_reference_video,
+    probe_video_info,
+)
 from app.services import composer, copypaste
 from app.services.copypaste import MAX_REF_VIDEO_S
 from app.services.estimator import ItemSpec, estimate_batch
@@ -59,9 +65,19 @@ def _add_to_bank(db: Session, user: User, video_url: str, label: str = "",
             db.commit()
             db.refresh(existing)
         return existing
+    info = probe_video_info(video_url)
+    duration_s, fps = info.duration_s, info.fps
+    if fps_out_of_range(fps):
+        # Seedance exige 23,8–60 fps → re-encodage auto à 30 fps. Si ça échoue,
+        # la vidéo est gardée mais exclue des tirages (bouton 🔧 pour re-tenter).
+        try:
+            video_url, info = normalize_reference_video(video_url, user.tenant_id)
+            duration_s, fps = info.duration_s, info.fps
+        except Exception:
+            pass
     row = ReferenceVideo(
         tenant_id=user.tenant_id, video_url=video_url, label=label, weight=weight,
-        theme=theme, duration_s=probe_video_duration(video_url),
+        theme=theme, duration_s=duration_s, fps=fps,
     )
     db.add(row)
     db.commit()
@@ -95,6 +111,29 @@ def update_video(
         row.label = payload.label
     if payload.weight is not None:
         row.weight = payload.weight
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.post("/videos/{video_id}/normalize", response_model=schemas.ReferenceVideoOut)
+def normalize_video(
+    video_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    """Re-sonde une vidéo de la banque et la re-encode à 30 fps si son frame
+    rate est hors plage Seedance (23,8–60). Sert aussi à réparer les vidéos
+    ajoutées avant l'introduction de la sonde fps."""
+    row = owned(db, ReferenceVideo, video_id, user)
+    info = probe_video_info(row.video_url)
+    row.duration_s, row.fps = info.duration_s, info.fps
+    if fps_out_of_range(info.fps):
+        try:
+            new_url, new_info = normalize_reference_video(row.video_url, user.tenant_id)
+        except Exception as exc:
+            db.commit()  # garde au moins les infos sondées
+            raise HTTPException(502, f"Normalisation échouée : {exc}")
+        row.video_url = new_url
+        row.duration_s, row.fps = new_info.duration_s, new_info.fps
     db.commit()
     db.refresh(row)
     return row
@@ -152,9 +191,10 @@ def create_job(
     # save_to_bank est décoché (test d'une vidéo sans polluer la banque).
     # Thème appliqué : video_theme, sinon le thème (de pioche) resté sélectionné
     # — l'upload suit toujours le thème visible dans l'UI.
+    saved_row = None
     if payload.reference_video_url and payload.save_to_bank:
         upload_theme = (payload.video_theme or "").strip() or (payload.theme or "").strip()
-        _add_to_bank(db, user, payload.reference_video_url, theme=upload_theme)
+        saved_row = _add_to_bank(db, user, payload.reference_video_url, theme=upload_theme)
 
     if payload.reference_video_ids:
         # Sélection précise : la génération est répartie UNIQUEMENT sur ces
@@ -179,6 +219,17 @@ def create_job(
                 f"Sélection invalide : {names} dépasse(nt) {MAX_REF_VIDEO_S:.0f} s "
                 "(limite Seedance) — retire-la(les) de la sélection.",
             )
+        bad_fps = [v for v in rows if fps_out_of_range(v.fps)]
+        if bad_fps:
+            names = ", ".join(
+                (v.label or v.video_url.rsplit("/", 1)[-1]) for v in bad_fps
+            )
+            raise HTTPException(
+                422,
+                f"Sélection invalide : {names} a/ont un frame rate hors plage Seedance "
+                f"({SEEDANCE_MIN_FPS}–{SEEDANCE_MAX_FPS:.0f} fps) — clique 🔧 dans la "
+                "banque pour normaliser à 30 fps.",
+            )
         urls = [v.video_url for v in rows]
         random.Random().shuffle(urls)
         videos = [urls[i % len(urls)] for i in range(payload.count)]
@@ -194,11 +245,12 @@ def create_job(
                     f"Aucune vidéo dans le thème « {theme} » — range des vidéos "
                     "dans ce thème d'abord (bouton ✎ de la banque).",
                 )
-        # Seedance limite la vidéo de référence à 15 s : les trop longues sont
-        # exclues du tirage (durée inconnue = laissée passer, kie tranchera).
+        # Seedance limite la référence à 15 s et 23,8–60 fps : les vidéos hors
+        # contraintes sont exclues du tirage (inconnues = laissées passer).
         usable = [
             v for v in rows
-            if v.duration_s is None or v.duration_s <= MAX_REF_VIDEO_S + 0.1
+            if (v.duration_s is None or v.duration_s <= MAX_REF_VIDEO_S + 0.1)
+            and not fps_out_of_range(v.fps)
         ]
         if not usable:
             raise HTTPException(
@@ -211,25 +263,41 @@ def create_job(
         bank = [Option(id=str(v.id), weight=v.weight, text=v.video_url) for v in usable]
         videos = copypaste.pick_bank_videos(bank, payload.count, random.Random())
     elif payload.reference_video_url:
-        # Durée : valeur sondée en banque si dispo, sinon probe direct (vidéo
-        # non sauvegardée). > 15 s → refus clair AVANT d'envoyer à kie.ai.
-        row = db.scalar(
+        # Infos : ligne de banque si dispo (déjà sondée/normalisée), sinon probe
+        # direct (vidéo non sauvegardée). Hors contraintes Seedance → refus ou
+        # normalisation AVANT d'envoyer à kie.ai.
+        row = saved_row or db.scalar(
             tenant_query(ReferenceVideo, user).where(
                 ReferenceVideo.video_url == payload.reference_video_url
             )
         )
-        duration = (
-            row.duration_s
-            if row is not None and row.duration_s is not None
-            else probe_video_duration(payload.reference_video_url)
-        )
+        if row is not None:
+            direct_url, duration, fps = row.video_url, row.duration_s, row.fps
+        else:
+            info = probe_video_info(payload.reference_video_url)
+            direct_url, duration, fps = payload.reference_video_url, info.duration_s, info.fps
         if duration is not None and duration > MAX_REF_VIDEO_S + 0.1:
             raise HTTPException(
                 422,
                 f"La vidéo de référence fait {duration:.1f} s — Seedance limite à "
                 f"{MAX_REF_VIDEO_S:.0f} s. Coupe-la avant de relancer.",
             )
-        videos = [payload.reference_video_url] * payload.count
+        if fps_out_of_range(fps):
+            # Vidéo non banquée (ou normalisation échouée à l'ajout) → re-tente.
+            try:
+                direct_url, info = normalize_reference_video(direct_url, user.tenant_id)
+                if row is not None:  # répare aussi la banque
+                    row.video_url = direct_url
+                    row.duration_s, row.fps = info.duration_s, info.fps
+                    db.commit()
+            except Exception as exc:
+                raise HTTPException(
+                    422,
+                    f"Frame rate {fps:.1f} fps hors plage Seedance "
+                    f"({SEEDANCE_MIN_FPS}–{SEEDANCE_MAX_FPS:.0f}) et la normalisation "
+                    f"automatique a échoué : {exc}",
+                )
+        videos = [direct_url] * payload.count
     else:
         raise HTTPException(
             422, "reference_video_url requis (ou coche use_bank pour piocher la banque)"

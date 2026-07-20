@@ -321,6 +321,10 @@ class ReferenceVideo(Base):
     # Durée sondée à l'ajout (ffprobe). Seedance limite la référence à 15 s :
     # au-delà la vidéo est exclue des tirages use_bank. None = probe échoué.
     duration_s: Mapped[float | None] = mapped_column(Float)
+    # FPS sondé à l'ajout. Seedance exige 23,8–60 fps : hors plage, la vidéo est
+    # re-encodée à 30 fps à l'ajout ; si la normalisation échoue elle est exclue
+    # des tirages (bouton 🔧 pour re-tenter). None = probe échoué.
+    fps: Mapped[float | None] = mapped_column(Float)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 

@@ -20,27 +20,33 @@ ADMIN_EMAIL = "cp-owner@example.com"
 ADMIN_PASSWORD = "test-password-123"
 
 
+from app.media.probe import VideoInfo, fps_out_of_range
+
+
 @pytest.fixture(autouse=True)
 def _no_probe(monkeypatch):
     """Par défaut les tests ne sondent pas les URLs factices (pas de DNS/ffprobe) ;
-    les tests de durée re-patchent avec une valeur précise."""
+    les tests de durée/fps re-patchent avec des valeurs précises."""
     monkeypatch.setattr(
-        "app.api.routers.copypaste.probe_video_duration", lambda url: None
+        "app.api.routers.copypaste.probe_video_info", lambda url: VideoInfo()
     )
 
 
 # ---------- unités ----------
 
 
-def test_probe_video_duration_parse(monkeypatch):
+def test_probe_video_info_parse(monkeypatch):
     import app.media.probe as probe
 
     class Proc:
         returncode = 0
-        stdout = "12.48\n"
+        stdout = '{"streams": [{"avg_frame_rate": "30000/1001"}], "format": {"duration": "12.48"}}'
         stderr = ""
 
     monkeypatch.setattr(probe.subprocess, "run", lambda *a, **k: Proc())
+    info = probe.probe_video_info("/tmp/x.mp4")
+    assert info.duration_s == pytest.approx(12.48)
+    assert info.fps == pytest.approx(29.97, abs=0.01)
     assert probe.probe_video_duration("/tmp/x.mp4") == pytest.approx(12.48)
 
     class Bad:
@@ -49,7 +55,16 @@ def test_probe_video_duration_parse(monkeypatch):
         stderr = "boom"
 
     monkeypatch.setattr(probe.subprocess, "run", lambda *a, **k: Bad())
-    assert probe.probe_video_duration("/tmp/x.mp4") is None
+    assert probe.probe_video_info("/tmp/x.mp4") == VideoInfo(None, None)
+
+
+def test_fps_out_of_range():
+    assert fps_out_of_range(20.0)
+    assert fps_out_of_range(120.0)
+    assert not fps_out_of_range(23.8)
+    assert not fps_out_of_range(30.0)
+    assert not fps_out_of_range(60.0)
+    assert not fps_out_of_range(None)  # inconnu = laissé passer
 
 
 def test_build_copypaste_prompt():
@@ -314,7 +329,7 @@ def test_video_trop_longue_rejetee_et_exclue_des_tirages(client, model_id, monke
     for v in client.get("/api/copypaste/videos").json():
         client.delete(f"/api/copypaste/videos/{v['id']}")
     monkeypatch.setattr(
-        "app.api.routers.copypaste.probe_video_duration", lambda url: 22.0
+        "app.api.routers.copypaste.probe_video_info", lambda url: VideoInfo(22.0, 30.0)
     )
     # l'ajout en banque sonde et mémorise la durée
     added = client.post(
@@ -463,6 +478,59 @@ def test_upload_avec_video_theme_range_dans_la_banque(client, model_id):
     vids = client.get("/api/copypaste/videos").json()
     added = next(v for v in vids if v["video_url"].endswith("street-1.mp4"))
     assert added["theme"] == "street"
+
+
+def test_fps_hors_plage_normalise_a_l_ajout(client, monkeypatch):
+    # vidéo 20 fps → re-encodée automatiquement à 30 fps à l'ajout en banque
+    monkeypatch.setattr(
+        "app.api.routers.copypaste.probe_video_info", lambda url: VideoInfo(10.0, 20.0)
+    )
+    monkeypatch.setattr(
+        "app.api.routers.copypaste.normalize_reference_video",
+        lambda url, tenant: ("https://r2.example/videos/norm-1.mp4", VideoInfo(10.0, 30.0)),
+    )
+    added = client.post(
+        "/api/copypaste/videos", json={"video_url": "https://r2.example/videos/fps20.mp4"}
+    ).json()
+    assert added["video_url"] == "https://r2.example/videos/norm-1.mp4"
+    assert added["fps"] == 30.0
+
+
+def test_fps_hors_plage_normalisation_echouee_exclue_et_reparable(client, model_id, monkeypatch):
+    # normalisation KO à l'ajout → vidéo stockée avec son fps hors plage
+    def boom(url, tenant):
+        raise RuntimeError("ffmpeg KO")
+
+    monkeypatch.setattr(
+        "app.api.routers.copypaste.probe_video_info", lambda url: VideoInfo(10.0, 20.0)
+    )
+    monkeypatch.setattr("app.api.routers.copypaste.normalize_reference_video", boom)
+    added = client.post(
+        "/api/copypaste/videos",
+        json={"video_url": "https://r2.example/videos/fps20-b.mp4", "theme": "fpstest"},
+    ).json()
+    assert added["fps"] == 20.0
+    # exclue de la pioche par thème → 409 (aucune vidéo utilisable dans ce thème)
+    r = client.post(
+        "/api/copypaste/jobs",
+        json={"model_id": model_id, "count": 1, "use_bank": True, "theme": "fpstest"},
+    )
+    assert r.status_code == 409
+    # sélection explicite → 422 avec indication du bouton 🔧
+    r = client.post(
+        "/api/copypaste/jobs",
+        json={"model_id": model_id, "count": 1, "reference_video_ids": [added["id"]]},
+    )
+    assert r.status_code == 422
+    assert "frame rate" in r.json()["detail"]
+    # bouton 🔧 : normalisation réussie → URL remplacée, fps 30, redevient utilisable
+    monkeypatch.setattr(
+        "app.api.routers.copypaste.normalize_reference_video",
+        lambda url, tenant: ("https://r2.example/videos/norm-2.mp4", VideoInfo(10.0, 30.0)),
+    )
+    fixed = client.post(f"/api/copypaste/videos/{added['id']}/normalize").json()
+    assert fixed["video_url"] == "https://r2.example/videos/norm-2.mp4"
+    assert fixed["fps"] == 30.0
 
 
 def test_job_sans_assets_aleatoires(client, model_id):

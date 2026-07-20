@@ -1267,6 +1267,10 @@ async function loadCpBank() {
       : v.duration_s > 15.1
         ? ` <span style="color:var(--err)">${v.duration_s.toFixed(0)}s — trop longue (max 15 s), exclue des tirages</span>`
         : ` <span class="muted">${v.duration_s.toFixed(0)}s</span>`;
+    const fpsBad = v.fps != null && (v.fps < 23.8 || v.fps > 60);
+    const fps = fpsBad
+      ? ` <span style="color:var(--err)">${v.fps.toFixed(1)} fps — hors plage Seedance (23,8–60), clique 🔧</span>`
+      : "";
     const url = esc(safeUrl(v.video_url));
     return `
     <div class="list-row">
@@ -1274,9 +1278,11 @@ async function loadCpBank() {
         <input type="checkbox" class="cp-sel" data-id="${v.id}" style="width:auto" onchange="cpSelChanged()">
         <video src="${url}#t=0.5" preload="metadata" muted playsinline
                onclick="window.open('${url}', '_blank')" title="ouvrir la vidéo"></video>
-        <span class="lbl"><a href="${url}" target="_blank" style="color:inherit">${esc(v.label || decodeURIComponent(v.video_url.split("/").pop() || v.video_url))}</a>${dur}</span>
+        <span class="lbl"><a href="${url}" target="_blank" style="color:inherit">${esc(v.label || decodeURIComponent(v.video_url.split("/").pop() || v.video_url))}</a>${dur}${fps}</span>
       </span>
       <span style="flex:none">
+        <button class="x" style="color:var(--muted)" onclick="normalizeCpVideo('${v.id}')"
+                title="re-analyser / normaliser à 30 fps">🔧</button>
         <button class="x" style="color:var(--muted)" data-id="${v.id}" data-theme="${esc(v.theme || "")}"
                 onclick="editCpTheme(this)" title="changer le thème">✎</button>
         <button class="x" onclick="delCpVideo('${v.id}')" title="retirer de la banque">✕</button>
@@ -1292,6 +1298,14 @@ async function loadCpBank() {
     ${groups[k].map(row).join("")}`).join("");
   cpSelChanged();
 }
+window.normalizeCpVideo = async (id) => {
+  toast("Analyse / normalisation en cours (peut prendre ~30 s)…");
+  try {
+    const v = await api("/copypaste/videos/" + id + "/normalize", {method: "POST"});
+    toast(`✅ Vidéo OK : ${v.duration_s ? v.duration_s.toFixed(0) + " s" : "?"} · ${v.fps ? v.fps.toFixed(1) + " fps" : "fps ?"}`);
+    loadCpBank();
+  } catch (e) { toast("Normalisation : " + e.message, 8000); }
+};
 window.editCpTheme = async (btn) => {
   const t = prompt("Thème de cette vidéo (vide = sans thème) :", btn.dataset.theme || "");
   if (t === null) return;

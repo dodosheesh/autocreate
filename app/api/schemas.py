@@ -364,6 +364,7 @@ class ReferenceVideoOut(BaseModel):
     theme: str = ""
     weight: float
     duration_s: float | None = None  # sondée à l'ajout ; > 15 s = inutilisable
+    fps: float | None = None  # hors 23,8–60 = inutilisable (🔧 pour normaliser)
     created_at: object = None
 
     model_config = {"from_attributes": True}
