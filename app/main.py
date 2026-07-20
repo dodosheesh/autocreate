@@ -40,14 +40,19 @@ app.include_router(diagnostics.router)
 _STATIC = Path(__file__).parent / "static"
 
 
+# no-cache : le navigateur revalide la page à chaque chargement → plus jamais
+# une vieille UI servie depuis le cache après un déploiement (F5 suffit).
+_NO_CACHE = {"Cache-Control": "no-cache"}
+
+
 @app.get("/", include_in_schema=False)
 def index():
-    return FileResponse(_STATIC / "index.html")
+    return FileResponse(_STATIC / "index.html", headers=_NO_CACHE)
 
 
 @app.get("/login", include_in_schema=False)
 def login_page():
-    return FileResponse(_STATIC / "login.html")
+    return FileResponse(_STATIC / "login.html", headers=_NO_CACHE)
 
 
 @app.get("/health")
