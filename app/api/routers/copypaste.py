@@ -46,16 +46,22 @@ router = APIRouter(prefix="/api/copypaste", tags=["copypaste"])
 
 
 def _add_to_bank(db: Session, user: User, video_url: str, label: str = "",
-                 weight: float = 1.0) -> ReferenceVideo:
-    """Ajout idempotent : la même URL n'est jamais dupliquée dans la banque."""
+                 weight: float = 1.0, theme: str = "") -> ReferenceVideo:
+    """Ajout idempotent : la même URL n'est jamais dupliquée dans la banque.
+    Un thème explicitement fourni re-range une vidéo déjà présente."""
+    theme = (theme or "").strip()
     existing = db.scalar(
         tenant_query(ReferenceVideo, user).where(ReferenceVideo.video_url == video_url)
     )
     if existing is not None:
+        if theme and existing.theme != theme:
+            existing.theme = theme
+            db.commit()
+            db.refresh(existing)
         return existing
     row = ReferenceVideo(
         tenant_id=user.tenant_id, video_url=video_url, label=label, weight=weight,
-        duration_s=probe_video_duration(video_url),
+        theme=theme, duration_s=probe_video_duration(video_url),
     )
     db.add(row)
     db.commit()
@@ -69,7 +75,29 @@ def add_video(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    return _add_to_bank(db, user, payload.video_url, payload.label, payload.weight)
+    return _add_to_bank(
+        db, user, payload.video_url, payload.label, payload.weight, payload.theme
+    )
+
+
+@router.patch("/videos/{video_id}", response_model=schemas.ReferenceVideoOut)
+def update_video(
+    video_id: uuid.UUID,
+    payload: schemas.ReferenceVideoUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """Rangement : change le thème (ou label/poids) d'une vidéo de la banque."""
+    row = owned(db, ReferenceVideo, video_id, user)
+    if payload.theme is not None:
+        row.theme = payload.theme.strip()
+    if payload.label is not None:
+        row.label = payload.label
+    if payload.weight is not None:
+        row.weight = payload.weight
+    db.commit()
+    db.refresh(row)
+    return row
 
 
 @router.get("/videos", response_model=list[schemas.ReferenceVideoOut])
@@ -123,7 +151,7 @@ def create_job(
     # La vidéo uploadée pour ce job rejoint la banque (dédup par URL) — sauf si
     # save_to_bank est décoché (test d'une vidéo sans polluer la banque).
     if payload.reference_video_url and payload.save_to_bank:
-        _add_to_bank(db, user, payload.reference_video_url)
+        _add_to_bank(db, user, payload.reference_video_url, theme=payload.video_theme)
 
     if payload.reference_video_ids:
         # Sélection précise : la génération est répartie UNIQUEMENT sur ces
@@ -153,6 +181,16 @@ def create_job(
         videos = [urls[i % len(urls)] for i in range(payload.count)]
     elif payload.use_bank:
         rows = db.scalars(tenant_query(ReferenceVideo, user)).all()
+        # Pioche restreinte à UN thème : les autres thèmes ne sont JAMAIS tirés.
+        theme = (payload.theme or "").strip()
+        if theme:
+            rows = [v for v in rows if (v.theme or "").strip().lower() == theme.lower()]
+            if not rows:
+                raise HTTPException(
+                    409,
+                    f"Aucune vidéo dans le thème « {theme} » — range des vidéos "
+                    "dans ce thème d'abord (bouton ✎ de la banque).",
+                )
         # Seedance limite la vidéo de référence à 15 s : les trop longues sont
         # exclues du tirage (durée inconnue = laissée passer, kie tranchera).
         usable = [
@@ -164,8 +202,8 @@ def create_job(
                 409,
                 "Banque vidéo vide : uploade au moins une vidéo de référence"
                 if not rows
-                else f"Toutes les vidéos de la banque dépassent {MAX_REF_VIDEO_S:.0f} s "
-                     "(limite Seedance) — coupe-les puis re-uploade.",
+                else f"Toutes les vidéos {'du thème « ' + theme + ' »' if theme else 'de la banque'} "
+                     f"dépassent {MAX_REF_VIDEO_S:.0f} s (limite Seedance) — coupe-les puis re-uploade.",
             )
         bank = [Option(id=str(v.id), weight=v.weight, text=v.video_url) for v in usable]
         videos = copypaste.pick_bank_videos(bank, payload.count, random.Random())

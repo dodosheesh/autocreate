@@ -384,6 +384,67 @@ def test_job_selection_inconnue_404(client, model_id):
     assert r.status_code == 404
 
 
+def test_themes_rangement_et_pioche_restreinte(client, model_id):
+    # 2 vidéos thème « gym », 1 thème « plage »
+    g1 = client.post(
+        "/api/copypaste/videos",
+        json={"video_url": "https://r2.example/videos/gym-1.mp4", "theme": "gym"},
+    ).json()
+    assert g1["theme"] == "gym"
+    client.post(
+        "/api/copypaste/videos",
+        json={"video_url": "https://r2.example/videos/gym-2.mp4", "theme": "gym"},
+    )
+    client.post(
+        "/api/copypaste/videos",
+        json={"video_url": "https://r2.example/videos/plage-1.mp4", "theme": "plage"},
+    )
+    # pioche restreinte au thème gym → JAMAIS une vidéo d'un autre thème
+    with patch("app.api.routers.copypaste.dispatch_seedance"):
+        r = client.post(
+            "/api/copypaste/jobs",
+            json={"model_id": model_id, "count": 8, "use_bank": True, "theme": "gym"},
+        )
+    assert r.status_code == 200, r.text
+    urls = {it["reference_video_url"] for it in r.json()["items"]}
+    assert urls <= {
+        "https://r2.example/videos/gym-1.mp4",
+        "https://r2.example/videos/gym-2.mp4",
+    }
+    # thème inexistant → refus clair
+    r = client.post(
+        "/api/copypaste/jobs",
+        json={"model_id": model_id, "count": 1, "use_bank": True, "theme": "ski"},
+    )
+    assert r.status_code == 409
+    assert "ski" in r.json()["detail"]
+
+
+def test_theme_modifiable_apres_coup(client):
+    vids = client.get("/api/copypaste/videos").json()
+    vid = next(v for v in vids if v["video_url"].endswith("plage-1.mp4"))
+    r = client.patch(f"/api/copypaste/videos/{vid['id']}", json={"theme": "piscine"})
+    assert r.status_code == 200
+    assert r.json()["theme"] == "piscine"
+
+
+def test_upload_avec_video_theme_range_dans_la_banque(client, model_id):
+    with patch("app.api.routers.copypaste.dispatch_seedance"):
+        r = client.post(
+            "/api/copypaste/jobs",
+            json={
+                "model_id": model_id,
+                "count": 1,
+                "reference_video_url": "https://r2.example/videos/street-1.mp4",
+                "video_theme": "street",
+            },
+        )
+    assert r.status_code == 200, r.text
+    vids = client.get("/api/copypaste/videos").json()
+    added = next(v for v in vids if v["video_url"].endswith("street-1.mp4"))
+    assert added["theme"] == "street"
+
+
 def test_job_sans_assets_aleatoires(client, model_id):
     with patch("app.api.routers.copypaste.dispatch_seedance"):
         r = client.post(

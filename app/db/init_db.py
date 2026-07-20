@@ -72,6 +72,7 @@ _ADDITIVE_COLUMNS = [
     ("job_items", "reference_video_url", "TEXT"),
     ("reference_videos", "duration_s", "FLOAT"),
     ("generation_jobs", "kie_model", "VARCHAR(128)"),
+    ("reference_videos", "theme", "VARCHAR(64) NOT NULL DEFAULT ''"),
 ]
 
 

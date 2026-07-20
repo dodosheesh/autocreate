@@ -457,10 +457,18 @@
         <div><label>Vidéo de référence</label><input type="file" id="cp-file" accept="video/*"></div>
         <div><label>Vidéos à générer</label><input type="number" id="cp-count" min="1" value="1"></div>
       </div>
+      <div class="row">
+        <div><label>Thème de la vidéo uploadée <span class="muted">(optionnel — pour la ranger)</span></label>
+          <input type="text" id="cp-theme" list="cp-themes" placeholder="ex : gym, plage, street…">
+          <datalist id="cp-themes"></datalist></div>
+        <div><label>Thème de pioche <span class="muted">(banque)</span></label>
+          <select id="cp-theme-filter"><option value="">Tous les thèmes</option></select></div>
+      </div>
       <label class="chk" style="margin-top:8px"><input type="checkbox" id="cp-save-bank" checked>
         Ajouter la vidéo uploadée à la banque <span class="muted">(décoche pour tester une vidéo sans polluer la banque)</span></label>
       <label class="chk" style="margin-top:8px"><input type="checkbox" id="cp-use-bank">
-        Piocher au hasard dans la banque vidéo (une vidéo différente par génération — l'upload devient optionnel)</label>
+        Piocher au hasard dans la banque vidéo — <b>uniquement dans le thème de pioche choisi</b>
+        <span class="muted">(« Tous les thèmes » = toute la banque ; les autres thèmes ne sont jamais tirés)</span></label>
       <label class="chk" style="margin-top:8px"><input type="checkbox" id="cp-assets" checked>
         Ajouter à chaque vidéo une caractéristique + un outfit aléatoires
         <span class="muted">(jamais de background — le décor reste celui de la vidéo de référence)</span></label>
@@ -1245,7 +1253,16 @@ $("#generate").addEventListener("click", async () => {
 async function loadCpBank() {
   const vids = await api("/copypaste/videos");
   $("#cp-bank-count").textContent = vids.length;
-  $("#cp-bank").innerHTML = vids.map(v => {
+  // thèmes existants → datalist (upload) + sélecteur de pioche (sélection préservée)
+  const themes = [...new Set(vids.map(v => (v.theme || "").trim()).filter(Boolean))].sort();
+  $("#cp-themes").innerHTML = themes.map(t => `<option value="${esc(t)}">`).join("");
+  const curFilter = $("#cp-theme-filter").value;
+  $("#cp-theme-filter").innerHTML = '<option value="">Tous les thèmes</option>'
+    + themes.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
+  if ([...$("#cp-theme-filter").options].some(o => o.value === curFilter))
+    $("#cp-theme-filter").value = curFilter;
+
+  const row = (v) => {
     const dur = v.duration_s == null ? ""
       : v.duration_s > 15.1
         ? ` <span style="color:var(--err)">${v.duration_s.toFixed(0)}s — trop longue (max 15 s), exclue des tirages</span>`
@@ -1259,10 +1276,30 @@ async function loadCpBank() {
                onclick="window.open('${url}', '_blank')" title="ouvrir la vidéo"></video>
         <span class="lbl"><a href="${url}" target="_blank" style="color:inherit">${esc(v.label || decodeURIComponent(v.video_url.split("/").pop() || v.video_url))}</a>${dur}</span>
       </span>
-      <button class="x" onclick="delCpVideo('${v.id}')" title="retirer de la banque">✕</button></div>`;
-  }).join("");
+      <span style="flex:none">
+        <button class="x" style="color:var(--muted)" data-id="${v.id}" data-theme="${esc(v.theme || "")}"
+                onclick="editCpTheme(this)" title="changer le thème">✎</button>
+        <button class="x" onclick="delCpVideo('${v.id}')" title="retirer de la banque">✕</button>
+      </span></div>`;
+  };
+  // groupé par thème (les vidéos sans thème à la fin)
+  const groups = {};
+  vids.forEach(v => { const k = (v.theme || "").trim(); (groups[k] = groups[k] || []).push(v); });
+  const keys = Object.keys(groups).sort((a, b) => (a === "" ? 1 : b === "" ? -1 : a.localeCompare(b)));
+  $("#cp-bank").innerHTML = keys.map(k => `
+    <div class="list-row" style="background:var(--panel2)"><b>${k ? "📁 " + esc(k) : "📂 Sans thème"}</b>
+      <span class="muted">${groups[k].length} vidéo(s)</span></div>
+    ${groups[k].map(row).join("")}`).join("");
   cpSelChanged();
 }
+window.editCpTheme = async (btn) => {
+  const t = prompt("Thème de cette vidéo (vide = sans thème) :", btn.dataset.theme || "");
+  if (t === null) return;
+  try {
+    await api("/copypaste/videos/" + btn.dataset.id, {method: "PATCH", body: JSON.stringify({theme: t.trim()})});
+    loadCpBank();
+  } catch (e) { toast("Thème : " + e.message); }
+};
 window.cpSelChanged = () => {
   const n = document.querySelectorAll("#cp-bank .cp-sel:checked").length;
   const box = $("#cp-sel-count");
@@ -1290,7 +1327,9 @@ $("#cp-generate").addEventListener("click", async () => {
                    add_random_assets: $("#cp-assets").checked,
                    seedance_quality: $("#cp-quality").value,
                    resolution: state.cp_resolution, bitrate: state.cp_bitrate,
-                   duration_s: +$("#cp-duration").value };
+                   duration_s: +$("#cp-duration").value,
+                   theme: $("#cp-theme-filter").value,
+                   video_theme: $("#cp-theme").value.trim() };
     if (selected.length) body.reference_video_ids = selected;
     const budget = parseFloat($("#cp-budget").value);
     if (!isNaN(budget)) body.budget_cap_usd = budget;

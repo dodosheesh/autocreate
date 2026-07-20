@@ -314,6 +314,9 @@ class ReferenceVideo(Base):
     tenant_id: Mapped[str] = mapped_column(String(64), default=DEFAULT_TENANT, index=True)
     video_url: Mapped[str] = mapped_column(Text)  # R2 (upload) — URL publique
     label: Mapped[str] = mapped_column(String(255), default="")
+    # Thème de rangement (gym, plage, street…) : la pioche use_bank peut être
+    # restreinte à UN thème sans jamais toucher aux autres. "" = sans thème.
+    theme: Mapped[str] = mapped_column(String(64), default="", server_default="")
     weight: Mapped[float] = mapped_column(Float, default=1.0)
     # Durée sondée à l'ajout (ffprobe). Seedance limite la référence à 15 s :
     # au-delà la vidéo est exclue des tirages use_bank. None = probe échoué.

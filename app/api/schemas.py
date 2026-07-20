@@ -345,13 +345,23 @@ class ExportOut(BaseModel):
 class ReferenceVideoCreate(BaseModel):
     video_url: HttpUrlStr = Field(description="Vidéo de référence uploadée (R2)")
     label: str = ""
+    theme: str = Field(default="", max_length=64, description="Thème de rangement (gym, plage…)")
     weight: float = Field(default=1.0, ge=0)
+
+
+class ReferenceVideoUpdate(BaseModel):
+    """Rangement d'une vidéo de la banque : seuls les champs fournis changent."""
+
+    theme: str | None = Field(default=None, max_length=64)
+    label: str | None = None
+    weight: float | None = Field(default=None, ge=0)
 
 
 class ReferenceVideoOut(BaseModel):
     id: uuid.UUID
     video_url: str
     label: str = ""
+    theme: str = ""
     weight: float
     duration_s: float | None = None  # sondée à l'ajout ; > 15 s = inutilisable
     created_at: object = None
@@ -377,6 +387,10 @@ class CopypasteJobCreate(BaseModel):
     add_random_assets: bool = True
     # Pioche AU HASARD une vidéo de la banque pour chaque item du batch.
     use_bank: bool = False
+    # Restreint la pioche use_bank à UN thème de la banque ("" = tous).
+    theme: str = Field(default="", max_length=64)
+    # Thème donné à la vidéo uploadée quand elle rejoint la banque.
+    video_theme: str = Field(default="", max_length=64)
     # Sélection PRÉCISE de vidéos de la banque : la génération est répartie
     # uniquement sur ces vidéos (round-robin mélangé). Prioritaire sur
     # use_bank et reference_video_url.
