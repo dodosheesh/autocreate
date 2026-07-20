@@ -1523,8 +1523,6 @@ async function openJob(id, auto = false, sel = "#job-detail") {
           <button class="btn small bad" onclick="review('${it.id}','rejected')">✗ Reject</button>
         </div>` : ""}
       </div>`).join("")}</div>`;
-  // Ouverture manuelle (clic sur une ligne / job lancé) → amène le résultat à l'écran.
-  if (!auto) $(sel).scrollIntoView({behavior: "smooth", block: "start"});
 }
 async function review(itemId, decision) {
   try { await api(`/items/${itemId}/review`, {method: "POST", body: JSON.stringify({decision})});
