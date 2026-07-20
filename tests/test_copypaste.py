@@ -362,21 +362,34 @@ def test_job_selection_repartie_sur_les_videos_choisies(client, model_id):
     b = client.post(
         "/api/copypaste/videos", json={"video_url": "https://r2.example/videos/sel-b.mp4"}
     ).json()
+    # count = générations PAR vidéo sélectionnée → 2 vidéos × 2 = 4 items
     with patch("app.api.routers.copypaste.dispatch_seedance"):
         r = client.post(
             "/api/copypaste/jobs",
             json={
                 "model_id": model_id,
-                "count": 4,
+                "count": 2,
                 "reference_video_ids": [a["id"], b["id"]],
             },
         )
     assert r.status_code == 200, r.text
-    urls = [it["reference_video_url"] for it in r.json()["items"]]
+    job = r.json()
+    urls = [it["reference_video_url"] for it in job["items"]]
+    assert len(urls) == 4
+    assert job["counts_per_category"] == {"copypaste": 4}
     # UNIQUEMENT les vidéos sélectionnées, réparties équitablement (2 + 2)
     assert set(urls) == {a["video_url"], b["video_url"]}
     assert urls.count(a["video_url"]) == 2
     assert urls.count(b["video_url"]) == 2
+
+    # count par défaut (1) → CHAQUE vidéo cochée est utilisée une fois
+    with patch("app.api.routers.copypaste.dispatch_seedance"):
+        r = client.post(
+            "/api/copypaste/jobs",
+            json={"model_id": model_id, "count": 1, "reference_video_ids": [a["id"], b["id"]]},
+        )
+    urls = [it["reference_video_url"] for it in r.json()["items"]]
+    assert sorted(urls) == sorted([a["video_url"], b["video_url"]])
 
 
 def test_job_selection_trop_longue_rejettee(client, model_id):

@@ -1325,12 +1325,14 @@ window.editCpTheme = async (btn) => {
 };
 window.cpSelChanged = () => {
   const n = document.querySelectorAll("#cp-bank .cp-sel:checked").length;
+  const per = Math.max(1, +$("#cp-count").value || 1);
   const box = $("#cp-sel-count");
   box.style.display = n ? "block" : "none";
   box.textContent = n
-    ? `${n} vidéo(s) sélectionnée(s) — la génération sera répartie UNIQUEMENT sur cette sélection (l'upload et la pioche aléatoire sont ignorés).`
+    ? `${n} vidéo(s) sélectionnée(s) — chaque vidéo cochée sera utilisée : « Vidéos à générer » devient le nombre de générations PAR vidéo, soit ${n} × ${per} = ${n * per} génération(s) au total (upload et pioche aléatoire ignorés).`
     : "";
 };
+$("#cp-count").addEventListener("input", () => cpSelChanged());
 window.delCpVideo = async (id) => {
   try { await api("/copypaste/videos/" + id, {method: "DELETE"}); toast("Vidéo retirée de la banque"); loadCpBank(); }
   catch (e) { toast("Suppression : " + e.message); }

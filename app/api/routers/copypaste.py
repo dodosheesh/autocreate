@@ -230,9 +230,17 @@ def create_job(
                 f"({SEEDANCE_MIN_FPS}–{SEEDANCE_MAX_FPS:.0f} fps) — clique 🔧 dans la "
                 "banque pour normaliser à 30 fps.",
             )
+        # Sélection : `count` = générations PAR vidéo sélectionnée (chaque vidéo
+        # cochée est TOUJOURS utilisée — sélection de 5 + count 1 → 5 vidéos).
         urls = [v.video_url for v in rows]
         random.Random().shuffle(urls)
-        videos = [urls[i % len(urls)] for i in range(payload.count)]
+        videos = [urls[i % len(urls)] for i in range(len(urls) * payload.count)]
+        if len(videos) > 200:
+            raise HTTPException(
+                422,
+                f"{len(urls)} vidéo(s) × {payload.count} génération(s) = {len(videos)} "
+                "vidéos demandées (max 200) — baisse « Vidéos à générer » ou la sélection.",
+            )
     elif payload.use_bank:
         rows = db.scalars(tenant_query(ReferenceVideo, user)).all()
         # Pioche restreinte à UN thème : les autres thèmes ne sont JAMAIS tirés.
@@ -330,9 +338,11 @@ def create_job(
         ]
 
     # Estimation + gate budget AVANT toute dépense (même flux que /api/jobs).
+    # total_count ≠ payload.count en mode sélection (count × vidéos cochées).
+    total_count = len(videos)
     rates = load_rates(db)
     spec = ItemSpec(
-        count=payload.count,
+        count=total_count,
         duration_s=payload.duration_s,
         resolution=payload.resolution,
         model=payload.model_variant,
@@ -345,7 +355,7 @@ def create_job(
     job = GenerationJob(
         tenant_id=user.tenant_id,
         model_id=model.id,
-        counts_per_category={Category.COPYPASTE: payload.count},
+        counts_per_category={Category.COPYPASTE: total_count},
         resolution=payload.resolution,
         duration_s=payload.duration_s,
         bitrate=payload.bitrate,
@@ -358,7 +368,7 @@ def create_job(
     db.add(job)
     db.flush()
 
-    per_item_cost = est.gross_usd / payload.count if payload.count else 0
+    per_item_cost = est.gross_usd / total_count if total_count else 0
     rng = random.Random()
     max_refs = get_settings().seedance_max_refs
     items = []

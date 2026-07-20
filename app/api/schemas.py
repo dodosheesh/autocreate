@@ -392,9 +392,10 @@ class CopypasteJobCreate(BaseModel):
     theme: str = Field(default="", max_length=64)
     # Thème donné à la vidéo uploadée quand elle rejoint la banque.
     video_theme: str = Field(default="", max_length=64)
-    # Sélection PRÉCISE de vidéos de la banque : la génération est répartie
-    # uniquement sur ces vidéos (round-robin mélangé). Prioritaire sur
-    # use_bank et reference_video_url.
+    # Sélection PRÉCISE de vidéos de la banque : chaque vidéo cochée est
+    # utilisée, et `count` devient le nombre de générations PAR vidéo
+    # sélectionnée (total = count × sélection, plafonné à 200). Prioritaire
+    # sur use_bank et reference_video_url.
     reference_video_ids: list[uuid.UUID] = []
     # Ajouté au prompt fixe « Replace the girl in the video… ».
     custom_prompt: str = ""
