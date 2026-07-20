@@ -107,6 +107,11 @@
   .btn.ghost { background: var(--panel2); border: 1px solid var(--border); color: var(--text); }
   .btn.ok { background: var(--ok); } .btn.bad { background: var(--err); }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  /* Liste de jobs compacte et scrollable : le détail du job ouvert reste
+     accessible juste en dessous, même avec des centaines de générations. */
+  .table-wrap { max-height: 320px; overflow: auto; border: 1px solid var(--border);
+                border-radius: 8px; }
+  .table-wrap thead th { position: sticky; top: 0; background: var(--panel); z-index: 1; }
   th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px;
        padding: 6px 8px; border-bottom: 1px solid var(--border); }
   td { padding: 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
@@ -416,10 +421,12 @@
 
         <div class="card">
           <h2>Jobs vidéo</h2>
-          <table>
-            <thead><tr><th>créé</th><th>catégories</th><th>statut</th><th>estimé</th><th>réel</th></tr></thead>
-            <tbody id="jobs"></tbody>
-          </table>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>créé</th><th>catégories</th><th>statut</th><th>estimé</th><th>réel</th></tr></thead>
+              <tbody id="jobs"></tbody>
+            </table>
+          </div>
           <div id="job-detail"></div>
         </div>
       </div>
@@ -514,10 +521,12 @@
 
     <div class="card">
       <h2>Jobs copypaste</h2>
-      <table>
-        <thead><tr><th>créé</th><th>vidéos</th><th>statut</th><th>estimé</th><th>réel</th></tr></thead>
-        <tbody id="cp-jobs"></tbody>
-      </table>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>créé</th><th>vidéos</th><th>statut</th><th>estimé</th><th>réel</th></tr></thead>
+          <tbody id="cp-jobs"></tbody>
+        </table>
+      </div>
       <div id="cp-job-detail"></div>
     </div>
   </section>
@@ -564,7 +573,7 @@
 
     <div class="card">
       <h2>Jobs photo</h2>
-      <div id="pic-jobs"></div>
+      <div id="pic-jobs" class="table-wrap" style="border:0"></div>
       <div id="pic-detail"></div>
     </div>
   </section>
@@ -1506,6 +1515,8 @@ async function openJob(id, auto = false, sel = "#job-detail") {
           <button class="btn small bad" onclick="review('${it.id}','rejected')">✗ Reject</button>
         </div>` : ""}
       </div>`).join("")}</div>`;
+  // Ouverture manuelle (clic sur une ligne / job lancé) → amène le résultat à l'écran.
+  if (!auto) $(sel).scrollIntoView({behavior: "smooth", block: "start"});
 }
 async function review(itemId, decision) {
   try { await api(`/items/${itemId}/review`, {method: "POST", body: JSON.stringify({decision})});
