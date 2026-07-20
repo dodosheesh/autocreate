@@ -458,7 +458,7 @@
         <div><label>Vidéos à générer</label><input type="number" id="cp-count" min="1" value="1"></div>
       </div>
       <div class="row">
-        <div><label>Thème de la vidéo uploadée <span class="muted">(optionnel — pour la ranger)</span></label>
+        <div><label>Thème de la vidéo uploadée <span class="muted">(vide = reprend le thème de pioche sélectionné)</span></label>
           <input type="text" id="cp-theme" list="cp-themes" placeholder="ex : gym, plage, street…">
           <datalist id="cp-themes"></datalist></div>
         <div><label>Thème de pioche <span class="muted">(banque)</span></label>
@@ -1329,7 +1329,8 @@ $("#cp-generate").addEventListener("click", async () => {
                    resolution: state.cp_resolution, bitrate: state.cp_bitrate,
                    duration_s: +$("#cp-duration").value,
                    theme: $("#cp-theme-filter").value,
-                   video_theme: $("#cp-theme").value.trim() };
+                   // thème d'upload : champ texte, sinon le thème de pioche resté sélectionné
+                   video_theme: $("#cp-theme").value.trim() || $("#cp-theme-filter").value };
     if (selected.length) body.reference_video_ids = selected;
     const budget = parseFloat($("#cp-budget").value);
     if (!isNaN(budget)) body.budget_cap_usd = budget;

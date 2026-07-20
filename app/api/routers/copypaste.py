@@ -150,8 +150,11 @@ def create_job(
 
     # La vidéo uploadée pour ce job rejoint la banque (dédup par URL) — sauf si
     # save_to_bank est décoché (test d'une vidéo sans polluer la banque).
+    # Thème appliqué : video_theme, sinon le thème (de pioche) resté sélectionné
+    # — l'upload suit toujours le thème visible dans l'UI.
     if payload.reference_video_url and payload.save_to_bank:
-        _add_to_bank(db, user, payload.reference_video_url, theme=payload.video_theme)
+        upload_theme = (payload.video_theme or "").strip() or (payload.theme or "").strip()
+        _add_to_bank(db, user, payload.reference_video_url, theme=upload_theme)
 
     if payload.reference_video_ids:
         # Sélection précise : la génération est répartie UNIQUEMENT sur ces

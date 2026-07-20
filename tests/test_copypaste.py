@@ -428,6 +428,26 @@ def test_theme_modifiable_apres_coup(client):
     assert r.json()["theme"] == "piscine"
 
 
+def test_upload_sans_video_theme_reprend_le_theme_de_pioche(client, model_id):
+    # video_theme vide mais thème (de pioche) sélectionné dans l'UI → l'upload
+    # est rangé dans CE thème (jamais en « sans thème »).
+    with patch("app.api.routers.copypaste.dispatch_seedance"):
+        r = client.post(
+            "/api/copypaste/jobs",
+            json={
+                "model_id": model_id,
+                "count": 1,
+                "reference_video_url": "https://r2.example/videos/gym-3.mp4",
+                "video_theme": "",
+                "theme": "gym",
+            },
+        )
+    assert r.status_code == 200, r.text
+    vids = client.get("/api/copypaste/videos").json()
+    added = next(v for v in vids if v["video_url"].endswith("gym-3.mp4"))
+    assert added["theme"] == "gym"
+
+
 def test_upload_avec_video_theme_range_dans_la_banque(client, model_id):
     with patch("app.api.routers.copypaste.dispatch_seedance"):
         r = client.post(
