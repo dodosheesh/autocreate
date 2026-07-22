@@ -1465,10 +1465,14 @@ function jobRow(j, detailSel) {
     </tr>`;
 }
 async function loadJobs() {
-  const jobs = await api("/jobs");
-  $("#jobs").innerHTML = jobs.filter(j => !isCpJob(j)).map(j => jobRow(j, "#job-detail")).join("")
+  // Filtré côté serveur : chaque onglet reçoit SES 50 derniers jobs (sinon les
+  // copypaste récents évincent les jobs vidéo de la fenêtre, et inversement).
+  const [videoJobs, cpJobs] = await Promise.all([
+    api("/jobs?kind=video"), api("/jobs?kind=copypaste"),
+  ]);
+  $("#jobs").innerHTML = videoJobs.map(j => jobRow(j, "#job-detail")).join("")
     || '<tr><td colspan="5" class="muted">aucun job</td></tr>';
-  $("#cp-jobs").innerHTML = jobs.filter(isCpJob).map(j => jobRow(j, "#cp-job-detail")).join("")
+  $("#cp-jobs").innerHTML = cpJobs.map(j => jobRow(j, "#cp-job-detail")).join("")
     || '<tr><td colspan="5" class="muted">aucun job copypaste</td></tr>';
 }
 // Un média en cours de lecture dans ce conteneur → ne pas re-render (sinon la

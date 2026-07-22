@@ -289,13 +289,24 @@ def estimate_batch_endpoint(
 
 @router.get("/jobs", response_model=list[schemas.JobSummaryOut])
 def list_jobs(
-    limit: int = 50, db: Session = Depends(get_db), user: User = Depends(current_user)
+    limit: int = 50,
+    kind: str | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
 ):
-    return db.scalars(
+    """`kind=video` exclut les jobs copypaste, `kind=copypaste` ne garde qu'eux
+    (filtré côté serveur : sinon les jobs récents d'un type poussent l'autre
+    type hors de la fenêtre `limit` et sa liste paraît vide)."""
+    rows = db.scalars(
         tenant_query(GenerationJob, user)
         .order_by(GenerationJob.created_at.desc())
-        .limit(limit)
+        .limit(2000 if kind else limit)
     ).all()
+    if kind == "copypaste":
+        rows = [j for j in rows if (j.counts_per_category or {}).get("copypaste") is not None]
+    elif kind == "video":
+        rows = [j for j in rows if (j.counts_per_category or {}).get("copypaste") is None]
+    return rows[:limit]
 
 
 @router.get("/jobs/{job_id}", response_model=schemas.JobOut)

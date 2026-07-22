@@ -229,6 +229,14 @@ def test_job_save_to_bank_false_ne_pollue_pas_la_banque(client, model_id):
     assert client.get("/api/copypaste/videos").json() == []
 
 
+def test_liste_jobs_filtree_par_kind(client, model_id):
+    # les jobs copypaste ne polluent pas la liste vidéo, et inversement
+    cps = client.get("/api/jobs?kind=copypaste").json()
+    assert cps and all("copypaste" in (j["counts_per_category"] or {}) for j in cps)
+    videos = client.get("/api/jobs?kind=video").json()
+    assert all("copypaste" not in (j["counts_per_category"] or {}) for j in videos)
+
+
 def test_job_budget_cap_bloque(client, model_id):
     with patch("app.api.routers.copypaste.dispatch_seedance") as disp:
         r = client.post(
