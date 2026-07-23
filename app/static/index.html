@@ -1468,7 +1468,7 @@ async function loadJobs() {
   // Filtré côté serveur : chaque onglet reçoit SES 50 derniers jobs (sinon les
   // copypaste récents évincent les jobs vidéo de la fenêtre, et inversement).
   const [videoJobs, cpJobs] = await Promise.all([
-    api("/jobs?kind=video"), api("/jobs?kind=copypaste"),
+    api("/jobs?kind=video&limit=200"), api("/jobs?kind=copypaste&limit=200"),
   ]);
   $("#jobs").innerHTML = videoJobs.map(j => jobRow(j, "#job-detail")).join("")
     || '<tr><td colspan="5" class="muted">aucun job</td></tr>';
