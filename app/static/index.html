@@ -897,7 +897,7 @@ document.addEventListener("change", (e) => {
     document.querySelectorAll(".js-model").forEach(s => { if (s !== e.target) s.value = activeModelId; });
     refreshEstimate();
     loadCharacteristics().catch(() => {});
-    loadAllBanks(); loadTemplates().catch(() => {}); loadPrompts().catch(() => {});
+    loadAllBanks(); loadCpBank().catch(() => {}); loadTemplates().catch(() => {}); loadPrompts().catch(() => {});
   }
 });
 
