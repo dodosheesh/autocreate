@@ -654,8 +654,8 @@ def test_refus_pixels_remplace_la_banque_et_relance_item(client, model_id, monke
         item.error = "kie.ai: The parameter video pixel count specified in the request is not valid"
         db.commit()
     monkeypatch.setattr(
-        "app.api.routers.copypaste.downscale_reference_video",
-        lambda url, tenant: ("https://r2.example/videos/too-many-pixels-1080p.mp4", VideoInfo(10.0, 30.0)),
+        "app.api.routers.copypaste.normalize_reference_video_pixel_count",
+        lambda url, tenant: ("https://r2.example/videos/too-many-pixels-normalized.mp4", VideoInfo(10.0, 30.0)),
     )
     with patch("app.api.routers.copypaste.dispatch_seedance") as dispatch:
         result = client.post(f"/api/copypaste/jobs/{job['id']}/items/{item_id}/downscale-retry")
@@ -666,4 +666,4 @@ def test_refus_pixels_remplace_la_banque_et_relance_item(client, model_id, monke
         item = db.get(JobItem, item_id)
         assert item.status == ItemStatus.COMPOSED
         assert item.error is None
-        assert item.reference_video_url.endswith("-1080p.mp4")
+        assert item.reference_video_url.endswith("-normalized.mp4")

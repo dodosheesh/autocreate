@@ -155,22 +155,24 @@ def strip_reference_video_audio(url: str, tenant_id: str) -> tuple[str, VideoInf
     return new_url, info
 
 
-def downscale_reference_video(url: str, tenant_id: str) -> tuple[str, VideoInfo]:
-    """Crée une référence Copypaste compatible, plafonnée à 1920×1080.
+def normalize_reference_video_pixel_count(url: str, tenant_id: str) -> tuple[str, VideoInfo]:
+    """Crée une référence avec au moins 720 px sur son petit côté.
 
-    Le ratio est conservé et aucune petite vidéo n'est agrandie. L'audio est
-    conservé : cette réparation vise uniquement le refus de nombre de pixels.
+    Kie/Seedance r2v exige au minimum 409 600 pixels (le refus expose le
+    champ ``video pixel count``). 720×720 est déjà au-dessus de cette limite ;
+    `increase` conserve le ratio et donne donc 720×1280 pour une vidéo 9:16,
+    ou 1280×720 pour une vidéo 16:9. L'audio est préservé.
     """
     settings = get_settings()
     with tempfile.TemporaryDirectory() as tmp:
         src = Path(tmp) / "src.mp4"
         safe_download(url, src)
-        out = Path(tmp) / "1080p.mp4"
+        out = Path(tmp) / "normalized-pixels.mp4"
         cmd = [
             settings.ffmpeg_bin, "-y",
             "-i", str(src),
             "-map", "0:v:0", "-map", "0:a?",
-            "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease",
+            "-vf", "scale=720:720:force_original_aspect_ratio=increase:force_divisible_by=2",
             "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
@@ -179,9 +181,9 @@ def downscale_reference_video(url: str, tenant_id: str) -> tuple[str, VideoInfo]
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
         if proc.returncode != 0:
             raise RuntimeError(
-                f"FFmpeg réduction 1080p a échoué ({proc.returncode}) : {proc.stderr[-1000:]}"
+                f"FFmpeg adaptation de résolution a échoué ({proc.returncode}) : {proc.stderr[-1000:]}"
             )
         info = probe_video_info(str(out))
-        key = f"refvideos/{tenant_id}/{uuid.uuid4().hex}-1080p.mp4"
+        key = f"refvideos/{tenant_id}/{uuid.uuid4().hex}-normalized.mp4"
         new_url = r2.upload_file(str(out), key, content_type="video/mp4")
     return new_url, info

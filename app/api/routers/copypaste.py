@@ -36,9 +36,9 @@ from app.db.models import (
 from app.media.probe import (
     SEEDANCE_MAX_FPS,
     SEEDANCE_MIN_FPS,
-    downscale_reference_video,
     fps_out_of_range,
     normalize_reference_video,
+    normalize_reference_video_pixel_count,
     probe_video_info,
     strip_reference_video_audio,
 )
@@ -265,9 +265,9 @@ def downscale_and_retry(
 
     old_url = item.reference_video_url
     try:
-        resized_url, info = downscale_reference_video(old_url, user.tenant_id)
+        resized_url, info = normalize_reference_video_pixel_count(old_url, user.tenant_id)
     except Exception as exc:
-        raise HTTPException(502, f"Réduction 1080p échouée : {exc}") from exc
+        raise HTTPException(502, f"Adaptation de résolution échouée : {exc}") from exc
 
     for row in db.scalars(
         tenant_query(ReferenceVideo, user).where(

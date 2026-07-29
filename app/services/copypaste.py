@@ -41,7 +41,9 @@ def is_video_pixel_limit_rejection(error: str | None) -> bool:
     """True pour le refus Kie/Seedance de taille (nombre de pixels) vidéo."""
     text = (error or "").casefold()
     return "video pixel count" in text and any(
-        marker in text for marker in ("not valid", "exceed", "maximum", "limit")
+        marker in text for marker in (
+            "not valid", "exceed", "maximum", "limit", "greater than", "less than",
+        )
     )
 
 

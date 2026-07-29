@@ -1544,7 +1544,7 @@ async function openJob(id, auto = false, sel = "#job-detail") {
           <button class="btn small ghost" onclick="stripAudioAndRetry('${j.id}','${it.id}')">🔇 Retirer l'audio et relancer</button>
         </div>` : ""}
         ${it.category === "copypaste" && it.status === "failed" && isVideoPixelLimitRejection(it.error) ? `<div class="actions">
-          <button class="btn small ghost" onclick="downscaleAndRetry('${j.id}','${it.id}')">📐 Réduire en 1080p et relancer</button>
+          <button class="btn small ghost" onclick="downscaleAndRetry('${j.id}','${it.id}')">📐 Adapter la résolution et relancer</button>
         </div>` : ""}
         ${it.status === "done" ? `<div class="actions">
           <button class="btn small ok" onclick="review('${it.id}','approved')">✓ Approve</button>
@@ -1586,14 +1586,14 @@ async function stripAudioAndRetry(jobId, itemId) {
   } catch (err) { toast("Réparation audio : " + err.message, 8000); }
 }
 async function downscaleAndRetry(jobId, itemId) {
-  if (!confirm("Créer une copie 1080p, remplacer cette vidéo dans la banque de la model et relancer les échecs de limite de pixels associés ?")) return;
-  toast("Réduction en 1080p et relance en cours (peut prendre ~30 s)…");
+  if (!confirm("Créer une copie en résolution compatible, remplacer cette vidéo dans la banque de la model et relancer les échecs de pixels associés ?")) return;
+  toast("Adaptation de résolution et relance en cours (peut prendre ~30 s)…");
   try {
     const result = await api(`/copypaste/jobs/${jobId}/items/${itemId}/downscale-retry`, {method: "POST"});
-    toast(`✅ Vidéo 1080p enregistrée — ${result.retried_items} job(s) relancé(s)`);
+    toast(`✅ Vidéo adaptée enregistrée — ${result.retried_items} job(s) relancé(s)`);
     loadCpBank().catch(() => {});
     await loadJobs(); await openJob(jobId, false, currentJobSel);
-  } catch (err) { toast("Réduction 1080p : " + err.message, 8000); }
+  } catch (err) { toast("Adaptation de résolution : " + err.message, 8000); }
 }
 async function approveAllJob(id) {
   try { await api(`/jobs/${id}/approve-all`, {method: "POST"}); toast("Toutes les vidéos livrées approuvées"); openJob(id, false, currentJobSel); }
