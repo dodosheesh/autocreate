@@ -320,6 +320,9 @@ class ReferenceVideo(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
     tenant_id: Mapped[str] = mapped_column(String(64), default=DEFAULT_TENANT, index=True)
+    # Banque Copypaste indépendante par model : une vidéo de référence de
+    # Christina ne peut jamais être proposée ou tirée pour Lia.
+    model_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("models.id"), index=True)
     video_url: Mapped[str] = mapped_column(Text)  # R2 (upload) — URL publique
     label: Mapped[str] = mapped_column(String(255), default="")
     # Thème de rangement (gym, plage, street…) : la pioche use_bank peut être
@@ -350,9 +353,6 @@ class PicturePrompt(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
     tenant_id: Mapped[str] = mapped_column(String(64), default=DEFAULT_TENANT, index=True)
-    # Banque Copypaste indépendante par model : une vidéo de référence de
-    # Christina ne peut jamais être proposée ou tirée pour Lia.
-    model_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("models.id"), index=True)
     model_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("models.id"), index=True)
     source_image_url: Mapped[str] = mapped_column(Text)  # l'upload de référence (R2)
     prompt_text: Mapped[str | None] = mapped_column(Text)  # rempli par le reverse-engineering
