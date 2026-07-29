@@ -74,6 +74,7 @@ _ADDITIVE_COLUMNS = [
     ("generation_jobs", "kie_model", "VARCHAR(128)"),
     ("reference_videos", "theme", "VARCHAR(64) NOT NULL DEFAULT ''"),
     ("reference_videos", "fps", "FLOAT"),
+    ("reference_videos", "model_id", "UUID REFERENCES models(id)"),
     ("outfits", "model_id", "UUID REFERENCES models(id)"),
     ("backgrounds", "model_id", "UUID REFERENCES models(id)"),
     ("prompt_templates", "model_id", "UUID REFERENCES models(id)"),
@@ -99,7 +100,7 @@ def ensure_columns() -> None:
         # Les banques existantes datent d'avant l'isolation par model. On les
         # rattache à la première model du tenant pour préserver son setup au
         # déploiement, plutôt que de les afficher à toutes les nouvelles models.
-        scoped_tables = ("outfits", "backgrounds", "prompt_templates", "dialogue_lines", "captions", "voice_profiles", "picture_prompts")
+        scoped_tables = ("outfits", "backgrounds", "prompt_templates", "dialogue_lines", "captions", "voice_profiles", "picture_prompts", "reference_videos")
         for table in scoped_tables:
             conn.execute(text(f"""
                 UPDATE {table} bank SET model_id = first_model.id

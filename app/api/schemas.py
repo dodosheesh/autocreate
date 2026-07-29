@@ -352,6 +352,7 @@ class ExportOut(BaseModel):
 
 
 class ReferenceVideoCreate(BaseModel):
+    model_id: uuid.UUID | None = None
     video_url: HttpUrlStr = Field(description="Vidéo de référence uploadée (R2)")
     label: str = ""
     theme: str = Field(default="", max_length=64, description="Thème de rangement (gym, plage…)")

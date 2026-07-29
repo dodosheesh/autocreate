@@ -1264,7 +1264,7 @@ $("#generate").addEventListener("click", async () => {
 
 // --- copypaste (vidéo → vidéo) ---
 async function loadCpBank() {
-  const vids = await api("/copypaste/videos");
+  const vids = getModel() ? await api("/copypaste/videos?model_id=" + encodeURIComponent(getModel())) : [];
   $("#cp-bank-count").textContent = vids.length;
   // thèmes existants → datalist (upload) + sélecteur de pioche (sélection préservée)
   const themes = [...new Set(vids.map(v => (v.theme || "").trim()).filter(Boolean))].sort();
@@ -1314,7 +1314,7 @@ async function loadCpBank() {
 window.normalizeCpVideo = async (id) => {
   toast("Analyse / normalisation en cours (peut prendre ~30 s)…");
   try {
-    const v = await api("/copypaste/videos/" + id + "/normalize", {method: "POST"});
+    const v = await api("/copypaste/videos/" + id + "/normalize?model_id=" + encodeURIComponent(getModel()), {method: "POST"});
     toast(`✅ Vidéo OK : ${v.duration_s ? v.duration_s.toFixed(0) + " s" : "?"} · ${v.fps ? v.fps.toFixed(1) + " fps" : "fps ?"}`);
     loadCpBank();
   } catch (e) { toast("Normalisation : " + e.message, 8000); }
@@ -1323,7 +1323,7 @@ window.editCpTheme = async (btn) => {
   const t = prompt("Thème de cette vidéo (vide = sans thème) :", btn.dataset.theme || "");
   if (t === null) return;
   try {
-    await api("/copypaste/videos/" + btn.dataset.id, {method: "PATCH", body: JSON.stringify({theme: t.trim()})});
+    await api("/copypaste/videos/" + btn.dataset.id + "?model_id=" + encodeURIComponent(getModel()), {method: "PATCH", body: JSON.stringify({theme: t.trim()})});
     loadCpBank();
   } catch (e) { toast("Thème : " + e.message); }
 };
@@ -1338,7 +1338,7 @@ window.cpSelChanged = () => {
 };
 $("#cp-count").addEventListener("input", () => cpSelChanged());
 window.delCpVideo = async (id) => {
-  try { await api("/copypaste/videos/" + id, {method: "DELETE"}); toast("Vidéo retirée de la banque"); loadCpBank(); }
+  try { await api("/copypaste/videos/" + id + "?model_id=" + encodeURIComponent(getModel()), {method: "DELETE"}); toast("Vidéo retirée de la banque"); loadCpBank(); }
   catch (e) { toast("Suppression : " + e.message); }
 };
 $("#cp-generate").addEventListener("click", async () => {
