@@ -21,6 +21,21 @@ HARD_PROMPT = "Replace the girl in the video for the girl in the picture."
 # (« The total duration of the video cannot exceed 15 seconds »).
 MAX_REF_VIDEO_S = 15.0
 
+# Kie/Seedance refuse parfois une référence parce que sa piste audio entre
+# dans son filtre de sûreté.  Cette liste reste volontairement stricte : un
+# simple mot « audio » ne doit jamais proposer de modifier une vidéo.
+_AUDIO_SAFETY_MARKERS = ("sensitive", "safety", "policy", "moderation")
+
+
+def is_audio_safety_rejection(error: str | None) -> bool:
+    """True seulement pour les refus explicites liés au filtre audio.
+
+    Utilisé comme garde-fou côté API avant de retirer une piste son : ce
+    n'est pas une action de réparation générique pour les autres erreurs.
+    """
+    text = (error or "").casefold()
+    return "audio" in text and any(marker in text for marker in _AUDIO_SAFETY_MARKERS)
+
 
 def build_copypaste_prompt(custom_prompt: str = "") -> str:
     """Prompt final = hard prompt + demande custom optionnelle."""

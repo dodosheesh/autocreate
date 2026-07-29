@@ -14,6 +14,7 @@ import random
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api import schemas
@@ -24,6 +25,7 @@ from app.db.base import get_db
 from app.db.models import (
     Category,
     GenerationJob,
+    ItemStatus,
     JobItem,
     JobStatus,
     Model,
@@ -37,6 +39,7 @@ from app.media.probe import (
     fps_out_of_range,
     normalize_reference_video,
     probe_video_info,
+    strip_reference_video_audio,
 )
 from app.services import composer, copypaste
 from app.services.copypaste import MAX_REF_VIDEO_S
@@ -175,6 +178,73 @@ def delete_video(
     db.delete(row)
     db.commit()
     return {"deleted": str(video_id)}
+
+
+@router.post("/jobs/{job_id}/items/{item_id}/strip-audio-retry")
+def strip_audio_and_retry(
+    job_id: uuid.UUID,
+    item_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """Répare un refus de sûreté audio et relance les items concernés.
+
+    L'action est volontairement disponible seulement pour un item Copypaste
+    explicitement refusé par le filtre audio. La ligne de banque de la model
+    est remplacée par sa copie silencieuse, sans toucher aux autres models.
+    """
+    job = owned(db, GenerationJob, job_id, user)
+    # JobItem n'a pas de tenant_id propre : le job, déjà chargé via owned(),
+    # porte l'isolation de tenant.
+    item = db.scalar(select(JobItem).where(JobItem.id == item_id, JobItem.job_id == job.id))
+    if item is None or item.category != Category.COPYPASTE or not item.reference_video_url:
+        raise HTTPException(404, "Item Copypaste introuvable")
+    if item.status != ItemStatus.FAILED or not copypaste.is_audio_safety_rejection(item.error):
+        raise HTTPException(409, "Cette réparation est réservée aux refus explicites liés à l'audio")
+
+    old_url = item.reference_video_url
+    try:
+        silent_url, info = strip_reference_video_audio(old_url, user.tenant_id)
+    except Exception as exc:
+        raise HTTPException(502, f"Suppression audio échouée : {exc}") from exc
+
+    # Remplace l'entrée de banque (même thème, label et poids), au lieu de
+    # la dupliquer. Ainsi l'ancienne vidéo sonore n'est plus proposée.
+    bank_rows = db.scalars(
+        tenant_query(ReferenceVideo, user).where(
+            ReferenceVideo.model_id == job.model_id,
+            ReferenceVideo.video_url == old_url,
+        )
+    ).all()
+    for row in bank_rows:
+        row.video_url = silent_url
+        row.duration_s, row.fps = info.duration_s, info.fps
+
+    # Une même référence peut avoir été utilisée plusieurs fois dans le
+    # job. On relance exactement les échecs audio qui l'emploient, jamais les
+    # autres échecs ni les items déjà terminés.
+    retry_items = [
+        candidate for candidate in job.items
+        if candidate.category == Category.COPYPASTE
+        and candidate.status == ItemStatus.FAILED
+        and candidate.reference_video_url == old_url
+        and copypaste.is_audio_safety_rejection(candidate.error)
+    ]
+    for candidate in retry_items:
+        candidate.reference_video_url = silent_url
+        candidate.seedance_task_id = None
+        candidate.raw_video_url = None
+        candidate.final_video_url = None
+        candidate.error = None
+        candidate.status = ItemStatus.COMPOSED
+        candidate.generation_attempts = 0
+    job.status = JobStatus.DISPATCHED
+    job.error = None
+    db.commit()
+
+    for candidate in retry_items:
+        dispatch_seedance.delay(str(candidate.id))
+    return {"retried_items": len(retry_items), "video_url": silent_url}
 
 
 # ---------- jobs ----------

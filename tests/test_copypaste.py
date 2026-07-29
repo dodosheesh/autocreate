@@ -10,10 +10,10 @@ import uuid
 
 from app.db.base import Base, SessionLocal, engine
 from app.db.init_db import SEED_PRICING
-from app.db.models import JobItem, Pricing, User
+from app.db.models import GenerationJob, ItemStatus, JobItem, JobStatus, Pricing, User
 from app.integrations.kie import build_seedance_input
 from app.main import app
-from app.services.copypaste import HARD_PROMPT, build_copypaste_prompt
+from app.services.copypaste import HARD_PROMPT, build_copypaste_prompt, is_audio_safety_rejection
 from app.services.security import hash_password
 
 ADMIN_EMAIL = "cp-owner@example.com"
@@ -75,6 +75,13 @@ def test_build_copypaste_prompt():
     assert full.endswith("keep the same outfit.")
     # ponctuation déjà présente → pas de double point
     assert build_copypaste_prompt("no zoom!").endswith("no zoom!")
+
+
+def test_audio_safety_rejection_est_strictement_ciblee():
+    assert is_audio_safety_rejection("Audio may contain sensitive content")
+    assert is_audio_safety_rejection("KIE: sensitive audio policy violation")
+    assert not is_audio_safety_rejection("audio indisponible")
+    assert not is_audio_safety_rejection("video violates safety policy")
 
 
 def test_seedance_input_avec_video_de_reference():
@@ -572,3 +579,55 @@ def test_job_sans_assets_aleatoires(client, model_id):
     with SessionLocal() as db:
         item = db.query(JobItem).filter(JobItem.job_id == uuid.UUID(r.json()["id"])).first()
         assert item.reference_image_urls == ["https://r2.example/face.jpg"]
+
+
+def test_refus_audio_remplace_la_banque_et_relance_item(client, model_id, monkeypatch):
+    source = "https://r2.example/videos/audio-sensitive.mp4"
+    with patch("app.api.routers.copypaste.dispatch_seedance"):
+        job = client.post(
+            "/api/copypaste/jobs",
+            json={"model_id": model_id, "count": 2, "reference_video_url": source},
+        ).json()
+    item_ids = [uuid.UUID(it["id"]) for it in job["items"]]
+    with SessionLocal() as db:
+        for item_id in item_ids:
+            item = db.get(JobItem, item_id)
+            item.status = ItemStatus.FAILED
+            item.error = "kie.ai: audio may contain sensitive content"
+        db.get(GenerationJob, uuid.UUID(job["id"])).status = JobStatus.FAILED
+        db.commit()
+
+    monkeypatch.setattr(
+        "app.api.routers.copypaste.strip_reference_video_audio",
+        lambda url, tenant: ("https://r2.example/videos/audio-sensitive-silent.mp4", VideoInfo(10.0, 30.0)),
+    )
+    with patch("app.api.routers.copypaste.dispatch_seedance") as dispatch:
+        result = client.post(
+            f"/api/copypaste/jobs/{job['id']}/items/{item_ids[0]}/strip-audio-retry"
+        )
+    assert result.status_code == 200, result.text
+    assert result.json()["retried_items"] == 2
+    assert dispatch.delay.call_count == 2
+    with SessionLocal() as db:
+        items = [db.get(JobItem, item_id) for item_id in item_ids]
+        assert all(item.status == ItemStatus.COMPOSED for item in items)
+        assert all(item.error is None for item in items)
+        assert all(item.reference_video_url.endswith("-silent.mp4") for item in items)
+        bank_urls = [v.video_url for v in client.get(f"/api/copypaste/videos?model_id={model_id}").json()]
+        assert "https://r2.example/videos/audio-sensitive-silent.mp4" in bank_urls
+
+
+def test_refus_non_audio_ne_peut_pas_etre_modifie(client, model_id):
+    with patch("app.api.routers.copypaste.dispatch_seedance"):
+        job = client.post(
+            "/api/copypaste/jobs",
+            json={"model_id": model_id, "count": 1, "reference_video_url": "https://r2.example/videos/other-error.mp4"},
+        ).json()
+    item_id = uuid.UUID(job["items"][0]["id"])
+    with SessionLocal() as db:
+        item = db.get(JobItem, item_id)
+        item.status = ItemStatus.FAILED
+        item.error = "kie.ai: video safety policy"
+        db.commit()
+    result = client.post(f"/api/copypaste/jobs/{job['id']}/items/{item_id}/strip-audio-retry")
+    assert result.status_code == 409

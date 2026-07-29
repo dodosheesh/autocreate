@@ -1495,6 +1495,11 @@ function jobSig(j) {
   return JSON.stringify([j.status, j.error, j.compose_shortfall,
     (j.items || []).map(it => [it.status, it.qc_status, it.review_status, it.final_video_url])]);
 }
+function isAudioSafetyRejection(error) {
+  const text = (error || "").toLowerCase();
+  return text.includes("audio") && ["sensitive", "safety", "policy", "moderation"]
+    .some(marker => text.includes(marker));
+}
 let lastJobStatus = null;
 let lastJobSig = null;
 async function openJob(id, auto = false, sel = "#job-detail") {
@@ -1530,6 +1535,9 @@ async function openJob(id, auto = false, sel = "#job-detail") {
           <a href="${esc(safeUrl(it.reference_video_url))}" target="_blank" class="muted" style="font-size:11px">vidéo de référence utilisée ↗</a>
         </div>` : ""}
         ${it.error ? `<div class="prompt" style="color:var(--err)">${esc(it.error.slice(0, 120))}</div>` : ""}
+        ${it.category === "copypaste" && it.status === "failed" && isAudioSafetyRejection(it.error) ? `<div class="actions">
+          <button class="btn small ghost" onclick="stripAudioAndRetry('${j.id}','${it.id}')">🔇 Retirer l'audio et relancer</button>
+        </div>` : ""}
         ${it.status === "done" ? `<div class="actions">
           <button class="btn small ok" onclick="review('${it.id}','approved')">✓ Approve</button>
           <button class="btn small bad" onclick="review('${it.id}','rejected')">✗ Reject</button>
@@ -1559,11 +1567,22 @@ async function recheckJob(id) {
   try { await api(`/jobs/${id}/recheck`, {method: "POST"}); toast("Vérifié auprès de kie.ai"); openJob(id, false, currentJobSel); }
   catch (err) { toast("Recheck : " + err.message); }
 }
+async function stripAudioAndRetry(jobId, itemId) {
+  if (!confirm("Créer une copie sans audio, remplacer cette vidéo dans la banque de la model et relancer les échecs audio associés ?")) return;
+  toast("Suppression de l'audio et relance en cours (peut prendre ~30 s)…");
+  try {
+    const result = await api(`/copypaste/jobs/${jobId}/items/${itemId}/strip-audio-retry`, {method: "POST"});
+    toast(`✅ Vidéo silencieuse enregistrée — ${result.retried_items} job(s) relancé(s)`);
+    loadCpBank().catch(() => {});
+    await loadJobs(); await openJob(jobId, false, currentJobSel);
+  } catch (err) { toast("Réparation audio : " + err.message, 8000); }
+}
 async function approveAllJob(id) {
   try { await api(`/jobs/${id}/approve-all`, {method: "POST"}); toast("Toutes les vidéos livrées approuvées"); openJob(id, false, currentJobSel); }
   catch (err) { toast("Approuver tout : " + err.message); }
 }
 window.openJob = openJob; window.review = review; window.recheckJob = recheckJob;
+window.stripAudioAndRetry = stripAudioAndRetry;
 window.approveAllJob = approveAllJob;
 
 // ================= PHOTOS =================

@@ -123,3 +123,33 @@ def normalize_reference_video(url: str, tenant_id: str) -> tuple[str, VideoInfo]
         key = f"refvideos/{tenant_id}/{uuid.uuid4().hex}.mp4"
         new_url = r2.upload_file(str(out), key, content_type="video/mp4")
     return new_url, VideoInfo(duration_s=info.duration_s, fps=info.fps or float(TARGET_FPS))
+
+
+def strip_reference_video_audio(url: str, tenant_id: str) -> tuple[str, VideoInfo]:
+    """Crée une copie silencieuse d'une référence Copypaste sur R2.
+
+    La vidéo est réencodée pour que l'absence de piste audio soit garantie,
+    y compris lorsque le conteneur source a plusieurs pistes.
+    """
+    settings = get_settings()
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "src.mp4"
+        safe_download(url, src)
+        out = Path(tmp) / "silent.mp4"
+        cmd = [
+            settings.ffmpeg_bin, "-y",
+            "-i", str(src),
+            "-map", "0:v:0",
+            "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+            "-an", "-movflags", "+faststart",
+            str(out),
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"FFmpeg suppression audio a échoué ({proc.returncode}) : {proc.stderr[-1000:]}"
+            )
+        info = probe_video_info(str(out))
+        key = f"refvideos/{tenant_id}/{uuid.uuid4().hex}-silent.mp4"
+        new_url = r2.upload_file(str(out), key, content_type="video/mp4")
+    return new_url, info
