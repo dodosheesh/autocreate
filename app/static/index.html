@@ -1689,14 +1689,19 @@ window.reviewPic = reviewPic;
 
 // --- bootstrap ---
 requireAuth().then(() => {
-  loadModels().then(() => { loadModelsList().catch(() => {}); loadCharacteristics().catch(() => {}); }).catch(e => toast(e.message));
-  loadAllBanks();
+  // Les banques dépendent toutes de la model active. On attend donc que
+  // loadModels ait renseigné activeModelId avant leur première lecture.
+  loadModels().then(() => {
+    loadModelsList().catch(() => {});
+    loadCharacteristics().catch(() => {});
+    loadAllBanks();
+    loadCpBank().catch(() => {});
+    loadPrompts().catch(() => {});
+    loadTemplates().catch(() => {});
+  }).catch(e => toast(e.message));
   loadJobs().catch(() => {});
-  loadCpBank().catch(() => {});
-  loadPrompts().catch(() => {});
   loadPicJobs().catch(() => {});
   loadPricing().catch(() => {});
-  loadTemplates().catch(() => {});
   setInterval(() => {
     loadJobs().catch(() => {});
     if (currentJob && !mediaPlaying(currentJobSel)) {  // jamais pendant la lecture
