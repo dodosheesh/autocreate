@@ -153,3 +153,35 @@ def strip_reference_video_audio(url: str, tenant_id: str) -> tuple[str, VideoInf
         key = f"refvideos/{tenant_id}/{uuid.uuid4().hex}-silent.mp4"
         new_url = r2.upload_file(str(out), key, content_type="video/mp4")
     return new_url, info
+
+
+def downscale_reference_video(url: str, tenant_id: str) -> tuple[str, VideoInfo]:
+    """Crée une référence Copypaste compatible, plafonnée à 1920×1080.
+
+    Le ratio est conservé et aucune petite vidéo n'est agrandie. L'audio est
+    conservé : cette réparation vise uniquement le refus de nombre de pixels.
+    """
+    settings = get_settings()
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "src.mp4"
+        safe_download(url, src)
+        out = Path(tmp) / "1080p.mp4"
+        cmd = [
+            settings.ffmpeg_bin, "-y",
+            "-i", str(src),
+            "-map", "0:v:0", "-map", "0:a?",
+            "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease",
+            "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-b:a", "128k",
+            "-movflags", "+faststart",
+            str(out),
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"FFmpeg réduction 1080p a échoué ({proc.returncode}) : {proc.stderr[-1000:]}"
+            )
+        info = probe_video_info(str(out))
+        key = f"refvideos/{tenant_id}/{uuid.uuid4().hex}-1080p.mp4"
+        new_url = r2.upload_file(str(out), key, content_type="video/mp4")
+    return new_url, info

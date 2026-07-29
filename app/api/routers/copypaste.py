@@ -36,6 +36,7 @@ from app.db.models import (
 from app.media.probe import (
     SEEDANCE_MAX_FPS,
     SEEDANCE_MIN_FPS,
+    downscale_reference_video,
     fps_out_of_range,
     normalize_reference_video,
     probe_video_info,
@@ -245,6 +246,60 @@ def strip_audio_and_retry(
     for candidate in retry_items:
         dispatch_seedance.delay(str(candidate.id))
     return {"retried_items": len(retry_items), "video_url": silent_url}
+
+
+@router.post("/jobs/{job_id}/items/{item_id}/downscale-retry")
+def downscale_and_retry(
+    job_id: uuid.UUID,
+    item_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """Réduit une référence trop grande à 1080p et relance les échecs liés."""
+    job = owned(db, GenerationJob, job_id, user)
+    item = db.scalar(select(JobItem).where(JobItem.id == item_id, JobItem.job_id == job.id))
+    if item is None or item.category != Category.COPYPASTE or not item.reference_video_url:
+        raise HTTPException(404, "Item Copypaste introuvable")
+    if item.status != ItemStatus.FAILED or not copypaste.is_video_pixel_limit_rejection(item.error):
+        raise HTTPException(409, "Cette réparation est réservée aux refus de limite de pixels vidéo")
+
+    old_url = item.reference_video_url
+    try:
+        resized_url, info = downscale_reference_video(old_url, user.tenant_id)
+    except Exception as exc:
+        raise HTTPException(502, f"Réduction 1080p échouée : {exc}") from exc
+
+    for row in db.scalars(
+        tenant_query(ReferenceVideo, user).where(
+            ReferenceVideo.model_id == job.model_id,
+            ReferenceVideo.video_url == old_url,
+        )
+    ).all():
+        row.video_url = resized_url
+        row.duration_s, row.fps = info.duration_s, info.fps
+
+    retry_items = [
+        candidate for candidate in job.items
+        if candidate.category == Category.COPYPASTE
+        and candidate.status == ItemStatus.FAILED
+        and candidate.reference_video_url == old_url
+        and copypaste.is_video_pixel_limit_rejection(candidate.error)
+    ]
+    for candidate in retry_items:
+        candidate.reference_video_url = resized_url
+        candidate.seedance_task_id = None
+        candidate.raw_video_url = None
+        candidate.final_video_url = None
+        candidate.error = None
+        candidate.status = ItemStatus.COMPOSED
+        candidate.generation_attempts = 0
+    job.status = JobStatus.DISPATCHED
+    job.error = None
+    db.commit()
+
+    for candidate in retry_items:
+        dispatch_seedance.delay(str(candidate.id))
+    return {"retried_items": len(retry_items), "video_url": resized_url}
 
 
 # ---------- jobs ----------
@@ -516,3 +571,4 @@ def create_job(
     for item in items:
         dispatch_seedance.delay(str(item.id))
     return job
+    downscale_reference_video,

@@ -37,6 +37,14 @@ def is_audio_safety_rejection(error: str | None) -> bool:
     return "audio" in text and any(marker in text for marker in _AUDIO_SAFETY_MARKERS)
 
 
+def is_video_pixel_limit_rejection(error: str | None) -> bool:
+    """True pour le refus Kie/Seedance de taille (nombre de pixels) vidéo."""
+    text = (error or "").casefold()
+    return "video pixel count" in text and any(
+        marker in text for marker in ("not valid", "exceed", "maximum", "limit")
+    )
+
+
 def build_copypaste_prompt(custom_prompt: str = "") -> str:
     """Prompt final = hard prompt + demande custom optionnelle."""
     custom = (custom_prompt or "").strip()

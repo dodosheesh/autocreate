@@ -1500,6 +1500,11 @@ function isAudioSafetyRejection(error) {
   return text.includes("audio") && ["sensitive", "safety", "policy", "moderation"]
     .some(marker => text.includes(marker));
 }
+function isVideoPixelLimitRejection(error) {
+  const text = (error || "").toLowerCase();
+  return text.includes("video pixel count") && ["not valid", "exceed", "maximum", "limit"]
+    .some(marker => text.includes(marker));
+}
 let lastJobStatus = null;
 let lastJobSig = null;
 async function openJob(id, auto = false, sel = "#job-detail") {
@@ -1537,6 +1542,9 @@ async function openJob(id, auto = false, sel = "#job-detail") {
         ${it.error ? `<div class="prompt" style="color:var(--err)">${esc(it.error.slice(0, 120))}</div>` : ""}
         ${it.category === "copypaste" && it.status === "failed" && isAudioSafetyRejection(it.error) ? `<div class="actions">
           <button class="btn small ghost" onclick="stripAudioAndRetry('${j.id}','${it.id}')">🔇 Retirer l'audio et relancer</button>
+        </div>` : ""}
+        ${it.category === "copypaste" && it.status === "failed" && isVideoPixelLimitRejection(it.error) ? `<div class="actions">
+          <button class="btn small ghost" onclick="downscaleAndRetry('${j.id}','${it.id}')">📐 Réduire en 1080p et relancer</button>
         </div>` : ""}
         ${it.status === "done" ? `<div class="actions">
           <button class="btn small ok" onclick="review('${it.id}','approved')">✓ Approve</button>
@@ -1577,12 +1585,23 @@ async function stripAudioAndRetry(jobId, itemId) {
     await loadJobs(); await openJob(jobId, false, currentJobSel);
   } catch (err) { toast("Réparation audio : " + err.message, 8000); }
 }
+async function downscaleAndRetry(jobId, itemId) {
+  if (!confirm("Créer une copie 1080p, remplacer cette vidéo dans la banque de la model et relancer les échecs de limite de pixels associés ?")) return;
+  toast("Réduction en 1080p et relance en cours (peut prendre ~30 s)…");
+  try {
+    const result = await api(`/copypaste/jobs/${jobId}/items/${itemId}/downscale-retry`, {method: "POST"});
+    toast(`✅ Vidéo 1080p enregistrée — ${result.retried_items} job(s) relancé(s)`);
+    loadCpBank().catch(() => {});
+    await loadJobs(); await openJob(jobId, false, currentJobSel);
+  } catch (err) { toast("Réduction 1080p : " + err.message, 8000); }
+}
 async function approveAllJob(id) {
   try { await api(`/jobs/${id}/approve-all`, {method: "POST"}); toast("Toutes les vidéos livrées approuvées"); openJob(id, false, currentJobSel); }
   catch (err) { toast("Approuver tout : " + err.message); }
 }
 window.openJob = openJob; window.review = review; window.recheckJob = recheckJob;
 window.stripAudioAndRetry = stripAudioAndRetry;
+window.downscaleAndRetry = downscaleAndRetry;
 window.approveAllJob = approveAllJob;
 
 // ================= PHOTOS =================
