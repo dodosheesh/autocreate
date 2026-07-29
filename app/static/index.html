@@ -897,7 +897,10 @@ document.addEventListener("change", (e) => {
     document.querySelectorAll(".js-model").forEach(s => { if (s !== e.target) s.value = activeModelId; });
     refreshEstimate();
     loadCharacteristics().catch(() => {});
+    currentJob = null; currentPicJob = null;
+    $("#job-detail").innerHTML = ""; $("#cp-job-detail").innerHTML = ""; $("#pic-detail").innerHTML = "";
     loadAllBanks(); loadCpBank().catch(() => {}); loadTemplates().catch(() => {}); loadPrompts().catch(() => {});
+    loadJobs().catch(() => {}); loadPicJobs().catch(() => {});
   }
 });
 
@@ -1471,8 +1474,9 @@ function jobRow(j, detailSel) {
 async function loadJobs() {
   // Filtré côté serveur : chaque onglet reçoit SES 50 derniers jobs (sinon les
   // copypaste récents évincent les jobs vidéo de la fenêtre, et inversement).
+  const scoped = getModel() ? "&model_id=" + encodeURIComponent(getModel()) : "";
   const [videoJobs, cpJobs] = await Promise.all([
-    api("/jobs?kind=video&limit=200"), api("/jobs?kind=copypaste&limit=200"),
+    api("/jobs?kind=video&limit=200" + scoped), api("/jobs?kind=copypaste&limit=200" + scoped),
   ]);
   $("#jobs").innerHTML = videoJobs.map(j => jobRow(j, "#job-detail")).join("")
     || '<tr><td colspan="5" class="muted">aucun job</td></tr>';
@@ -1631,7 +1635,7 @@ $("#pic-generate").addEventListener("click", async () => {
   $("#pic-generate").disabled = false;
 });
 async function loadPicJobs() {
-  const jobs = await api("/pictures/jobs");
+  const jobs = getModel() ? await api("/pictures/jobs?model_id=" + encodeURIComponent(getModel())) : [];
   $("#pic-jobs").innerHTML = jobs.length ? `<table>
     <thead><tr><th>#</th><th>photos</th><th>statut</th><th>estimé</th></tr></thead><tbody>${
     jobs.map(j => `<tr class="job-row" onclick="openPicJob('${j.id}')">

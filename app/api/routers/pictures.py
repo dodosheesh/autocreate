@@ -208,10 +208,15 @@ def create_job(
 
 @router.get("/jobs", response_model=list[schemas.PictureJobOut])
 def list_jobs(
-    limit: int = 50, db: Session = Depends(get_db), user: User = Depends(current_user)
+    limit: int = 50, model_id: uuid.UUID | None = None,
+    db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
+    query = tenant_query(PictureJob, user)
+    if model_id is not None:
+        owned(db, Model, model_id, user)
+        query = query.where(PictureJob.model_id == model_id)
     return db.scalars(
-        tenant_query(PictureJob, user).order_by(PictureJob.created_at.desc()).limit(limit)
+        query.order_by(PictureJob.created_at.desc()).limit(limit)
     ).all()
 
 
