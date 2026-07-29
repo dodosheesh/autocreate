@@ -225,6 +225,7 @@ def estimate_batch_endpoint(
     speaking_categories = set(
         db.scalars(
             tenant_query(PromptTemplate, user)
+            .where(PromptTemplate.model_id == payload.model_id)
             .where(PromptTemplate.speaking.is_(True))
             .with_only_columns(PromptTemplate.category)
             .distinct()

@@ -333,7 +333,7 @@ def create_job(
         outfits = [
             outfit_option(str(o.id), o.tags, o.image_url, o.weight)
             for o in db.scalars(
-                tenant_query(Outfit, user).where(Outfit.status == "ready")
+                tenant_query(Outfit, user).where(Outfit.model_id == model.id, Outfit.status == "ready")
             ).all()
         ]
 

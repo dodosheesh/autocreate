@@ -144,6 +144,9 @@ class Outfit(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
     tenant_id: Mapped[str] = mapped_column(String(64), default=DEFAULT_TENANT, index=True)
+    # Les banques sont propres à une model : deux personas ne doivent jamais
+    # partager par accident leurs tenues, prompts ou presets.
+    model_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("models.id"), index=True)
     image_url: Mapped[str] = mapped_column(Text)
     tags: Mapped[list] = mapped_column(JSON, default=list)
     weight: Mapped[float] = mapped_column(Float, default=1.0)
@@ -157,6 +160,7 @@ class Background(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
     tenant_id: Mapped[str] = mapped_column(String(64), default=DEFAULT_TENANT, index=True)
+    model_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("models.id"), index=True)
     image_url: Mapped[str] = mapped_column(Text)
     tags: Mapped[list] = mapped_column(JSON, default=list)
     weight: Mapped[float] = mapped_column(Float, default=1.0)
@@ -169,6 +173,7 @@ class PromptTemplate(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
     tenant_id: Mapped[str] = mapped_column(String(64), default=DEFAULT_TENANT, index=True)
+    model_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("models.id"), index=True)
     category: Mapped[str] = mapped_column(String(32), index=True)
     # Slots : {setting} {outfit} {background} {action} {camera} {mood}
     #         {characteristics} {dialogue} {caption}
@@ -195,6 +200,7 @@ class DialogueLine(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
     tenant_id: Mapped[str] = mapped_column(String(64), default=DEFAULT_TENANT, index=True)
+    model_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("models.id"), index=True)
     category: Mapped[str] = mapped_column(String(32), index=True)
     raw_text: Mapped[str] = mapped_column(Text)
     weight: Mapped[float] = mapped_column(Float, default=1.0)
@@ -207,6 +213,7 @@ class Caption(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
     tenant_id: Mapped[str] = mapped_column(String(64), default=DEFAULT_TENANT, index=True)
+    model_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("models.id"), index=True)
     category: Mapped[str] = mapped_column(String(32), index=True)
     text: Mapped[str] = mapped_column(Text)
     weight: Mapped[float] = mapped_column(Float, default=1.0)
@@ -217,6 +224,7 @@ class VoiceProfile(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
     tenant_id: Mapped[str] = mapped_column(String(64), default=DEFAULT_TENANT, index=True)
+    model_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("models.id"), index=True)
     label: Mapped[str] = mapped_column(String(255))
     elevenlabs_voice_id: Mapped[str] = mapped_column(String(64))
     gender: Mapped[str] = mapped_column(String(8))  # male / female
@@ -342,6 +350,7 @@ class PicturePrompt(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
     tenant_id: Mapped[str] = mapped_column(String(64), default=DEFAULT_TENANT, index=True)
+    model_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("models.id"), index=True)
     source_image_url: Mapped[str] = mapped_column(Text)  # l'upload de référence (R2)
     prompt_text: Mapped[str | None] = mapped_column(Text)  # rempli par le reverse-engineering
     status: Mapped[str] = mapped_column(String(16), default=PromptStatus.PENDING)

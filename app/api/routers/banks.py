@@ -25,6 +25,7 @@ from app.db.models import (
     JobItem,
     Outfit,
     PictureItem,
+    Model,
     PromptTemplate,
     User,
     VoiceProfile,
@@ -58,11 +59,25 @@ router = APIRouter(prefix="/api/banks", tags=["banks"])
 _ASSET_MODELS = {"outfit": Outfit, "background": Background}
 
 
+def _owned_model_id(db: Session, model_id: uuid.UUID | None, user: User) -> uuid.UUID | None:
+    """Valide le scope avant toute lecture/écriture d'une banque."""
+    if model_id is None:
+        return None  # compatibilité des anciennes intégrations API
+    model = db.get(Model, model_id)
+    if model is None or model.tenant_id != user.tenant_id:
+        raise HTTPException(404, "Model introuvable")
+    return model_id
+
+
 @router.post("/templates/load-defaults")
-def load_defaults(db: Session = Depends(get_db), user: User = Depends(current_user)):
+def load_defaults(
+    model_id: uuid.UUID | None = None,
+    db: Session = Depends(get_db), user: User = Depends(current_user),
+):
     """Charge la bibliothèque de templates prêts à l'emploi (mise en scène par
     catégorie) dans la banque du tenant. Idempotent (dédup par texte)."""
-    added = load_default_templates(db, user.tenant_id)
+    model_id = _owned_model_id(db, model_id, user)
+    added = load_default_templates(db, user.tenant_id, model_id=model_id)
     return {"added": added}
 
 
@@ -78,7 +93,7 @@ def reverse_video(
     (keyframes + vision). Une fois `ready`, il est tiré dans la génération
     de sa catégorie comme n'importe quel template."""
     tmpl = PromptTemplate(
-        tenant_id=user.tenant_id,
+        tenant_id=user.tenant_id, model_id=_owned_model_id(db, payload.model_id, user),
         category=payload.category,
         template_text="(analyse en cours…)",
         speaking=payload.speaking,
@@ -102,7 +117,7 @@ def reverse_video_bulk(
     Chaque template est créé en `pending` puis analysé en async (Celery)."""
     created = [
         PromptTemplate(
-            tenant_id=user.tenant_id,
+            tenant_id=user.tenant_id, model_id=_owned_model_id(db, payload.model_id, user),
             category=payload.category,
             template_text="(analyse en cours…)",
             speaking=payload.speaking,
@@ -172,6 +187,7 @@ def retranscribe_template(
 @router.delete("/templates")
 def delete_all_templates(
     category: str | None = None,
+    model_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
@@ -179,6 +195,9 @@ def delete_all_templates(
     Avec `category` (ex. podcast) : uniquement ceux de cette catégorie — utile
     pour nettoyer d'anciens templates d'un style sans toucher aux autres."""
     q = select(PromptTemplate.id).where(PromptTemplate.tenant_id == user.tenant_id)
+    scoped_model_id = _owned_model_id(db, model_id, user)
+    if scoped_model_id is not None:
+        q = q.where(PromptTemplate.model_id == scoped_model_id)
     if category:
         q = q.where(PromptTemplate.category == category)
     ids = db.scalars(q).all()
@@ -230,7 +249,7 @@ def _bulk_describe(kind: str, db_model, payload, db, user):
     """Crée N assets puis les décrit immédiatement (vision synchrone + suffixe)."""
     created = []
     for url in payload.image_urls:
-        row = db_model(tenant_id=user.tenant_id, image_url=url, tags=[], weight=payload.weight, status="pending")
+        row = db_model(tenant_id=user.tenant_id, model_id=_owned_model_id(db, payload.model_id, user), image_url=url, tags=[], weight=payload.weight, status="pending")
         db.add(row)
         created.append(row)
     db.commit()
@@ -268,9 +287,11 @@ def describe_pending_assets(
     (ex. importés avant que la description soit synchrone). Synchrone."""
     out: dict[str, int] = {}
     for kind, db_model in _ASSET_MODELS.items():
+        model_id = _owned_model_id(db, payload.model_id if payload else None, user)
         rows = db.scalars(
             select(db_model).where(
-                db_model.tenant_id == user.tenant_id, db_model.status == "pending"
+                db_model.tenant_id == user.tenant_id, db_model.model_id == model_id,
+                db_model.status == "pending"
             )
         ).all()
         suffix = ""
@@ -293,7 +314,9 @@ def _register(
         db: Session = Depends(get_db),
         user: User = Depends(current_user),
     ):
-        row = db_model(tenant_id=user.tenant_id, **payload.model_dump())
+        data = payload.model_dump()
+        data["model_id"] = _owned_model_id(db, data.get("model_id"), user)
+        row = db_model(tenant_id=user.tenant_id, **data)
         db.add(row)
         db.commit()
         db.refresh(row)
@@ -302,10 +325,14 @@ def _register(
     @router.get(f"/{name}", response_model=list[out_schema], name=f"list_{name}")
     def list_all(
         category: str | None = None,
+        model_id: uuid.UUID | None = None,
         db: Session = Depends(get_db),
         user: User = Depends(current_user),
     ):
         query = tenant_query(db_model, user)
+        scoped_model_id = _owned_model_id(db, model_id, user)
+        if scoped_model_id is not None:
+            query = query.where(db_model.model_id == scoped_model_id)
         if category is not None and hasattr(db_model, "category"):
             query = query.where(db_model.category == category)
         return db.scalars(query).all()

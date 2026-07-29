@@ -48,7 +48,8 @@ def create_prompt(
 ):
     """Enregistre une image de référence et la reverse-engineere en prompt
     réutilisable (SYNCHRONE : aucun worker requis, résultat immédiat)."""
-    prompt = PicturePrompt(tenant_id=user.tenant_id, **payload.model_dump())
+    model = owned(db, Model, payload.model_id, user) if payload.model_id else None
+    prompt = PicturePrompt(tenant_id=user.tenant_id, model_id=model.id if model else None, **payload.model_dump(exclude={"model_id"}))
     db.add(prompt)
     db.commit()
     db.refresh(prompt)
@@ -76,7 +77,7 @@ def create_prompts_bulk(
     from concurrent.futures import ThreadPoolExecutor
 
     created = [
-        PicturePrompt(tenant_id=user.tenant_id, source_image_url=url,
+        PicturePrompt(tenant_id=user.tenant_id, model_id=(owned(db, Model, payload.model_id, user).id if payload.model_id else None), source_image_url=url,
                       tags=payload.tags, weight=payload.weight, status=PromptStatus.PENDING)
         for url in payload.source_image_urls
     ]
@@ -112,10 +113,15 @@ def create_prompts_bulk(
 
 
 @router.get("/prompts", response_model=list[schemas.PicturePromptOut])
-def list_prompts(db: Session = Depends(get_db), user: User = Depends(current_user)):
-    return db.scalars(
-        tenant_query(PicturePrompt, user).order_by(PicturePrompt.created_at.desc())
-    ).all()
+def list_prompts(
+    model_id: uuid.UUID | None = None,
+    db: Session = Depends(get_db), user: User = Depends(current_user),
+):
+    query = tenant_query(PicturePrompt, user)
+    if model_id is not None:
+        owned(db, Model, model_id, user)
+        query = query.where(PicturePrompt.model_id == model_id)
+    return db.scalars(query.order_by(PicturePrompt.created_at.desc())).all()
 
 
 @router.delete("/prompts/{prompt_id}")

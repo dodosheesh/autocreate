@@ -206,13 +206,13 @@ def ensure_slots(template_text: str, speaking: bool, with_background: bool = Tru
     return text
 
 
-def load_default_templates(db: Session, tenant_id: str) -> int:
+def load_default_templates(db: Session, tenant_id: str, model_id=None) -> int:
     """Insère les templates par défaut manquants pour ce tenant (dédup par
     (catégorie, texte)). Renvoie le nombre réellement ajouté."""
     existing = {
         (t.category, t.template_text)
         for t in db.scalars(
-            select(PromptTemplate).where(PromptTemplate.tenant_id == tenant_id)
+            select(PromptTemplate).where(PromptTemplate.tenant_id == tenant_id, PromptTemplate.model_id == model_id)
         ).all()
     }
     added = 0
@@ -221,7 +221,7 @@ def load_default_templates(db: Session, tenant_id: str) -> int:
             continue
         db.add(
             PromptTemplate(
-                tenant_id=tenant_id,
+            tenant_id=tenant_id, model_id=model_id,
                 category=category,
                 template_text=text,
                 speaking=speaking,
