@@ -222,14 +222,12 @@ def estimate_batch_endpoint(
     qc_rate = payload.qc_success_rate or get_calibrated_qc_rate(
         db, settings.default_qc_success_rate
     )
+    template_query = tenant_query(PromptTemplate, user).where(PromptTemplate.speaking.is_(True))
+    if payload.model_id is not None:
+        owned(db, Model, payload.model_id, user)
+        template_query = template_query.where(PromptTemplate.model_id == payload.model_id)
     speaking_categories = set(
-        db.scalars(
-            tenant_query(PromptTemplate, user)
-            .where(PromptTemplate.model_id == payload.model_id)
-            .where(PromptTemplate.speaking.is_(True))
-            .with_only_columns(PromptTemplate.category)
-            .distinct()
-        ).all()
+        db.scalars(template_query.with_only_columns(PromptTemplate.category).distinct()).all()
     )
     specs: list[tuple[str, ItemSpec]] = [
         (

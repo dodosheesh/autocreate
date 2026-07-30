@@ -1225,7 +1225,7 @@ async function doEstimate() {
     $("#est-count").textContent = "0"; $("#est-cats").innerHTML = ""; return;
   }
   try {
-    const body = { counts_per_category: c, duration_s: +$("#duration").value,
+    const body = { counts_per_category: c, model_id: getModel(), duration_s: +$("#duration").value,
                    resolution: state.resolution, model_variant: $("#variant").value };
     const budget = parseFloat($("#budget").value);
     if (!isNaN(budget)) body.budget_usd = budget;

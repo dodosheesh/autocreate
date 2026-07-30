@@ -539,6 +539,9 @@ class BatchEstimateRequest(BaseModel):
     BatchJobCreate, sans rien créer."""
 
     counts_per_category: dict[str, int] = Field(min_length=1)
+    # Model active : permet de compter uniquement ses templates parlants.
+    # Optionnel pour conserver la compatibilité des anciens appels API.
+    model_id: uuid.UUID | None = None
     duration_s: float = Field(default=10, gt=0)
     resolution: Resolution = "720p"
     model_variant: str = "seedance_2.0"
