@@ -518,7 +518,6 @@ def create_job(
 
     per_item_cost = est.gross_usd / total_count if total_count else 0
     rng = random.Random()
-    max_refs = get_settings().seedance_max_refs
     items = []
     for index, video in enumerate(videos):
         outfit = weighted_draw(outfits, rng) if outfits else None
@@ -531,12 +530,9 @@ def create_job(
         if outfit:  # outfit.text = « wearing … »
             prompt = f"{prompt} She is {outfit.text}."
         prompt = composer.inject_characteristics(prompt, active)
-        refs = composer.select_reference_images(
-            model.face_reference_url,
-            active,
-            extra_refs=[outfit.image_url] if outfit and outfit.image_url else [],
-            max_refs=max_refs,
-        )
+        # Copypaste: the face photo is the sole visual identity reference.
+        # Asset images remain as text in the prompt so they cannot dilute it.
+        refs = [model.face_reference_url]
         items.append(
             JobItem(
                 job_id=job.id,

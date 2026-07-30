@@ -15,7 +15,13 @@ from app.services.variation import Option, weighted_draw
 
 # Prompt FIXE de la feature : la fille de la vidéo est remplacée par la model
 # (la photo visage part en référence image à côté de la vidéo).
-HARD_PROMPT = "Replace the girl in the video for the girl in the picture."
+HARD_PROMPT = (
+    "Replace the woman in the reference video with the woman in reference image 1. "
+    "Reference image 1 is the only identity source: preserve her exact facial identity, "
+    "including face shape, eyes, nose, lips, skin tone and hairline. Do not retain or blend "
+    "the identity of the woman from the source video. Preserve the source video's motion, "
+    "camera, pose, setting and action."
+)
 
 # Limite Seedance 2 : la vidéo de référence ne peut pas dépasser 15 s
 # (« The total duration of the video cannot exceed 15 seconds »).
