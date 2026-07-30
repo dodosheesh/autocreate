@@ -24,7 +24,9 @@ MAX_REF_VIDEO_S = 15.0
 # Kie/Seedance refuse parfois une référence parce que sa piste audio entre
 # dans son filtre de sûreté.  Cette liste reste volontairement stricte : un
 # simple mot « audio » ne doit jamais proposer de modifier une vidéo.
-_AUDIO_SAFETY_MARKERS = ("sensitive", "safety", "policy", "moderation")
+_AUDIO_SAFETY_MARKERS = (
+    "sensitive", "safety", "policy", "moderation", "copyright", "copyright restrictions",
+)
 
 
 def is_audio_safety_rejection(error: str | None) -> bool:

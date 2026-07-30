@@ -82,6 +82,7 @@ def test_build_copypaste_prompt():
 def test_audio_safety_rejection_est_strictement_ciblee():
     assert is_audio_safety_rejection("Audio may contain sensitive content")
     assert is_audio_safety_rejection("KIE: sensitive audio policy violation")
+    assert is_audio_safety_rejection("The output audio may be related to copyright restrictions")
     assert not is_audio_safety_rejection("audio indisponible")
     assert not is_audio_safety_rejection("video violates safety policy")
 

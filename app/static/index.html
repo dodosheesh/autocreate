@@ -1497,7 +1497,7 @@ function jobSig(j) {
 }
 function isAudioSafetyRejection(error) {
   const text = (error || "").toLowerCase();
-  return text.includes("audio") && ["sensitive", "safety", "policy", "moderation"]
+  return text.includes("audio") && ["sensitive", "safety", "policy", "moderation", "copyright"]
     .some(marker => text.includes(marker));
 }
 function isVideoPixelLimitRejection(error) {
