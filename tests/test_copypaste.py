@@ -296,11 +296,13 @@ def test_job_assets_aleatoires_injecte_caracteristique_et_outfit(client, model_i
         assert "wearing red dress" in it["filled_prompt"]
         assert "floral tattoo" in it["filled_prompt"]
         assert "ackground" not in it["filled_prompt"]  # jamais de background
-    # Copypaste verrouille l'identité : seule la photo visage est envoyée.
+    # Réf. 1 = identité ; réf. 2 = outfit. Les traits restent textuels.
     with SessionLocal() as db:
         items = db.query(JobItem).filter(JobItem.job_id == uuid.UUID(job["id"])).all()
         for item in items:
-            assert item.reference_image_urls == ["https://r2.example/face.jpg"]
+            assert item.reference_image_urls == [
+                "https://r2.example/face.jpg", "https://r2.example/outfit.jpg",
+            ]
             assert item.outfit_id is not None
             assert item.characteristic_ids
 

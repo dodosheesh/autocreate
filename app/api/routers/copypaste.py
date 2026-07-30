@@ -530,9 +530,11 @@ def create_job(
         if outfit:  # outfit.text = « wearing … »
             prompt = f"{prompt} She is {outfit.text}."
         prompt = composer.inject_characteristics(prompt, active)
-        # Copypaste: the face photo is the sole visual identity reference.
-        # Asset images remain as text in the prompt so they cannot dilute it.
+        # Ref 1 locks the identity. Ref 2 may show the outfit only; characteristic
+        # images remain textual so they cannot compete with the face.
         refs = [model.face_reference_url]
+        if outfit and outfit.image_url:
+            refs.append(outfit.image_url)
         items.append(
             JobItem(
                 job_id=job.id,

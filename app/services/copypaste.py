@@ -20,7 +20,8 @@ HARD_PROMPT = (
     "Reference image 1 is the only identity source: preserve her exact facial identity, "
     "including face shape, eyes, nose, lips, skin tone and hairline. Do not retain or blend "
     "the identity of the woman from the source video. Preserve the source video's motion, "
-    "camera, pose, setting and action."
+    "camera, pose, setting and action. If reference image 2 is provided, use it only for the "
+    "outfit; it must never change the face or identity from reference image 1."
 )
 
 # Limite Seedance 2 : la vidéo de référence ne peut pas dépasser 15 s
