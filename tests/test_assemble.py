@@ -25,6 +25,20 @@ def test_commande_1080p_high():
     assert "-b:v 12000k" in joined
 
 
+def test_assemble_efface_les_metadonnees():
+    # Étiquette de provenance / C2PA héritée de Seedance retirée avant livraison.
+    cmd = build_assemble_command("in.mp4", "out.mp4", AssembleParams("720p", "standard"))
+    joined = " ".join(cmd)
+    assert "-map_metadata -1" in joined
+    assert "-map_chapters -1" in joined
+
+
+def test_concat_efface_les_metadonnees():
+    cmd = build_concat_command(["a.mp4", "b.mp4"], "out.mp4")
+    joined = " ".join(cmd)
+    assert "-map_metadata -1" in joined and "-map_chapters -1" in joined
+
+
 def test_resolution_inconnue():
     with pytest.raises(ValueError):
         build_assemble_command("in.mp4", "out.mp4", AssembleParams("4k", "standard"))

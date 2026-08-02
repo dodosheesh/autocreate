@@ -7,6 +7,12 @@ Normalise la vidéo (déjà voix-swappée le cas échéant) au format de livrais
   largeur + texte centré, contenu depuis le slot {caption})
 - piste musique optionnelle mixée sous la voix (music_url du job)
 - audio AAC, faststart pour le streaming
+- AUCUNE métadonnée héritée : tags de conteneur, chapitres et manifeste de
+  provenance C2PA (« Content Credentials » / étiquette généré-par-IA) sont
+  retirés à l'encodage (pendant vidéo de media/scrub.py côté photo).
+
+⚠️ Comme pour les images, cela retire l'étiquette LISIBLE (métadonnées/C2PA),
+pas un éventuel watermark encodé dans les pixels/l'audio (type SynthID).
 
 Le texte du caption passe par un fichier (drawtext textfile=) pour éviter
 tout problème d'échappement — le contenu vient de l'utilisateur.
@@ -47,6 +53,11 @@ def _wrap_caption(text: str, max_chars: int = 36, max_lines: int = 4) -> list[st
     if cur:
         lines.append(cur)
     return lines[:max_lines]
+
+# Flags FFmpeg qui vident toute métadonnée héritée du fichier source (tags de
+# conteneur, chapitres — y compris un manifeste de provenance C2PA / « Content
+# Credentials »). Appliqués à toute vidéo livrée à l'utilisateur.
+_STRIP_METADATA = ["-map_metadata", "-1", "-map_chapters", "-1"]
 
 RESOLUTIONS: dict[str, tuple[int, int]] = {
     "480p": (480, 854),
@@ -145,6 +156,7 @@ def build_assemble_command(
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
         "-b:a", "192k",
+        *_STRIP_METADATA,
         "-movflags", "+faststart",
         output_path,
     ]
@@ -166,7 +178,9 @@ def build_concat_command(clip_paths: list[str], output_path: str) -> list[str]:
         "-filter_complex", f"{streams}concat=n={n}:v=1:a=1[v][a]",
         "-map", "[v]", "-map", "[a]",
         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "medium",
-        "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
+        "-c:a", "aac", "-b:a", "192k",
+        *_STRIP_METADATA,
+        "-movflags", "+faststart",
         output_path,
     ]
     return cmd
