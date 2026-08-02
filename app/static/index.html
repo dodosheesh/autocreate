@@ -897,6 +897,10 @@ document.addEventListener("change", (e) => {
     document.querySelectorAll(".js-model").forEach(s => { if (s !== e.target) s.value = activeModelId; });
     refreshEstimate();
     loadCharacteristics().catch(() => {});
+    currentJob = null; currentPicJob = null;
+    $("#job-detail").innerHTML = ""; $("#cp-job-detail").innerHTML = ""; $("#pic-detail").innerHTML = "";
+    loadAllBanks(); loadCpBank().catch(() => {}); loadTemplates().catch(() => {}); loadPrompts().catch(() => {});
+    loadJobs().catch(() => {}); loadPicJobs().catch(() => {});
   }
 });
 
@@ -969,7 +973,8 @@ window.editCharImg = (mid, cid) => pickAndUpload(async (url) => {
   } catch (e) { toast(e.message); }
 });
 async function loadBankList(kind, sel, rowFn) {
-  renderList(sel, await api("/banks/" + kind), rowFn);
+  if (!getModel()) return renderList(sel, [], rowFn);
+  renderList(sel, await api("/banks/" + kind + "?model_id=" + encodeURIComponent(getModel())), rowFn);
 }
 function loadAllBanks() {
   loadBankList("voices", "#list-voices", v => delRow(`[${esc(v.tag)}] ${esc(v.label)} · ${esc(v.elevenlabs_voice_id)}`, v.id, "delVoice")).catch(() => {});
@@ -982,7 +987,8 @@ function loadAllBanks() {
 // Templates filtrés par la catégorie sélectionnée + texte ENTIER (lisible).
 async function loadTemplatesList() {
   const cat = $("#t-cat").value;
-  const items = await api("/banks/templates?category=" + encodeURIComponent(cat));
+  if (!getModel()) return renderList("#list-templates", [], () => "");
+  const items = await api("/banks/templates?category=" + encodeURIComponent(cat) + "&model_id=" + encodeURIComponent(getModel()));
   const el = $("#list-templates"); if (!el) return;
   el.innerHTML = items.length
     ? items.map(t => `<div class="list-row top"><span class="grow"><span class="lbl wrap">`
@@ -1036,7 +1042,7 @@ async function bulkDescribe(kind, filesSel, suffixSel, btnSel) {
     }
     const endpoint = kind === "outfit" ? "outfits" : "backgrounds";
     const rows = await api(`/banks/${endpoint}/bulk-describe`, {method: "POST",
-      body: JSON.stringify({image_urls: urls, suffix: $(suffixSel).value})});
+      body: JSON.stringify({model_id: getModel(), image_urls: urls, suffix: $(suffixSel).value})});
     $(filesSel).value = "";
     const ok = rows.filter(r => r.status === "ready").length;
     const ko = rows.length - ok;
@@ -1052,7 +1058,7 @@ async function describePending() {
   const btn = $("#describe-pending-btn");
   btn.disabled = true; btn.textContent = "Description en cours…";
   try {
-    const r = await api("/banks/assets/describe-pending", {method: "POST", body: "{}"});
+    const r = await api("/banks/assets/describe-pending", {method: "POST", body: JSON.stringify({model_id: getModel()})});
     const n = (r.described.outfit || 0) + (r.described.background || 0);
     toast(n ? `${n} élément(s) traité(s)` : "Aucun élément en attente");
     loadAllBanks();
@@ -1105,54 +1111,55 @@ async function addImageBank(endpoint, fileSel, tagsSel, label) {
   try {
     if (!$(fileSel).files[0]) return toast("Image manquante");
     const url = await uploadFile($(fileSel));
-    await api(`/banks/${endpoint}`, {method: "POST", body: JSON.stringify({image_url: url, tags: tags($(tagsSel).value)})});
+    if (!getModel()) return toast("SÃ©lectionne une model");
+    await api(`/banks/${endpoint}`, {method: "POST", body: JSON.stringify({model_id: getModel(), image_url: url, tags: tags($(tagsSel).value)})});
     toast(label + " ajouté"); $(fileSel).value = ""; $(tagsSel).value = ""; loadAllBanks();
   } catch (e) { toast(label + " : " + e.message); }
 }
 $("#o-add").addEventListener("click", () => addImageBank("outfits", "#o-photo", "#o-tags", "Outfit"));
 $("#b-add").addEventListener("click", () => addImageBank("backgrounds", "#b-photo", "#b-tags", "Background"));
 $("#load-templates").addEventListener("click", async () => {
-  try { const r = await api("/banks/templates/load-defaults", {method: "POST"});
+  try { const r = await api("/banks/templates/load-defaults?model_id=" + encodeURIComponent(getModel()), {method: "POST"});
     toast(r.added + " template(s) chargé(s)"); loadAllBanks(); }
   catch (e) { toast("Templates : " + e.message); }
 });
 $("#del-all-templates").addEventListener("click", async () => {
   if (!confirm("Supprimer TOUS les templates de scène ? (tu pourras recharger les templates par défaut ensuite)")) return;
-  try { const r = await api("/banks/templates", {method: "DELETE"});
+  try { const r = await api("/banks/templates?model_id=" + encodeURIComponent(getModel()), {method: "DELETE"});
     toast(r.deleted + " template(s) supprimé(s)"); loadAllBanks(); }
   catch (e) { toast("Templates : " + e.message); }
 });
 $("#del-cat-templates").addEventListener("click", async () => {
   const cat = $("#t-cat").value;
   if (!confirm(`Supprimer tous les templates « ${cat} » ? (les autres catégories ne sont pas touchées)`)) return;
-  try { const r = await api("/banks/templates?category=" + encodeURIComponent(cat), {method: "DELETE"});
+  try { const r = await api("/banks/templates?category=" + encodeURIComponent(cat) + "&model_id=" + encodeURIComponent(getModel()), {method: "DELETE"});
     toast(r.deleted + ` template(s) « ${cat} » supprimé(s)`); loadAllBanks(); }
   catch (e) { toast("Templates : " + e.message); }
 });
 $("#t-add").addEventListener("click", async () => {
   try {
     await api("/banks/templates", {method: "POST", body: JSON.stringify({
-      category: $("#t-cat").value, template_text: $("#t-text").value, speaking: $("#t-speaking").checked})});
+      model_id: getModel(), category: $("#t-cat").value, template_text: $("#t-text").value, speaking: $("#t-speaking").checked})});
     toast("Template ajouté"); $("#t-text").value = ""; loadAllBanks();
   } catch (e) { toast("Template : " + e.message); }
 });
 $("#d-add").addEventListener("click", async () => {
   try {
     await api("/banks/dialogues", {method: "POST", body: JSON.stringify({
-      category: $("#d-cat").value, raw_text: $("#d-text").value})});
+      model_id: getModel(), category: $("#d-cat").value, raw_text: $("#d-text").value})});
     toast("Dialogue ajouté"); $("#d-text").value = ""; loadAllBanks();
   } catch (e) { toast("Dialogue : " + e.message); }
 });
 $("#cap-add").addEventListener("click", async () => {
   try {
-    await api("/banks/captions", {method: "POST", body: JSON.stringify({category: $("#cap-cat").value, text: $("#cap-text").value})});
+    await api("/banks/captions", {method: "POST", body: JSON.stringify({model_id: getModel(), category: $("#cap-cat").value, text: $("#cap-text").value})});
     toast("Caption ajoutée"); $("#cap-text").value = ""; loadAllBanks();
   } catch (e) { toast("Caption : " + e.message); }
 });
 $("#v-add").addEventListener("click", async () => {
   try {
     await api("/banks/voices", {method: "POST", body: JSON.stringify({
-      label: $("#v-label").value, elevenlabs_voice_id: $("#v-id").value, gender: $("#v-gender").value, tag: $("#v-tag").value})});
+      model_id: getModel(), label: $("#v-label").value, elevenlabs_voice_id: $("#v-id").value, gender: $("#v-gender").value, tag: $("#v-tag").value})});
     toast("Voix ajoutée"); $("#v-label").value = ""; $("#v-id").value = ""; loadAllBanks();
   } catch (e) { toast("Voix : " + e.message); }
 });
@@ -1218,7 +1225,7 @@ async function doEstimate() {
     $("#est-count").textContent = "0"; $("#est-cats").innerHTML = ""; return;
   }
   try {
-    const body = { counts_per_category: c, duration_s: +$("#duration").value,
+    const body = { counts_per_category: c, model_id: getModel(), duration_s: +$("#duration").value,
                    resolution: state.resolution, model_variant: $("#variant").value };
     const budget = parseFloat($("#budget").value);
     if (!isNaN(budget)) body.budget_usd = budget;
@@ -1260,7 +1267,7 @@ $("#generate").addEventListener("click", async () => {
 
 // --- copypaste (vidéo → vidéo) ---
 async function loadCpBank() {
-  const vids = await api("/copypaste/videos");
+  const vids = getModel() ? await api("/copypaste/videos?model_id=" + encodeURIComponent(getModel())) : [];
   $("#cp-bank-count").textContent = vids.length;
   // thèmes existants → datalist (upload) + sélecteur de pioche (sélection préservée)
   const themes = [...new Set(vids.map(v => (v.theme || "").trim()).filter(Boolean))].sort();
@@ -1310,7 +1317,7 @@ async function loadCpBank() {
 window.normalizeCpVideo = async (id) => {
   toast("Analyse / normalisation en cours (peut prendre ~30 s)…");
   try {
-    const v = await api("/copypaste/videos/" + id + "/normalize", {method: "POST"});
+    const v = await api("/copypaste/videos/" + id + "/normalize?model_id=" + encodeURIComponent(getModel()), {method: "POST"});
     toast(`✅ Vidéo OK : ${v.duration_s ? v.duration_s.toFixed(0) + " s" : "?"} · ${v.fps ? v.fps.toFixed(1) + " fps" : "fps ?"}`);
     loadCpBank();
   } catch (e) { toast("Normalisation : " + e.message, 8000); }
@@ -1319,7 +1326,7 @@ window.editCpTheme = async (btn) => {
   const t = prompt("Thème de cette vidéo (vide = sans thème) :", btn.dataset.theme || "");
   if (t === null) return;
   try {
-    await api("/copypaste/videos/" + btn.dataset.id, {method: "PATCH", body: JSON.stringify({theme: t.trim()})});
+    await api("/copypaste/videos/" + btn.dataset.id + "?model_id=" + encodeURIComponent(getModel()), {method: "PATCH", body: JSON.stringify({theme: t.trim()})});
     loadCpBank();
   } catch (e) { toast("Thème : " + e.message); }
 };
@@ -1334,7 +1341,7 @@ window.cpSelChanged = () => {
 };
 $("#cp-count").addEventListener("input", () => cpSelChanged());
 window.delCpVideo = async (id) => {
-  try { await api("/copypaste/videos/" + id, {method: "DELETE"}); toast("Vidéo retirée de la banque"); loadCpBank(); }
+  try { await api("/copypaste/videos/" + id + "?model_id=" + encodeURIComponent(getModel()), {method: "DELETE"}); toast("Vidéo retirée de la banque"); loadCpBank(); }
   catch (e) { toast("Suppression : " + e.message); }
 };
 $("#cp-generate").addEventListener("click", async () => {
@@ -1380,7 +1387,7 @@ $("#rv-go").addEventListener("click", async () => {
     const urls = await uploadAll($("#rv-file"),
       (i, t) => { btn.textContent = `Upload ${i + 1}/${t}…`; });
     await api("/banks/templates/reverse-video/bulk", {method: "POST", body: JSON.stringify({
-      source_video_urls: urls, category: $("#rv-cat").value, speaking: $("#rv-speaking").checked})});
+      model_id: getModel(), source_video_urls: urls, category: $("#rv-cat").value, speaking: $("#rv-speaking").checked})});
     $("#rv-file").value = "";
     toast(`${urls.length} vidéo(s) uploadée(s) — analyse en cours`);
     loadTemplates();
@@ -1397,7 +1404,7 @@ $("#rvl-go").addEventListener("click", async () => {
       (i, t) => { btn.textContent = `Upload ${i + 1}/${t}…`; });
     // Catégorie forcée storytelling_long + parlant (les paroles alimentent les 2 clips).
     await api("/banks/templates/reverse-video/bulk", {method: "POST", body: JSON.stringify({
-      source_video_urls: urls, category: LONG_FORM_CAT, speaking: true})});
+      model_id: getModel(), source_video_urls: urls, category: LONG_FORM_CAT, speaking: true})});
     $("#rvl-file").value = "";
     toast(`${urls.length} vidéo(s) 30 s uploadée(s) — analyse en cours`);
     loadTemplates();
@@ -1433,7 +1440,7 @@ window.retranscribe = async (id) => {
   loadTemplates();
 };
 async function loadTemplates() {
-  const tmpls = await api("/banks/templates");
+  const tmpls = getModel() ? await api("/banks/templates?model_id=" + encodeURIComponent(getModel())) : [];
   const rv = tmpls.filter(t => t.source_video_url);
   // Deux pools SÉPARÉS : clips courts (toutes catégories sauf 30 s) vs 30 s.
   const short = rv.filter(t => t.category !== LONG_FORM_CAT);
@@ -1467,8 +1474,9 @@ function jobRow(j, detailSel) {
 async function loadJobs() {
   // Filtré côté serveur : chaque onglet reçoit SES 50 derniers jobs (sinon les
   // copypaste récents évincent les jobs vidéo de la fenêtre, et inversement).
+  const scoped = getModel() ? "&model_id=" + encodeURIComponent(getModel()) : "";
   const [videoJobs, cpJobs] = await Promise.all([
-    api("/jobs?kind=video&limit=200"), api("/jobs?kind=copypaste&limit=200"),
+    api("/jobs?kind=video&limit=200" + scoped), api("/jobs?kind=copypaste&limit=200" + scoped),
   ]);
   $("#jobs").innerHTML = videoJobs.map(j => jobRow(j, "#job-detail")).join("")
     || '<tr><td colspan="5" class="muted">aucun job</td></tr>';
@@ -1486,6 +1494,16 @@ function mediaPlaying(sel) {
 function jobSig(j) {
   return JSON.stringify([j.status, j.error, j.compose_shortfall,
     (j.items || []).map(it => [it.status, it.qc_status, it.review_status, it.final_video_url])]);
+}
+function isAudioSafetyRejection(error) {
+  const text = (error || "").toLowerCase();
+  return text.includes("audio") && ["sensitive", "safety", "policy", "moderation", "copyright"]
+    .some(marker => text.includes(marker));
+}
+function isVideoPixelLimitRejection(error) {
+  const text = (error || "").toLowerCase();
+  return text.includes("video pixel count") && ["not valid", "exceed", "maximum", "limit"]
+    .some(marker => text.includes(marker));
 }
 let lastJobStatus = null;
 let lastJobSig = null;
@@ -1522,6 +1540,12 @@ async function openJob(id, auto = false, sel = "#job-detail") {
           <a href="${esc(safeUrl(it.reference_video_url))}" target="_blank" class="muted" style="font-size:11px">vidéo de référence utilisée ↗</a>
         </div>` : ""}
         ${it.error ? `<div class="prompt" style="color:var(--err)">${esc(it.error.slice(0, 120))}</div>` : ""}
+        ${it.category === "copypaste" && it.status === "failed" && isAudioSafetyRejection(it.error) ? `<div class="actions">
+          <button class="btn small ghost" onclick="stripAudioAndRetry('${j.id}','${it.id}')">🔇 Retirer l'audio et relancer</button>
+        </div>` : ""}
+        ${it.category === "copypaste" && it.status === "failed" && isVideoPixelLimitRejection(it.error) ? `<div class="actions">
+          <button class="btn small ghost" onclick="downscaleAndRetry('${j.id}','${it.id}')">📐 Adapter la résolution et relancer</button>
+        </div>` : ""}
         ${it.status === "done" ? `<div class="actions">
           <button class="btn small ok" onclick="review('${it.id}','approved')">✓ Approve</button>
           <button class="btn small bad" onclick="review('${it.id}','rejected')">✗ Reject</button>
@@ -1551,11 +1575,33 @@ async function recheckJob(id) {
   try { await api(`/jobs/${id}/recheck`, {method: "POST"}); toast("Vérifié auprès de kie.ai"); openJob(id, false, currentJobSel); }
   catch (err) { toast("Recheck : " + err.message); }
 }
+async function stripAudioAndRetry(jobId, itemId) {
+  if (!confirm("Créer une copie sans audio, remplacer cette vidéo dans la banque de la model et relancer les échecs audio associés ?")) return;
+  toast("Suppression de l'audio et relance en cours (peut prendre ~30 s)…");
+  try {
+    const result = await api(`/copypaste/jobs/${jobId}/items/${itemId}/strip-audio-retry`, {method: "POST"});
+    toast(`✅ Vidéo silencieuse enregistrée — ${result.retried_items} job(s) relancé(s)`);
+    loadCpBank().catch(() => {});
+    await loadJobs(); await openJob(jobId, false, currentJobSel);
+  } catch (err) { toast("Réparation audio : " + err.message, 8000); }
+}
+async function downscaleAndRetry(jobId, itemId) {
+  if (!confirm("Créer une copie en résolution compatible, remplacer cette vidéo dans la banque de la model et relancer les échecs de pixels associés ?")) return;
+  toast("Adaptation de résolution et relance en cours (peut prendre ~30 s)…");
+  try {
+    const result = await api(`/copypaste/jobs/${jobId}/items/${itemId}/downscale-retry`, {method: "POST"});
+    toast(`✅ Vidéo adaptée enregistrée — ${result.retried_items} job(s) relancé(s)`);
+    loadCpBank().catch(() => {});
+    await loadJobs(); await openJob(jobId, false, currentJobSel);
+  } catch (err) { toast("Adaptation de résolution : " + err.message, 8000); }
+}
 async function approveAllJob(id) {
   try { await api(`/jobs/${id}/approve-all`, {method: "POST"}); toast("Toutes les vidéos livrées approuvées"); openJob(id, false, currentJobSel); }
   catch (err) { toast("Approuver tout : " + err.message); }
 }
 window.openJob = openJob; window.review = review; window.recheckJob = recheckJob;
+window.stripAudioAndRetry = stripAudioAndRetry;
+window.downscaleAndRetry = downscaleAndRetry;
 window.approveAllJob = approveAllJob;
 
 // ================= PHOTOS =================
@@ -1568,7 +1614,8 @@ $("#pic-reverse").addEventListener("click", async () => {
     const urls = await uploadAll($("#pic-ref-file"),
       (i, t) => { btn.textContent = `Upload ${i + 1}/${t}…`; });
     btn.textContent = `Analyse de ${urls.length} image(s)…`;
-    await api("/pictures/prompts/bulk", {method: "POST", body: JSON.stringify({source_image_urls: urls})});
+    if (!getModel()) return toast("SÃ©lectionne une model");
+    await api("/pictures/prompts/bulk", {method: "POST", body: JSON.stringify({model_id: getModel(), source_image_urls: urls})});
     $("#pic-ref-file").value = "";
     toast(`${urls.length} image(s) reverse-engineerée(s)`);
     loadPrompts();
@@ -1576,7 +1623,7 @@ $("#pic-reverse").addEventListener("click", async () => {
   btn.disabled = false; btn.textContent = "Uploader & reverse-engineer";
 });
 async function loadPrompts() {
-  const prompts = await api("/pictures/prompts");
+  const prompts = getModel() ? await api("/pictures/prompts?model_id=" + encodeURIComponent(getModel())) : [];
   const head = $("#pic-prompts-head");
   if (prompts.length) {
     head.style.display = "flex";
@@ -1626,7 +1673,7 @@ $("#pic-generate").addEventListener("click", async () => {
   $("#pic-generate").disabled = false;
 });
 async function loadPicJobs() {
-  const jobs = await api("/pictures/jobs");
+  const jobs = getModel() ? await api("/pictures/jobs?model_id=" + encodeURIComponent(getModel())) : [];
   $("#pic-jobs").innerHTML = jobs.length ? `<table>
     <thead><tr><th>#</th><th>photos</th><th>statut</th><th>estimé</th></tr></thead><tbody>${
     jobs.map(j => `<tr class="job-row" onclick="openPicJob('${j.id}')">
@@ -1684,14 +1731,19 @@ window.reviewPic = reviewPic;
 
 // --- bootstrap ---
 requireAuth().then(() => {
-  loadModels().then(() => { loadModelsList().catch(() => {}); loadCharacteristics().catch(() => {}); }).catch(e => toast(e.message));
-  loadAllBanks();
+  // Les banques dépendent toutes de la model active. On attend donc que
+  // loadModels ait renseigné activeModelId avant leur première lecture.
+  loadModels().then(() => {
+    loadModelsList().catch(() => {});
+    loadCharacteristics().catch(() => {});
+    loadAllBanks();
+    loadCpBank().catch(() => {});
+    loadPrompts().catch(() => {});
+    loadTemplates().catch(() => {});
+  }).catch(e => toast(e.message));
   loadJobs().catch(() => {});
-  loadCpBank().catch(() => {});
-  loadPrompts().catch(() => {});
   loadPicJobs().catch(() => {});
   loadPricing().catch(() => {});
-  loadTemplates().catch(() => {});
   setInterval(() => {
     loadJobs().catch(() => {});
     if (currentJob && !mediaPlaying(currentJobSel)) {  // jamais pendant la lecture

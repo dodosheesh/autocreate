@@ -14,6 +14,7 @@ import random
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api import schemas
@@ -24,6 +25,7 @@ from app.db.base import get_db
 from app.db.models import (
     Category,
     GenerationJob,
+    ItemStatus,
     JobItem,
     JobStatus,
     Model,
@@ -36,7 +38,9 @@ from app.media.probe import (
     SEEDANCE_MIN_FPS,
     fps_out_of_range,
     normalize_reference_video,
+    normalize_reference_video_pixel_count,
     probe_video_info,
+    strip_reference_video_audio,
 )
 from app.services import composer, copypaste
 from app.services.copypaste import MAX_REF_VIDEO_S
@@ -51,13 +55,24 @@ router = APIRouter(prefix="/api/copypaste", tags=["copypaste"])
 # ---------- banque de vidéos de référence ----------
 
 
+def _owned_video(db: Session, video_id: uuid.UUID, user: User, model_id: uuid.UUID | None) -> ReferenceVideo:
+    row = owned(db, ReferenceVideo, video_id, user)
+    if model_id is not None:
+        owned(db, Model, model_id, user)
+        if row.model_id != model_id:
+            raise HTTPException(404, "Vidéo introuvable pour cette model")
+    return row
+
+
 def _add_to_bank(db: Session, user: User, video_url: str, label: str = "",
-                 weight: float = 1.0, theme: str = "") -> ReferenceVideo:
+                 weight: float = 1.0, theme: str = "", model_id=None) -> ReferenceVideo:
     """Ajout idempotent : la même URL n'est jamais dupliquée dans la banque.
     Un thème explicitement fourni re-range une vidéo déjà présente."""
     theme = (theme or "").strip()
     existing = db.scalar(
-        tenant_query(ReferenceVideo, user).where(ReferenceVideo.video_url == video_url)
+        tenant_query(ReferenceVideo, user).where(
+            ReferenceVideo.video_url == video_url, ReferenceVideo.model_id == model_id
+        )
     )
     if existing is not None:
         if theme and existing.theme != theme:
@@ -76,7 +91,7 @@ def _add_to_bank(db: Session, user: User, video_url: str, label: str = "",
         except Exception:
             pass
     row = ReferenceVideo(
-        tenant_id=user.tenant_id, video_url=video_url, label=label, weight=weight,
+        tenant_id=user.tenant_id, model_id=model_id, video_url=video_url, label=label, weight=weight,
         theme=theme, duration_s=duration_s, fps=fps,
     )
     db.add(row)
@@ -91,8 +106,9 @@ def add_video(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
+    model = owned(db, Model, payload.model_id, user) if payload.model_id else None
     return _add_to_bank(
-        db, user, payload.video_url, payload.label, payload.weight, payload.theme
+        db, user, payload.video_url, payload.label, payload.weight, payload.theme, model.id if model else None
     )
 
 
@@ -100,11 +116,12 @@ def add_video(
 def update_video(
     video_id: uuid.UUID,
     payload: schemas.ReferenceVideoUpdate,
+    model_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
     """Rangement : change le thème (ou label/poids) d'une vidéo de la banque."""
-    row = owned(db, ReferenceVideo, video_id, user)
+    row = _owned_video(db, video_id, user, model_id)
     if payload.theme is not None:
         row.theme = payload.theme.strip()
     if payload.label is not None:
@@ -118,12 +135,13 @@ def update_video(
 
 @router.post("/videos/{video_id}/normalize", response_model=schemas.ReferenceVideoOut)
 def normalize_video(
-    video_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+    video_id: uuid.UUID, model_id: uuid.UUID | None = None,
+    db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
     """Re-sonde une vidéo de la banque et la re-encode à 30 fps si son frame
     rate est hors plage Seedance (23,8–60). Sert aussi à réparer les vidéos
     ajoutées avant l'introduction de la sonde fps."""
-    row = owned(db, ReferenceVideo, video_id, user)
+    row = _owned_video(db, video_id, user, model_id)
     info = probe_video_info(row.video_url)
     row.duration_s, row.fps = info.duration_s, info.fps
     if fps_out_of_range(info.fps):
@@ -140,21 +158,148 @@ def normalize_video(
 
 
 @router.get("/videos", response_model=list[schemas.ReferenceVideoOut])
-def list_videos(db: Session = Depends(get_db), user: User = Depends(current_user)):
-    return db.scalars(
-        tenant_query(ReferenceVideo, user).order_by(ReferenceVideo.created_at.desc())
-    ).all()
+def list_videos(
+    model_id: uuid.UUID | None = None,
+    db: Session = Depends(get_db), user: User = Depends(current_user),
+):
+    query = tenant_query(ReferenceVideo, user)
+    if model_id is not None:
+        owned(db, Model, model_id, user)
+        query = query.where(ReferenceVideo.model_id == model_id)
+    return db.scalars(query.order_by(ReferenceVideo.created_at.desc())).all()
 
 
 @router.delete("/videos/{video_id}")
 def delete_video(
-    video_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+    video_id: uuid.UUID, model_id: uuid.UUID | None = None,
+    db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
     # Les items déjà générés gardent leur URL (pas de FK) : suppression sans risque.
-    row = owned(db, ReferenceVideo, video_id, user)
+    row = _owned_video(db, video_id, user, model_id)
     db.delete(row)
     db.commit()
     return {"deleted": str(video_id)}
+
+
+@router.post("/jobs/{job_id}/items/{item_id}/strip-audio-retry")
+def strip_audio_and_retry(
+    job_id: uuid.UUID,
+    item_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """Répare un refus de sûreté audio et relance les items concernés.
+
+    L'action est volontairement disponible seulement pour un item Copypaste
+    explicitement refusé par le filtre audio. La ligne de banque de la model
+    est remplacée par sa copie silencieuse, sans toucher aux autres models.
+    """
+    job = owned(db, GenerationJob, job_id, user)
+    # JobItem n'a pas de tenant_id propre : le job, déjà chargé via owned(),
+    # porte l'isolation de tenant.
+    item = db.scalar(select(JobItem).where(JobItem.id == item_id, JobItem.job_id == job.id))
+    if item is None or item.category != Category.COPYPASTE or not item.reference_video_url:
+        raise HTTPException(404, "Item Copypaste introuvable")
+    if item.status != ItemStatus.FAILED or not copypaste.is_audio_safety_rejection(item.error):
+        raise HTTPException(409, "Cette réparation est réservée aux refus explicites liés à l'audio")
+
+    old_url = item.reference_video_url
+    try:
+        silent_url, info = strip_reference_video_audio(old_url, user.tenant_id)
+    except Exception as exc:
+        raise HTTPException(502, f"Suppression audio échouée : {exc}") from exc
+
+    # Remplace l'entrée de banque (même thème, label et poids), au lieu de
+    # la dupliquer. Ainsi l'ancienne vidéo sonore n'est plus proposée.
+    bank_rows = db.scalars(
+        tenant_query(ReferenceVideo, user).where(
+            ReferenceVideo.model_id == job.model_id,
+            ReferenceVideo.video_url == old_url,
+        )
+    ).all()
+    for row in bank_rows:
+        row.video_url = silent_url
+        row.duration_s, row.fps = info.duration_s, info.fps
+
+    # Une même référence peut avoir été utilisée plusieurs fois dans le
+    # job. On relance exactement les échecs audio qui l'emploient, jamais les
+    # autres échecs ni les items déjà terminés.
+    retry_items = [
+        candidate for candidate in job.items
+        if candidate.category == Category.COPYPASTE
+        and candidate.status == ItemStatus.FAILED
+        and candidate.reference_video_url == old_url
+        and copypaste.is_audio_safety_rejection(candidate.error)
+    ]
+    for candidate in retry_items:
+        candidate.reference_video_url = silent_url
+        candidate.seedance_task_id = None
+        candidate.raw_video_url = None
+        candidate.final_video_url = None
+        candidate.error = None
+        candidate.status = ItemStatus.COMPOSED
+        candidate.generation_attempts = 0
+    job.status = JobStatus.DISPATCHED
+    job.error = None
+    db.commit()
+
+    for candidate in retry_items:
+        dispatch_seedance.delay(str(candidate.id))
+    return {"retried_items": len(retry_items), "video_url": silent_url}
+
+
+@router.post("/jobs/{job_id}/items/{item_id}/downscale-retry")
+def downscale_and_retry(
+    job_id: uuid.UUID,
+    item_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """Réduit une référence trop grande à 1080p et relance les échecs liés."""
+    job = owned(db, GenerationJob, job_id, user)
+    item = db.scalar(select(JobItem).where(JobItem.id == item_id, JobItem.job_id == job.id))
+    if item is None or item.category != Category.COPYPASTE or not item.reference_video_url:
+        raise HTTPException(404, "Item Copypaste introuvable")
+    if item.status != ItemStatus.FAILED or not copypaste.is_video_pixel_limit_rejection(item.error):
+        raise HTTPException(409, "Cette réparation est réservée aux refus de limite de pixels vidéo")
+
+    old_url = item.reference_video_url
+    try:
+        resized_url, info = normalize_reference_video_pixel_count(old_url, user.tenant_id)
+    except Exception as exc:
+        raise HTTPException(502, f"Adaptation de résolution échouée : {exc}") from exc
+
+    for row in db.scalars(
+        tenant_query(ReferenceVideo, user).where(
+            ReferenceVideo.model_id == job.model_id,
+            ReferenceVideo.video_url == old_url,
+        )
+    ).all():
+        row.video_url = resized_url
+        row.duration_s, row.fps = info.duration_s, info.fps
+
+    retry_items = [
+        candidate for candidate in job.items
+        if candidate.category == Category.COPYPASTE
+        and candidate.status == ItemStatus.FAILED
+        and candidate.reference_video_url == old_url
+        and copypaste.is_video_pixel_limit_rejection(candidate.error)
+    ]
+    for candidate in retry_items:
+        candidate.reference_video_url = resized_url
+        candidate.seedance_task_id = None
+        candidate.raw_video_url = None
+        candidate.final_video_url = None
+        candidate.error = None
+        candidate.status = ItemStatus.COMPOSED
+        candidate.generation_attempts = 0
+    job.status = JobStatus.DISPATCHED
+    job.error = None
+    db.commit()
+
+    for candidate in retry_items:
+        dispatch_seedance.delay(str(candidate.id))
+    return {"retried_items": len(retry_items), "video_url": resized_url}
 
 
 # ---------- jobs ----------
@@ -194,14 +339,14 @@ def create_job(
     saved_row = None
     if payload.reference_video_url and payload.save_to_bank:
         upload_theme = (payload.video_theme or "").strip() or (payload.theme or "").strip()
-        saved_row = _add_to_bank(db, user, payload.reference_video_url, theme=upload_theme)
+        saved_row = _add_to_bank(db, user, payload.reference_video_url, theme=upload_theme, model_id=model.id)
 
     if payload.reference_video_ids:
         # Sélection précise : la génération est répartie UNIQUEMENT sur ces
         # vidéos (round-robin sur un ordre mélangé → répartition équilibrée).
         rows = db.scalars(
             tenant_query(ReferenceVideo, user).where(
-                ReferenceVideo.id.in_(payload.reference_video_ids)
+                ReferenceVideo.id.in_(payload.reference_video_ids), ReferenceVideo.model_id == model.id
             )
         ).all()
         if len(rows) != len(set(payload.reference_video_ids)):
@@ -242,7 +387,9 @@ def create_job(
                 "vidéos demandées (max 200) — baisse « Vidéos à générer » ou la sélection.",
             )
     elif payload.use_bank:
-        rows = db.scalars(tenant_query(ReferenceVideo, user)).all()
+        rows = db.scalars(
+            tenant_query(ReferenceVideo, user).where(ReferenceVideo.model_id == model.id)
+        ).all()
         # Pioche restreinte à UN thème : les autres thèmes ne sont JAMAIS tirés.
         theme = (payload.theme or "").strip()
         if theme:
@@ -276,7 +423,8 @@ def create_job(
         # normalisation AVANT d'envoyer à kie.ai.
         row = saved_row or db.scalar(
             tenant_query(ReferenceVideo, user).where(
-                ReferenceVideo.video_url == payload.reference_video_url
+                ReferenceVideo.video_url == payload.reference_video_url,
+                ReferenceVideo.model_id == model.id,
             )
         )
         if row is not None:
@@ -333,7 +481,7 @@ def create_job(
         outfits = [
             outfit_option(str(o.id), o.tags, o.image_url, o.weight)
             for o in db.scalars(
-                tenant_query(Outfit, user).where(Outfit.status == "ready")
+                tenant_query(Outfit, user).where(Outfit.model_id == model.id, Outfit.status == "ready")
             ).all()
         ]
 
@@ -370,7 +518,6 @@ def create_job(
 
     per_item_cost = est.gross_usd / total_count if total_count else 0
     rng = random.Random()
-    max_refs = get_settings().seedance_max_refs
     items = []
     for index, video in enumerate(videos):
         outfit = weighted_draw(outfits, rng) if outfits else None
@@ -383,12 +530,11 @@ def create_job(
         if outfit:  # outfit.text = « wearing … »
             prompt = f"{prompt} She is {outfit.text}."
         prompt = composer.inject_characteristics(prompt, active)
-        refs = composer.select_reference_images(
-            model.face_reference_url,
-            active,
-            extra_refs=[outfit.image_url] if outfit and outfit.image_url else [],
-            max_refs=max_refs,
-        )
+        # Ref 1 locks the identity. Ref 2 may show the outfit only; characteristic
+        # images remain textual so they cannot compete with the face.
+        refs = [model.face_reference_url]
+        if outfit and outfit.image_url:
+            refs.append(outfit.image_url)
         items.append(
             JobItem(
                 job_id=job.id,
@@ -423,3 +569,4 @@ def create_job(
     for item in items:
         dispatch_seedance.delay(str(item.id))
     return job
+    downscale_reference_video,

@@ -10,10 +10,12 @@ import uuid
 
 from app.db.base import Base, SessionLocal, engine
 from app.db.init_db import SEED_PRICING
-from app.db.models import JobItem, Pricing, User
+from app.db.models import GenerationJob, ItemStatus, JobItem, JobStatus, Pricing, User
 from app.integrations.kie import build_seedance_input
 from app.main import app
-from app.services.copypaste import HARD_PROMPT, build_copypaste_prompt
+from app.services.copypaste import (
+    HARD_PROMPT, build_copypaste_prompt, is_audio_safety_rejection, is_video_pixel_limit_rejection,
+)
 from app.services.security import hash_password
 
 ADMIN_EMAIL = "cp-owner@example.com"
@@ -75,6 +77,19 @@ def test_build_copypaste_prompt():
     assert full.endswith("keep the same outfit.")
     # ponctuation déjà présente → pas de double point
     assert build_copypaste_prompt("no zoom!").endswith("no zoom!")
+
+
+def test_audio_safety_rejection_est_strictement_ciblee():
+    assert is_audio_safety_rejection("Audio may contain sensitive content")
+    assert is_audio_safety_rejection("KIE: sensitive audio policy violation")
+    assert is_audio_safety_rejection("The output audio may be related to copyright restrictions")
+    assert not is_audio_safety_rejection("audio indisponible")
+    assert not is_audio_safety_rejection("video violates safety policy")
+
+
+def test_video_pixel_limit_rejection_est_ciblee():
+    assert is_video_pixel_limit_rejection("The parameter video pixel count specified in the request is not valid")
+    assert not is_video_pixel_limit_rejection("audio may contain sensitive content")
 
 
 def test_seedance_input_avec_video_de_reference():
@@ -281,13 +296,13 @@ def test_job_assets_aleatoires_injecte_caracteristique_et_outfit(client, model_i
         assert "wearing red dress" in it["filled_prompt"]
         assert "floral tattoo" in it["filled_prompt"]
         assert "ackground" not in it["filled_prompt"]  # jamais de background
-    # refs : visage d'abord, puis photo du trait, puis photo outfit
+    # Réf. 1 = identité ; réf. 2 = outfit. Les traits restent textuels.
     with SessionLocal() as db:
         items = db.query(JobItem).filter(JobItem.job_id == uuid.UUID(job["id"])).all()
         for item in items:
-            assert item.reference_image_urls[0] == "https://r2.example/face.jpg"
-            assert "https://r2.example/tattoo.jpg" in item.reference_image_urls
-            assert "https://r2.example/outfit.jpg" in item.reference_image_urls
+            assert item.reference_image_urls == [
+                "https://r2.example/face.jpg", "https://r2.example/outfit.jpg",
+            ]
             assert item.outfit_id is not None
             assert item.characteristic_ids
 
@@ -572,3 +587,84 @@ def test_job_sans_assets_aleatoires(client, model_id):
     with SessionLocal() as db:
         item = db.query(JobItem).filter(JobItem.job_id == uuid.UUID(r.json()["id"])).first()
         assert item.reference_image_urls == ["https://r2.example/face.jpg"]
+
+
+def test_refus_audio_remplace_la_banque_et_relance_item(client, model_id, monkeypatch):
+    source = "https://r2.example/videos/audio-sensitive.mp4"
+    with patch("app.api.routers.copypaste.dispatch_seedance"):
+        job = client.post(
+            "/api/copypaste/jobs",
+            json={"model_id": model_id, "count": 2, "reference_video_url": source},
+        ).json()
+    item_ids = [uuid.UUID(it["id"]) for it in job["items"]]
+    with SessionLocal() as db:
+        for item_id in item_ids:
+            item = db.get(JobItem, item_id)
+            item.status = ItemStatus.FAILED
+            item.error = "kie.ai: audio may contain sensitive content"
+        db.get(GenerationJob, uuid.UUID(job["id"])).status = JobStatus.FAILED
+        db.commit()
+
+    monkeypatch.setattr(
+        "app.api.routers.copypaste.strip_reference_video_audio",
+        lambda url, tenant: ("https://r2.example/videos/audio-sensitive-silent.mp4", VideoInfo(10.0, 30.0)),
+    )
+    with patch("app.api.routers.copypaste.dispatch_seedance") as dispatch:
+        result = client.post(
+            f"/api/copypaste/jobs/{job['id']}/items/{item_ids[0]}/strip-audio-retry"
+        )
+    assert result.status_code == 200, result.text
+    assert result.json()["retried_items"] == 2
+    assert dispatch.delay.call_count == 2
+    with SessionLocal() as db:
+        items = [db.get(JobItem, item_id) for item_id in item_ids]
+        assert all(item.status == ItemStatus.COMPOSED for item in items)
+        assert all(item.error is None for item in items)
+        assert all(item.reference_video_url.endswith("-silent.mp4") for item in items)
+        bank_urls = [v.video_url for v in client.get(f"/api/copypaste/videos?model_id={model_id}").json()]
+        assert "https://r2.example/videos/audio-sensitive-silent.mp4" in bank_urls
+
+
+def test_refus_non_audio_ne_peut_pas_etre_modifie(client, model_id):
+    with patch("app.api.routers.copypaste.dispatch_seedance"):
+        job = client.post(
+            "/api/copypaste/jobs",
+            json={"model_id": model_id, "count": 1, "reference_video_url": "https://r2.example/videos/other-error.mp4"},
+        ).json()
+    item_id = uuid.UUID(job["items"][0]["id"])
+    with SessionLocal() as db:
+        item = db.get(JobItem, item_id)
+        item.status = ItemStatus.FAILED
+        item.error = "kie.ai: video safety policy"
+        db.commit()
+    result = client.post(f"/api/copypaste/jobs/{job['id']}/items/{item_id}/strip-audio-retry")
+    assert result.status_code == 409
+
+
+def test_refus_pixels_remplace_la_banque_et_relance_item(client, model_id, monkeypatch):
+    source = "https://r2.example/videos/too-many-pixels.mp4"
+    with patch("app.api.routers.copypaste.dispatch_seedance"):
+        job = client.post(
+            "/api/copypaste/jobs",
+            json={"model_id": model_id, "count": 1, "reference_video_url": source},
+        ).json()
+    item_id = uuid.UUID(job["items"][0]["id"])
+    with SessionLocal() as db:
+        item = db.get(JobItem, item_id)
+        item.status = ItemStatus.FAILED
+        item.error = "kie.ai: The parameter video pixel count specified in the request is not valid"
+        db.commit()
+    monkeypatch.setattr(
+        "app.api.routers.copypaste.normalize_reference_video_pixel_count",
+        lambda url, tenant: ("https://r2.example/videos/too-many-pixels-normalized.mp4", VideoInfo(10.0, 30.0)),
+    )
+    with patch("app.api.routers.copypaste.dispatch_seedance") as dispatch:
+        result = client.post(f"/api/copypaste/jobs/{job['id']}/items/{item_id}/downscale-retry")
+    assert result.status_code == 200, result.text
+    assert result.json()["retried_items"] == 1
+    assert dispatch.delay.call_count == 1
+    with SessionLocal() as db:
+        item = db.get(JobItem, item_id)
+        assert item.status == ItemStatus.COMPOSED
+        assert item.error is None
+        assert item.reference_video_url.endswith("-normalized.mp4")

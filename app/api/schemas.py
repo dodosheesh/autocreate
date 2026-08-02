@@ -92,6 +92,7 @@ class CharacteristicUpdate(BaseModel):
 
 
 class OutfitCreate(BaseModel):
+    model_id: uuid.UUID | None = None
     image_url: HttpUrlStr
     tags: list[str] = []
     weight: float = Field(default=1.0, ge=0)
@@ -114,6 +115,7 @@ class BackgroundOut(OutfitOut):
 
 
 class TemplateCreate(BaseModel):
+    model_id: uuid.UUID | None = None
     category: str
     template_text: str = Field(
         description="Slots : {outfit} {background} {characteristics} {dialogue} {caption}"
@@ -138,6 +140,7 @@ class TemplateOut(TemplateCreate):
 
 
 class ReverseVideoRequest(BaseModel):
+    model_id: uuid.UUID | None = None
     source_video_url: HttpUrlStr = Field(description="Vidéo de référence uploadée (R2)")
     category: str = Field(description="Catégorie du template généré")
     speaking: bool = False
@@ -147,6 +150,7 @@ class BulkReverseVideoRequest(BaseModel):
     """Réplique en masse : N vidéos → N templates (même catégorie + flag parlant)."""
 
     source_video_urls: list[HttpUrlStr] = Field(min_length=1)
+    model_id: uuid.UUID | None = None
     category: str = Field(description="Catégorie appliquée à tous les templates")
     speaking: bool = False
 
@@ -155,6 +159,7 @@ class BulkDescribeRequest(BaseModel):
     """Import en masse d'outfits/backgrounds avec auto-description (vision)."""
 
     image_urls: list[HttpUrlStr] = Field(min_length=1)
+    model_id: uuid.UUID | None = None
     # Suffixe FOURNI PAR L'UTILISATEUR, ajouté à la fin de chaque description
     # générée (ex. un détail à toujours inclure). Optionnel, jamais en dur.
     suffix: str = ""
@@ -167,9 +172,11 @@ class DescribePendingRequest(BaseModel):
 
     outfit_suffix: str = ""
     background_suffix: str = ""
+    model_id: uuid.UUID | None = None
 
 
 class DialogueLineCreate(BaseModel):
+    model_id: uuid.UUID | None = None
     category: str
     raw_text: str = Field(
         description="Lignes taggées, ordre chrono. [H]/[F] = la model (voix grave / "
@@ -199,6 +206,7 @@ class DialogueLineOut(DialogueLineCreate):
 
 
 class CaptionCreate(BaseModel):
+    model_id: uuid.UUID | None = None
     category: str
     text: str
     weight: float = Field(default=1.0, ge=0)
@@ -211,6 +219,7 @@ class CaptionOut(CaptionCreate):
 
 
 class VoiceProfileCreate(BaseModel):
+    model_id: uuid.UUID | None = None
     label: str
     elevenlabs_voice_id: str
     gender: Literal["male", "female"]
@@ -343,6 +352,7 @@ class ExportOut(BaseModel):
 
 
 class ReferenceVideoCreate(BaseModel):
+    model_id: uuid.UUID | None = None
     video_url: HttpUrlStr = Field(description="Vidéo de référence uploadée (R2)")
     label: str = ""
     theme: str = Field(default="", max_length=64, description="Thème de rangement (gym, plage…)")
@@ -416,6 +426,7 @@ ImageSize = Literal["1:1", "4:3", "3:4", "16:9", "9:16", "2:3", "3:2"]
 
 
 class PicturePromptCreate(BaseModel):
+    model_id: uuid.UUID | None = None
     source_image_url: HttpUrlStr = Field(description="Image de référence uploadée (R2)")
     tags: list[str] = []
     weight: float = Field(default=1.0, ge=0)
@@ -425,6 +436,7 @@ class BulkPicturePromptRequest(BaseModel):
     """Reverse-engineering en masse : N images → N prompts réutilisables."""
 
     source_image_urls: list[HttpUrlStr] = Field(min_length=1)
+    model_id: uuid.UUID | None = None
     tags: list[str] = []
     weight: float = Field(default=1.0, ge=0)
 
@@ -527,6 +539,9 @@ class BatchEstimateRequest(BaseModel):
     BatchJobCreate, sans rien créer."""
 
     counts_per_category: dict[str, int] = Field(min_length=1)
+    # Model active : permet de compter uniquement ses templates parlants.
+    # Optionnel pour conserver la compatibilité des anciens appels API.
+    model_id: uuid.UUID | None = None
     duration_s: float = Field(default=10, gt=0)
     resolution: Resolution = "720p"
     model_variant: str = "seedance_2.0"

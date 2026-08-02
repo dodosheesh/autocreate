@@ -213,7 +213,7 @@ def reverse_engineer_video(self, template_id: str) -> None:
                     # Reverse « court » : ligne de dialogue réutilisable dans la
                     # banque (taggée [F] ; re-tague au besoin).
                     db.add(DialogueLine(
-                        tenant_id=tenant_id, category=category,
+                        tenant_id=tenant_id, model_id=tmpl.model_id, category=category,
                         raw_text=f"[F] {transcript}", weight=1.0,
                     ))
     except Exception as exc:
@@ -226,12 +226,13 @@ def reverse_engineer_video(self, template_id: str) -> None:
                 tmpl.error = str(exc)[:2000]
 
 
-def _picture_pools(db, tenant_id: str) -> tuple[list[Option], list[Option]]:
+def _picture_pools(db, tenant_id: str, model_id) -> tuple[list[Option], list[Option]]:
     prompts = [
         Option(id=str(p.id), weight=p.weight, text=p.prompt_text or "")
         for p in db.scalars(
             select(PicturePrompt).where(
                 PicturePrompt.tenant_id == tenant_id,
+                PicturePrompt.model_id == model_id,
                 PicturePrompt.status == PromptStatus.READY,
             )
         ).all()
@@ -239,7 +240,7 @@ def _picture_pools(db, tenant_id: str) -> tuple[list[Option], list[Option]]:
     outfits = [
         outfit_option(str(o.id), o.tags, o.image_url, o.weight)
         for o in db.scalars(
-            select(Outfit).where(Outfit.tenant_id == tenant_id, Outfit.status == "ready")
+            select(Outfit).where(Outfit.tenant_id == tenant_id, Outfit.model_id == model_id, Outfit.status == "ready")
         ).all()
     ]
     return prompts, outfits
@@ -266,7 +267,7 @@ def compose_picture_job(job_id: str) -> None:
                 )
                 for c in model.characteristics
             ]
-            prompts, outfits = _picture_pools(db, job.tenant_id)
+            prompts, outfits = _picture_pools(db, job.tenant_id, job.model_id)
 
             result = picture_composer.compose_pictures(
                 count=job.count,

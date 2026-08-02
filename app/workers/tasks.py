@@ -80,21 +80,21 @@ def _fail_job(job_id: str, error: str) -> None:
             job.error = error[:4000]
 
 
-def _build_pools(db, categories: list[str], tenant_id: str) -> dict[str, variation.CategoryPools]:
+def _build_pools(db, categories: list[str], tenant_id: str, model_id) -> dict[str, variation.CategoryPools]:
     """Charge les banques Postgres en pools purs pour le moteur de variation,
     scopées au tenant du job. Outfits/backgrounds sont partagés entre catégories ;
     templates, dialogues et captions sont filtrés par catégorie."""
     outfits = [
         variation.outfit_option(str(o.id), o.tags, o.image_url, o.weight)
         for o in db.scalars(
-            select(Outfit).where(Outfit.tenant_id == tenant_id, Outfit.status == "ready")
+            select(Outfit).where(Outfit.tenant_id == tenant_id, Outfit.model_id == model_id, Outfit.status == "ready")
         ).all()
     ]
     backgrounds = [
         variation.background_option(str(b.id), b.tags, b.image_url, b.weight)
         for b in db.scalars(
             select(Background).where(
-                Background.tenant_id == tenant_id, Background.status == "ready"
+                Background.tenant_id == tenant_id, Background.model_id == model_id, Background.status == "ready"
             )
         ).all()
     ]
@@ -111,6 +111,7 @@ def _build_pools(db, categories: list[str], tenant_id: str) -> dict[str, variati
             for t in db.scalars(
                 select(PromptTemplate).where(
                     PromptTemplate.tenant_id == tenant_id,
+                    PromptTemplate.model_id == model_id,
                     PromptTemplate.category == category,
                     PromptTemplate.status == "ready",
                 )
@@ -121,6 +122,7 @@ def _build_pools(db, categories: list[str], tenant_id: str) -> dict[str, variati
             for d in db.scalars(
                 select(DialogueLine).where(
                     DialogueLine.tenant_id == tenant_id,
+                    DialogueLine.model_id == model_id,
                     DialogueLine.category == category,
                 )
             ).all()
@@ -129,7 +131,7 @@ def _build_pools(db, categories: list[str], tenant_id: str) -> dict[str, variati
             variation.Option(id=str(c.id), weight=c.weight, text=c.text)
             for c in db.scalars(
                 select(Caption).where(
-                    Caption.tenant_id == tenant_id, Caption.category == category
+                    Caption.tenant_id == tenant_id, Caption.model_id == model_id, Caption.category == category
                 )
             ).all()
         ]
@@ -143,7 +145,7 @@ def _build_pools(db, categories: list[str], tenant_id: str) -> dict[str, variati
     return pools
 
 
-def _compose_failure_message(db, tenant_id: str, empty_categories: list[str]) -> str:
+def _compose_failure_message(db, tenant_id: str, model_id, empty_categories: list[str]) -> str:
     """Message d'échec précis quand aucun item n'a pu être composé. Pour le format
     long, distingue « aucun template » de « template prêt mais SANS transcript »."""
     parts: list[str] = []
@@ -152,6 +154,7 @@ def _compose_failure_message(db, tenant_id: str, empty_categories: list[str]) ->
             ready = db.scalars(
                 select(PromptTemplate).where(
                     PromptTemplate.tenant_id == tenant_id,
+                    PromptTemplate.model_id == model_id,
                     PromptTemplate.category == cat,
                     PromptTemplate.status == "ready",
                 )
@@ -201,7 +204,7 @@ def compose_job(job_id: str) -> None:
                 for c in model.characteristics
             ]
             counts = {k: int(v) for k, v in (job.counts_per_category or {}).items()}
-            pools = _build_pools(db, list(counts), job.tenant_id)
+            pools = _build_pools(db, list(counts), job.tenant_id, job.model_id)
 
             result = variation.compose_batch(
                 counts_per_category=counts,
@@ -242,7 +245,7 @@ def compose_job(job_id: str) -> None:
                 # spécifique au format long (transcript manquant) le cas échéant.
                 job.status = JobStatus.FAILED
                 job.error = _compose_failure_message(
-                    db, job.tenant_id, sorted(result.shortfall_per_category)
+                    db, job.tenant_id, job.model_id, sorted(result.shortfall_per_category)
                 )
                 return
         estimate_and_gate.delay(job_id)
@@ -335,13 +338,13 @@ def dispatch_seedance(self, item_id: str) -> None:
         raise self.retry(exc=exc)
 
 
-def _voice_map(db) -> dict[str, str]:
+def _voice_map(db, model_id) -> dict[str, str]:
     """tag ([H]/[F]) → elevenlabs_voice_id depuis la table voice_profiles."""
     from app.db.models import VoiceProfile
 
     return {
         profile.tag: profile.elevenlabs_voice_id
-        for profile in db.scalars(select(VoiceProfile)).all()
+        for profile in db.scalars(select(VoiceProfile).where(VoiceProfile.model_id == model_id)).all()
     }
 
 
@@ -373,7 +376,7 @@ def process_generated(self, item_id: str) -> None:
             resolution, bitrate = job.resolution, job.bitrate
             music_url = job.music_url
             face_url = model.face_reference_url
-            voices = _voice_map(db) if dialogue_script else {}
+            voices = _voice_map(db, job.model_id) if dialogue_script else {}
             job_id = str(job.id)
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -531,7 +534,7 @@ def generate_long_form_item(self, item_id: str) -> None:
             refs = list(item.reference_image_urls or [])
             resolution, bitrate, aspect = job.resolution, job.bitrate, job.aspect
             music_url = job.music_url
-            voices = _voice_map(db) if (dialogue1 or dialogue2) else {}
+            voices = _voice_map(db, job.model_id) if (dialogue1 or dialogue2) else {}
             job_id = str(job.id)
             item.status = ItemStatus.DISPATCHED
             item.qc_status = QcStatus.SKIPPED

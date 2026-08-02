@@ -15,11 +15,45 @@ from app.services.variation import Option, weighted_draw
 
 # Prompt FIXE de la feature : la fille de la vidéo est remplacée par la model
 # (la photo visage part en référence image à côté de la vidéo).
-HARD_PROMPT = "Replace the girl in the video for the girl in the picture."
+HARD_PROMPT = (
+    "Replace the woman in the reference video with the woman in reference image 1. "
+    "Reference image 1 is the only identity source: preserve her exact facial identity, "
+    "including face shape, eyes, nose, lips, skin tone and hairline. Do not retain or blend "
+    "the identity of the woman from the source video. Preserve the source video's motion, "
+    "camera, pose, setting and action. If reference image 2 is provided, use it only for the "
+    "outfit; it must never change the face or identity from reference image 1."
+)
 
 # Limite Seedance 2 : la vidéo de référence ne peut pas dépasser 15 s
 # (« The total duration of the video cannot exceed 15 seconds »).
 MAX_REF_VIDEO_S = 15.0
+
+# Kie/Seedance refuse parfois une référence parce que sa piste audio entre
+# dans son filtre de sûreté.  Cette liste reste volontairement stricte : un
+# simple mot « audio » ne doit jamais proposer de modifier une vidéo.
+_AUDIO_SAFETY_MARKERS = (
+    "sensitive", "safety", "policy", "moderation", "copyright", "copyright restrictions",
+)
+
+
+def is_audio_safety_rejection(error: str | None) -> bool:
+    """True seulement pour les refus explicites liés au filtre audio.
+
+    Utilisé comme garde-fou côté API avant de retirer une piste son : ce
+    n'est pas une action de réparation générique pour les autres erreurs.
+    """
+    text = (error or "").casefold()
+    return "audio" in text and any(marker in text for marker in _AUDIO_SAFETY_MARKERS)
+
+
+def is_video_pixel_limit_rejection(error: str | None) -> bool:
+    """True pour le refus Kie/Seedance de taille (nombre de pixels) vidéo."""
+    text = (error or "").casefold()
+    return "video pixel count" in text and any(
+        marker in text for marker in (
+            "not valid", "exceed", "maximum", "limit", "greater than", "less than",
+        )
+    )
 
 
 def build_copypaste_prompt(custom_prompt: str = "") -> str:

@@ -222,13 +222,12 @@ def estimate_batch_endpoint(
     qc_rate = payload.qc_success_rate or get_calibrated_qc_rate(
         db, settings.default_qc_success_rate
     )
+    template_query = tenant_query(PromptTemplate, user).where(PromptTemplate.speaking.is_(True))
+    if payload.model_id is not None:
+        owned(db, Model, payload.model_id, user)
+        template_query = template_query.where(PromptTemplate.model_id == payload.model_id)
     speaking_categories = set(
-        db.scalars(
-            tenant_query(PromptTemplate, user)
-            .where(PromptTemplate.speaking.is_(True))
-            .with_only_columns(PromptTemplate.category)
-            .distinct()
-        ).all()
+        db.scalars(template_query.with_only_columns(PromptTemplate.category).distinct()).all()
     )
     specs: list[tuple[str, ItemSpec]] = [
         (
@@ -291,14 +290,19 @@ def estimate_batch_endpoint(
 def list_jobs(
     limit: int = 50,
     kind: str | None = None,
+    model_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
     """`kind=video` exclut les jobs copypaste, `kind=copypaste` ne garde qu'eux
     (filtré côté serveur : sinon les jobs récents d'un type poussent l'autre
     type hors de la fenêtre `limit` et sa liste paraît vide)."""
+    query = tenant_query(GenerationJob, user)
+    if model_id is not None:
+        owned(db, Model, model_id, user)
+        query = query.where(GenerationJob.model_id == model_id)
     rows = db.scalars(
-        tenant_query(GenerationJob, user)
+        query
         .order_by(GenerationJob.created_at.desc())
         .limit(2000 if kind else limit)
     ).all()
