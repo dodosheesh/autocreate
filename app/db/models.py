@@ -230,7 +230,9 @@ class VoiceProfile(Base):
     gender: Mapped[str] = mapped_column(String(8))  # male / female
     tag: Mapped[str] = mapped_column(String(8))  # H / F
 
-    __table_args__ = (UniqueConstraint("tenant_id", "tag", name="uq_voice_tag_per_tenant"),)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "model_id", "tag", name="uq_voice_tag_per_model"),
+    )
 
 
 class GenerationJob(Base):

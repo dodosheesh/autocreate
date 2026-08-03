@@ -110,6 +110,19 @@ def ensure_columns() -> None:
                 ) first_model
                 WHERE bank.model_id IS NULL AND bank.tenant_id = first_model.tenant_id
             """))
+        # Les voix sont maintenant propres à chaque model. L'ancienne contrainte
+        # empêchait, par exemple, Christina et Barbie d'avoir chacune un tag F.
+        conn.execute(text("ALTER TABLE voice_profiles DROP CONSTRAINT IF EXISTS uq_voice_tag_per_tenant"))
+        conn.execute(text("""
+            DO $$ BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint WHERE conname = 'uq_voice_tag_per_model'
+                ) THEN
+                    ALTER TABLE voice_profiles
+                    ADD CONSTRAINT uq_voice_tag_per_model UNIQUE (tenant_id, model_id, tag);
+                END IF;
+            END $$
+        """))
 
 
 def init() -> None:
