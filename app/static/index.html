@@ -514,6 +514,7 @@
           <input type="number" id="cp-budget" min="0" step="1" placeholder="—"></div>
       </div>
       <button class="btn" id="cp-generate">🎭 Copypaste</button>
+      <div class="hint" style="margin-top:10px">Estimation totale : <span class="mono" id="cp-est">—</span></div>
       <div style="margin-top:12px">
         <label>Banque vidéo (<span id="cp-bank-count">0</span>)
           <span class="muted">— coche des vidéos pour générer UNIQUEMENT sur ta sélection</span></label>
@@ -907,6 +908,11 @@ function selectedRunModels(pickerId) {
   const ids = [...document.querySelectorAll("#" + pickerId + " input:checked")].map(i => i.value);
   return ids.length ? ids : (getModel() ? [getModel()] : []);
 }
+document.addEventListener("change", (e) => {
+  if (e.target.closest && e.target.closest("#video-run-models")) refreshEstimate();
+  if (e.target.closest && e.target.closest("#cp-run-models")) refreshCpEstimate();
+  if (e.target.closest && e.target.closest("#pic-run-models")) refreshPicEstimate();
+});
 async function loadModels() {
   const models = await api("/models");
   allModels = models;
@@ -1251,13 +1257,33 @@ async function doEstimate() {
     $("#est-count").textContent = "0"; $("#est-cats").innerHTML = ""; return;
   }
   try {
-    const body = { counts_per_category: c, model_id: getModel(), duration_s: +$("#duration").value,
+    const modelIds = selectedRunModels("video-run-models");
+    const body = { counts_per_category: c, duration_s: +$("#duration").value,
                    resolution: state.resolution, model_variant: $("#variant").value };
     const budget = parseFloat($("#budget").value);
     if (!isNaN(budget)) body.budget_usd = budget;
-    const e = await api("/estimate/batch", {method: "POST", body: JSON.stringify(body)});
+    const estimates = await Promise.all(modelIds.map(model_id => api("/estimate/batch", {
+      method: "POST", body: JSON.stringify({...body, model_id})
+    })));
+    const categories = {};
+    estimates.forEach(part => Object.entries(part.per_category_usd).forEach(([key, value]) => {
+      categories[key] = (categories[key] || 0) + value;
+    }));
+    const totalItems = estimates.reduce((sum, part) => sum + part.total_items, 0);
+    const effective = estimates.reduce((sum, part) => sum + part.effective_usd, 0);
+    const e = {
+      gross_usd: estimates.reduce((sum, part) => sum + part.gross_usd, 0),
+      effective_usd: effective,
+      total_items: totalItems,
+      cost_per_delivered_video_usd: totalItems ? effective / totalItems : 0,
+      qc_success_rate: estimates.reduce((sum, part) => sum + part.qc_success_rate, 0) / estimates.length,
+      per_category_usd: categories,
+      over_budget: estimates.some(part => part.over_budget),
+      max_videos_for_budget: Math.min(...estimates.map(part => part.max_videos_for_budget ?? Infinity)),
+    };
     $("#est-eff").innerHTML = `$${e.effective_usd.toFixed(2)} <small>effectif (livré)</small>`;
     $("#est-gross").textContent = `$${e.gross_usd.toFixed(2)}`;
+    $("#est-eff").innerHTML = `$${e.effective_usd.toFixed(2)} <small>effectif (livré) · ${modelIds.length} model(s)</small>`;
     $("#est-count").textContent = e.total_items;
     $("#est-per").textContent = `$${e.cost_per_delivered_video_usd.toFixed(3)}`;
     $("#est-qc").textContent = `${(e.qc_success_rate * 100).toFixed(0)} %`;
@@ -1372,8 +1398,26 @@ window.cpSelChanged = () => {
   box.textContent = n
     ? `${n} vidéo(s) sélectionnée(s) — chaque vidéo cochée sera utilisée : « Vidéos à générer » devient le nombre de générations PAR vidéo, soit ${n} × ${per} = ${n * per} génération(s) au total (upload et pioche aléatoire ignorés).`
     : "";
+  refreshCpEstimate();
 };
 $("#cp-count").addEventListener("input", () => cpSelChanged());
+let cpEstTimer = null;
+function refreshCpEstimate() { clearTimeout(cpEstTimer); cpEstTimer = setTimeout(async () => {
+  const selectedCount = document.querySelectorAll("#cp-bank .cp-sel:checked").length;
+  const perModel = (+$("#cp-count").value || 1) * (selectedCount || 1);
+  const models = selectedRunModels("cp-run-models");
+  if (!models.length) return;
+  try {
+    const e = await api("/estimate", {method: "POST", body: JSON.stringify({
+      count: perModel * models.length, duration_s: +$("#cp-duration").value,
+      resolution: state.cp_resolution, model_variant: "seedance_2.0"
+    })});
+    $("#cp-est").textContent = `$${e.gross_usd.toFixed(2)} brut · $${e.effective_usd.toFixed(2)} livré · ${models.length} model(s)`;
+  } catch (err) { $("#cp-est").textContent = err.message; }
+}, 250); }
+$("#cp-count").addEventListener("input", refreshCpEstimate);
+$("#cp-duration").addEventListener("input", refreshCpEstimate);
+$("#cp-quality").addEventListener("change", refreshCpEstimate);
 window.delCpVideo = async (id) => {
   try { await api("/copypaste/videos/" + id + "?model_id=" + encodeURIComponent(getModel()), {method: "DELETE"}); toast("Vidéo retirée de la banque"); loadCpBank(); }
   catch (e) { toast("Suppression : " + e.message); }
@@ -1697,10 +1741,13 @@ function refreshPicEstimate() { clearTimeout(picEstTimer); picEstTimer = setTime
   const count = parseInt($("#pic-count").value || "0", 10);
   if (count <= 0) { $("#pic-est").textContent = "—"; return; }
   try {
+    const models = selectedRunModels("pic-run-models");
     const body = {count, image_resolution: $("#pic-resolution").value};
     const b = parseFloat($("#pic-budget").value);
     if (!isNaN(b)) body.budget_usd = b;
     const e = await api("/pictures/estimate", {method: "POST", body: JSON.stringify(body)});
+    e.gross_usd *= models.length;
+    e.effective_usd *= models.length;
     $("#pic-est").textContent = `$${e.gross_usd.toFixed(2)} brut · $${e.effective_usd.toFixed(2)} livré`
       + (e.over_budget ? ` ⚠ max ${e.max_videos_for_budget}` : "");
   } catch (err) { $("#pic-est").textContent = err.message; }
