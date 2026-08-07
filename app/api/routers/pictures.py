@@ -181,8 +181,13 @@ def create_job(
     """Batch de génération de photos : compose (prompt+outfit+caractéristiques),
     estime, gate le budget et dispatche vers nano banana — tout en async."""
     owned(db, Model, payload.model_id, user)
+    # La banque de prompts est propre à chaque model : ne jamais autoriser un
+    # job avec uniquement les prompts d'une autre model.
     ready = db.scalar(
-        tenant_query(PicturePrompt, user).where(PicturePrompt.status == "ready").limit(1)
+        tenant_query(PicturePrompt, user).where(
+            PicturePrompt.model_id == payload.model_id,
+            PicturePrompt.status == "ready",
+        ).limit(1)
     )
     if ready is None:
         raise HTTPException(
@@ -196,6 +201,7 @@ def create_job(
         image_resolution=payload.image_resolution,
         output_format=payload.output_format,
         styles=payload.styles,
+        use_prompt_source_images=payload.use_prompt_source_images,
         model_variant=payload.model_variant,
         budget_cap_usd=payload.budget_cap_usd,
     )

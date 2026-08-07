@@ -567,6 +567,10 @@
           <label class="chk"><input type="checkbox" value="amateur_blurry"> Amateur flou</label>
         </div>
       </div>
+      <label class="chk" style="margin-top:10px"><input type="checkbox" id="pic-use-source-images">
+        Utiliser les images reverse-engineerées comme référence visuelle
+        <span class="muted">(image de base = réf. 1, visage de la model = réf. 2 ; les autres assets suivent)</span>
+      </label>
       <div class="hint" style="margin:10px 0 0">Estimation : <span class="mono" id="pic-est">—</span></div>
       <button class="btn" id="pic-generate">🖼️ Générer les photos</button>
     </div>
@@ -1661,7 +1665,8 @@ $("#pic-generate").addEventListener("click", async () => {
   if (!getModel()) return toast("Aucune model — configure-la dans Réglages");
   const styles = Array.from($("#pic-styles").querySelectorAll("input:checked")).map(i => i.value);
   const body = {model_id: getModel(), count: +$("#pic-count").value, image_size: $("#pic-size").value,
-                image_resolution: $("#pic-resolution").value, styles};
+                image_resolution: $("#pic-resolution").value, styles,
+                use_prompt_source_images: $("#pic-use-source-images").checked};
   const b = parseFloat($("#pic-budget").value);
   if (!isNaN(b)) body.budget_cap_usd = b;
   $("#pic-generate").disabled = true;

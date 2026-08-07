@@ -69,6 +69,7 @@ _ADDITIVE_COLUMNS = [
     ("picture_items", "generation_attempts", "INTEGER NOT NULL DEFAULT 0"),
     ("picture_jobs", "image_resolution", "VARCHAR(8) NOT NULL DEFAULT '2K'"),
     ("picture_jobs", "styles", "JSON DEFAULT '[]'"),
+    ("picture_jobs", "use_prompt_source_images", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ("job_items", "reference_video_url", "TEXT"),
     ("reference_videos", "duration_s", "FLOAT"),
     ("generation_jobs", "kie_model", "VARCHAR(128)"),

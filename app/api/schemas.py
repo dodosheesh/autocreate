@@ -465,6 +465,9 @@ class PictureJobCreate(BaseModel):
     model_variant: str = "seedream"
     # Styles photo cochés (0..n) ; vide = prompt brut, sans modificateur de style.
     styles: list[PhotoStyle] = []
+    # L'image ayant servi au reverse devient la référence 1 (le visage de la
+    # model reste la référence 2).
+    use_prompt_source_images: bool = False
     budget_cap_usd: float | None = None
 
 
@@ -493,6 +496,7 @@ class PictureJobOut(BaseModel):
     image_resolution: str = "2K"
     output_format: str
     styles: list[str] = []
+    use_prompt_source_images: bool = False
     model_variant: str
     budget_cap_usd: float | None
     estimated_cost_usd: float | None

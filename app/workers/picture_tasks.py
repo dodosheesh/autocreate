@@ -228,7 +228,10 @@ def reverse_engineer_video(self, template_id: str) -> None:
 
 def _picture_pools(db, tenant_id: str, model_id) -> tuple[list[Option], list[Option]]:
     prompts = [
-        Option(id=str(p.id), weight=p.weight, text=p.prompt_text or "")
+        Option(
+            id=str(p.id), weight=p.weight, text=p.prompt_text or "",
+            image_url=p.source_image_url,
+        )
         for p in db.scalars(
             select(PicturePrompt).where(
                 PicturePrompt.tenant_id == tenant_id,
@@ -277,6 +280,7 @@ def compose_picture_job(job_id: str) -> None:
                 face_reference_url=model.face_reference_url,
                 max_refs=get_settings().nano_banana_max_refs,
                 style_suffix=build_style_suffix(job.styles),
+                use_prompt_source_images=job.use_prompt_source_images,
             )
             for composed in result.items:
                 db.add(

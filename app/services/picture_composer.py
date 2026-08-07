@@ -4,7 +4,8 @@ Même philosophie que le moteur de variation vidéo :
 - tirage pondéré d'un prompt (banque persistante reverse-engineerée) + d'un
   outfit optionnel qui se mélange au prompt de base ;
 - injection des caractéristiques de la model dans le prompt ;
-- refs images = visage + caractéristiques + outfit (cap nano banana 10) ;
+- refs images = visage + caractéristiques + outfit (ou, au choix, image de
+  base + visage + caractéristiques + outfit ; cap nano banana 10) ;
 - anti-statique : une variante de pose/action tirée au sort par photo (sucette,
   bulle de chewing-gum, duck face…) pour casser les poses figées des banques ;
 - combo_hash pour la dédup intra-job.
@@ -34,6 +35,11 @@ class PictureComposeResult:
 
 
 MAX_DRAW_ATTEMPTS = 25
+
+FACE_SWAP_FROM_PROMPT_SOURCE = (
+    "Change the face of the girl in picture 1 for the face of the girl in picture 2. "
+    "Picture 1 defines the scene, pose, framing, outfit and lighting; picture 2 is the identity source."
+)
 
 # ANTI-STATIQUE PHOTO (pendant de _LIVELINESS côté vidéo) : les prompts de banque
 # donnent souvent des poses figées → on tire une variante de pose/action ludique
@@ -90,6 +96,7 @@ def compose_pictures(
     max_refs: int = 10,
     rng: random.Random | None = None,
     style_suffix: str = "",
+    use_prompt_source_images: bool = False,
 ) -> PictureComposeResult:
     if not prompts:
         raise PictureComposeError("Aucun prompt en banque (reverse-engineerer une image d'abord)")
@@ -127,9 +134,16 @@ def compose_pictures(
         text = _apply_pose(text, weighted_draw(PHOTO_POSES, rng))
         text = _apply_style(text, style_suffix)
         extra_refs = [outfit.image_url] if outfit and outfit.image_url else []
-        refs = composer.select_reference_images(
+        model_refs = composer.select_reference_images(
             face_reference_url, active, extra_refs=extra_refs, max_refs=max_refs
         )
+        if use_prompt_source_images and prompt.image_url:
+            # Ordre contractuel pour Seedream : image de base = picture 1,
+            # visage de la model = picture 2, puis les autres assets.
+            refs = list(dict.fromkeys([prompt.image_url, *model_refs]))[:max_refs]
+            text = f"{FACE_SWAP_FROM_PROMPT_SOURCE} {text}"
+        else:
+            refs = model_refs
         items.append(
             ComposedPicture(
                 prompt_id=prompt.id,

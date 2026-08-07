@@ -129,6 +129,18 @@ def test_compose_injecte_caracteristiques_et_outfit():
     assert "https://r2.example/tattoo.jpg" in item.reference_image_urls
 
 
+def test_compose_peut_utiliser_l_image_source_comme_premiere_reference():
+    source = "https://r2.example/base.jpg"
+    prompts = [Option(id="p1", text="a woman in a cafe", image_url=source)]
+    result = compose_pictures(
+        1, prompts, outfits_pool(1), CHARACS, FACE, rng=random.Random(3),
+        use_prompt_source_images=True,
+    )
+    item = result.items[0]
+    assert item.reference_image_urls[:2] == [source, FACE]
+    assert "Change the face of the girl in picture 1" in item.filled_prompt
+
+
 def test_compose_pictures_injecte_une_variante_de_pose():
     from app.services.picture_composer import PHOTO_POSES
 

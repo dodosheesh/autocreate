@@ -381,6 +381,10 @@ class PictureJob(Base):
     output_format: Mapped[str] = mapped_column(String(8), default="png")
     # Styles photo cochés à la génération (facecam_selfie/amateur/professional/…).
     styles: Mapped[list] = mapped_column(JSON, default=list)
+    # Photo reverse-engineerée utilisée comme référence 1 du job.
+    use_prompt_source_images: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false", default=False
+    )
     model_variant: Mapped[str] = mapped_column(String(64), default="nano_banana")
     budget_cap_usd: Mapped[float | None] = mapped_column(Float)
     estimated_cost_usd: Mapped[float | None] = mapped_column(Float)
