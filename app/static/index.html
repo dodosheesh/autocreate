@@ -380,6 +380,7 @@
           <h2>Panneau de génération</h2>
           <label>Model</label>
           <select class="js-model"></select>
+          <div id="video-run-models" class="hint" style="margin-top:8px"></div>
           <div style="margin-top:14px">
             <label>Vidéos par catégorie</label>
             <div class="cats" id="cats"></div>
@@ -460,6 +461,7 @@
         coupe-les avant d'uploader (les trop longues sont marquées en rouge et exclues des tirages).</div>
       <label>Model</label>
       <select class="js-model"></select>
+      <div id="cp-run-models" class="hint" style="margin-top:8px"></div>
       <div class="row">
         <div><label>Vidéo de référence</label><input type="file" id="cp-file" accept="video/*"></div>
         <div><label>Vidéos à générer</label><input type="number" id="cp-count" min="1" value="1"></div>
@@ -540,6 +542,7 @@
       <h2>Générer des photos</h2>
       <label>Model</label>
       <select class="js-model"></select>
+      <div id="pic-run-models" class="hint" style="margin-top:8px"></div>
       <div class="row">
         <div><label>Photos à générer</label><input type="number" id="pic-count" min="1" value="10"></div>
         <div><label>Format</label>
@@ -886,14 +889,33 @@ $("#pw-change").addEventListener("click", async () => {
 
 // --- model active (synchronisé entre les pages) ---
 let activeModelId = "";
+let allModels = [];
 function getModel() { return activeModelId; }
+function renderRunModelPickers() {
+  ["video-run-models", "cp-run-models", "pic-run-models"].forEach(id => {
+    const el = $("#" + id); if (!el) return;
+    const previous = new Set([...el.querySelectorAll("input:checked")].map(i => i.value));
+    const chosen = previous.size ? previous : new Set(activeModelId ? [activeModelId] : []);
+    el.innerHTML = allModels.length
+      ? `<span class="muted">Générer pour :</span> ` + allModels.map(m =>
+          `<label class="chk" style="display:inline-flex;margin:3px 10px 0 0"><input type="checkbox" value="${esc(m.id)}" ${chosen.has(m.id) ? "checked" : ""}> ${esc(m.name)}</label>`
+        ).join("") + `<div class="muted" style="margin-top:4px">Un job et une banque restent propres à chaque model sélectionnée. Le budget indiqué s'applique par model.</div>`
+      : "";
+  });
+}
+function selectedRunModels(pickerId) {
+  const ids = [...document.querySelectorAll("#" + pickerId + " input:checked")].map(i => i.value);
+  return ids.length ? ids : (getModel() ? [getModel()] : []);
+}
 async function loadModels() {
   const models = await api("/models");
+  allModels = models;
   const opts = models.length
     ? models.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join("")
     : '<option value="">— crée une model dans Réglages —</option>';
   if (!activeModelId && models.length) activeModelId = models[0].id;
   document.querySelectorAll(".js-model").forEach(sel => { sel.innerHTML = opts; if (activeModelId) sel.value = activeModelId; });
+  renderRunModelPickers();
 }
 document.addEventListener("change", (e) => {
   if (e.target.classList && e.target.classList.contains("js-model")) {
@@ -1250,9 +1272,10 @@ async function doEstimate() {
 
 $("#generate").addEventListener("click", async () => {
   const c = counts();
-  if (!getModel()) return toast("Aucune model — configure-la dans Réglages");
+  const modelIds = selectedRunModels("video-run-models");
+  if (!modelIds.length) return toast("Aucune model — configure-la dans Réglages");
   if (!Object.keys(c).length) return toast("Aucune vidéo demandée");
-  const body = { model_id: getModel(), counts_per_category: c,
+  const body = { counts_per_category: c,
                  resolution: state.resolution, bitrate: state.bitrate,
                  duration_s: +$("#duration").value, model_variant: $("#variant").value,
                  custom_prompt: $("#custom-prompt").value.trim(),
@@ -1262,16 +1285,23 @@ $("#generate").addEventListener("click", async () => {
   if ($("#music").value) body.music_url = $("#music").value;
   $("#generate").disabled = true;
   try {
-    const job = await api("/jobs/batch", {method: "POST", body: JSON.stringify(body)});
-    toast("Job lancé — composition en cours");
-    await loadJobs(); await openJob(job.id);
+    const jobs = [];
+    for (const modelId of modelIds) {
+      jobs.push(await api("/jobs/batch", {method: "POST", body: JSON.stringify({...body, model_id: modelId})}));
+    }
+    toast(`${jobs.length} job(s) vidéo lancé(s) — un par model`);
+    await loadJobs();
+    const visible = jobs.find(j => modelIds[jobs.indexOf(j)] === getModel()) || jobs[0];
+    await openJob(visible.id);
   } catch (err) { toast("Generate : " + err.message); }
   $("#generate").disabled = false;
 });
 
 // --- copypaste (vidéo → vidéo) ---
+let cpBankVideos = [];
 async function loadCpBank() {
   const vids = getModel() ? await api("/copypaste/videos?model_id=" + encodeURIComponent(getModel())) : [];
+  cpBankVideos = vids;
   $("#cp-bank-count").textContent = vids.length;
   // thèmes existants → datalist (upload) + sélecteur de pioche (sélection préservée)
   const themes = [...new Set(vids.map(v => (v.theme || "").trim()).filter(Boolean))].sort();
@@ -1349,7 +1379,8 @@ window.delCpVideo = async (id) => {
   catch (e) { toast("Suppression : " + e.message); }
 };
 $("#cp-generate").addEventListener("click", async () => {
-  if (!getModel()) return toast("Aucune model — configure-la dans Réglages");
+  const modelIds = selectedRunModels("cp-run-models");
+  if (!modelIds.length) return toast("Aucune model — configure-la dans Réglages");
   const useBank = $("#cp-use-bank").checked;
   const hasFile = ($("#cp-file").files || []).length > 0;
   const selected = [...document.querySelectorAll("#cp-bank .cp-sel:checked")].map(i => i.dataset.id);
@@ -1357,7 +1388,7 @@ $("#cp-generate").addEventListener("click", async () => {
     return toast("Uploade une vidéo, coche « Piocher dans la banque » ou sélectionne des vidéos de la banque");
   const btn = $("#cp-generate"); btn.disabled = true;
   try {
-    const body = { model_id: getModel(), count: +$("#cp-count").value || 1,
+    const body = { count: +$("#cp-count").value || 1,
                    custom_prompt: $("#cp-custom").value.trim(), use_bank: useBank,
                    save_to_bank: $("#cp-save-bank").checked,
                    add_random_assets: $("#cp-assets").checked,
@@ -1371,13 +1402,29 @@ $("#cp-generate").addEventListener("click", async () => {
     const budget = parseFloat($("#cp-budget").value);
     if (!isNaN(budget)) body.budget_cap_usd = budget;
     if (hasFile) { btn.textContent = "Upload de la vidéo…"; body.reference_video_url = await uploadFile($("#cp-file")); }
-    const job = await api("/copypaste/jobs", {method: "POST", body: JSON.stringify(body)});
+    // Une sélection de banque appartient à la model affichée. En multi-model,
+    // on réutilise les mêmes URLs et les ajoute aux banques de destination.
+    const selectedUrls = selected.length && modelIds.length > 1
+      ? cpBankVideos.filter(v => selected.includes(v.id)).map(v => v.video_url) : [];
+    const jobs = [];
+    for (const modelId of modelIds) {
+      const sources = selectedUrls.length ? selectedUrls : [null];
+      for (const sourceUrl of sources) {
+        const request = {...body, model_id: modelId};
+        if (sourceUrl) {
+          request.reference_video_ids = [];
+          request.reference_video_url = sourceUrl;
+          request.use_bank = false;
+        }
+        jobs.push(await api("/copypaste/jobs", {method: "POST", body: JSON.stringify(request)}));
+      }
+    }
     $("#cp-file").value = "";
-    toast(job.status === "blocked_budget"
-      ? `⚠ Bloqué par le budget (estimé $${(job.estimated_cost_usd || 0).toFixed(2)})`
-      : "Copypaste lancé");
+    const blocked = jobs.filter(j => j.status === "blocked_budget").length;
+    toast(blocked ? `⚠ ${blocked}/${jobs.length} job(s) bloqué(s) par leur budget` : `${jobs.length} job(s) Copypaste lancé(s)`);
     loadCpBank().catch(() => {});
-    await loadJobs(); await openJob(job.id, false, "#cp-job-detail");
+    await loadJobs();
+    await openJob(jobs[0].id, false, "#cp-job-detail");
   } catch (err) { toast("Copypaste : " + err.message); }
   btn.disabled = false; btn.textContent = "🎭 Copypaste";
 });
@@ -1662,18 +1709,24 @@ function refreshPicEstimate() { clearTimeout(picEstTimer); picEstTimer = setTime
 $("#pic-resolution").addEventListener("change", refreshPicEstimate);
 
 $("#pic-generate").addEventListener("click", async () => {
-  if (!getModel()) return toast("Aucune model — configure-la dans Réglages");
+  const modelIds = selectedRunModels("pic-run-models");
+  if (!modelIds.length) return toast("Aucune model — configure-la dans Réglages");
   const styles = Array.from($("#pic-styles").querySelectorAll("input:checked")).map(i => i.value);
-  const body = {model_id: getModel(), count: +$("#pic-count").value, image_size: $("#pic-size").value,
+  const body = {count: +$("#pic-count").value, image_size: $("#pic-size").value,
                 image_resolution: $("#pic-resolution").value, styles,
                 use_prompt_source_images: $("#pic-use-source-images").checked};
   const b = parseFloat($("#pic-budget").value);
   if (!isNaN(b)) body.budget_cap_usd = b;
   $("#pic-generate").disabled = true;
   try {
-    const job = await api("/pictures/jobs", {method: "POST", body: JSON.stringify(body)});
-    toast("Génération photos lancée");
-    await loadPicJobs(); await openPicJob(job.id);
+    const jobs = [];
+    for (const modelId of modelIds) {
+      jobs.push(await api("/pictures/jobs", {method: "POST", body: JSON.stringify({...body, model_id: modelId})}));
+    }
+    toast(`${jobs.length} job(s) photo lancé(s) — un par model`);
+    await loadPicJobs();
+    const visible = jobs.find(j => modelIds[jobs.indexOf(j)] === getModel()) || jobs[0];
+    await openPicJob(visible.id);
   } catch (err) { toast("Photos : " + err.message); }
   $("#pic-generate").disabled = false;
 });
