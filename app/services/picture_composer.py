@@ -131,7 +131,9 @@ def compose_pictures(
         text = composer.inject_characteristics(text, active)
         # Pose tirée hors combo_hash : pure variété de rendu, la dédup reste
         # prompt × outfit × caractéristiques.
-        text = _apply_pose(text, weighted_draw(PHOTO_POSES, rng))
+        # Avec une image de base, la pose/cadrage de picture 1 doit primer.
+        if not use_prompt_source_images:
+            text = _apply_pose(text, weighted_draw(PHOTO_POSES, rng))
         text = _apply_style(text, style_suffix)
         extra_refs = [outfit.image_url] if outfit and outfit.image_url else []
         model_refs = composer.select_reference_images(
